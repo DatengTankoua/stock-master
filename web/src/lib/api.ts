@@ -9,6 +9,7 @@ import type {
 import { PERMISSION_CATALOG } from "./organization-permissions";
 import type { LegalAcceptancePayload } from "./legal/acceptance";
 import { clientT, currentLocale } from "@/i18n/client-t";
+import { isProductSearch, matchesProductSearch } from "./product-search";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -920,6 +921,85 @@ export async function fetchProducts(sectionId?: string): Promise<ApiProduct[]> {
   return data.map(flattenProduct);
 }
 
+/**
+ * 1-20D — Relecture ciblée : mêmes produits que `fetchProducts` (même
+ * rayon, même projection selon les permissions), restreints à `ids`. Une API
+ * antérieure ignore `ids` et renvoie la liste complète : seuls les produits
+ * demandés sont alors retenus (résultat correct, coût d'une liste complète).
+ */
+export async function fetchProductsByIds(
+  ids: readonly string[],
+  sectionId?: string,
+): Promise<ApiProduct[]> {
+  const { data } = await apiClient.get<ApiProductEnvelope[]>("/products", {
+    params: { ids: ids.join(","), ...(sectionId ? { sectionId } : {}) },
+  });
+  const wanted = new Set(ids);
+  return data.map(flattenProduct).filter((p) => wanted.has(p._id));
+}
+
+/** 1-20F — Produits par page de la liste d'un rayon (maximum serveur : 100). */
+export const PRODUCTS_PAGE_SIZE = 24;
+
+/**
+ * 1-20F — Une page de la liste (`GET /products?limit=…`) : `total` porte sur
+ * tout le périmètre de la vue (rayon et recherche), `scopeTotal` sur tout le
+ * rayon sans la recherche, jamais sur la page. `legacy` : API antérieure, qui
+ * ignore `limit` et renvoie le tableau COMPLET du rayon → recherche appliquée
+ * ici avec la même règle, résultat complet présenté comme tel (aucune page
+ * suivante, totaux exacts).
+ */
+export interface ProductsPage {
+  items: ApiProduct[];
+  total: number;
+  scopeTotal: number;
+  nextCursor: string | null;
+  legacy: boolean;
+}
+
+export async function fetchProductsPage(options: {
+  sectionId?: string;
+  cursor?: string | null;
+  query?: string;
+  limit?: number;
+}): Promise<ProductsPage> {
+  const query = options.query ?? "";
+  const { data } = await apiClient.get<
+    | ApiProductEnvelope[]
+    | {
+        items: ApiProductEnvelope[];
+        total: number;
+        scopeTotal: number;
+        nextCursor: string | null;
+      }
+  >("/products", {
+    params: {
+      limit: options.limit ?? PRODUCTS_PAGE_SIZE,
+      ...(options.sectionId ? { sectionId: options.sectionId } : {}),
+      ...(options.cursor ? { cursor: options.cursor } : {}),
+      ...(isProductSearch(query) ? { q: query } : {}),
+    },
+  });
+  if (Array.isArray(data)) {
+    const all = data.map(flattenProduct);
+    const items = all.filter((p) => matchesProductSearch(p.name, query));
+    return {
+      items,
+      total: items.length,
+      scopeTotal: all.length,
+      nextCursor: null,
+      legacy: true,
+    };
+  }
+  return {
+    items: data.items.map(flattenProduct),
+    total: data.total,
+    scopeTotal: data.scopeTotal,
+    nextCursor: data.nextCursor,
+    legacy: false,
+  };
+}
+
 export async function fetchProduct(id: string): Promise<ApiProductDetail> {
   const { data } = await apiClient.get<
     ApiProductEnvelope & { sales: ApiSale[]; auditLogs: ApiAuditLog[] }
@@ -931,6 +1011,22 @@ export async function fetchProduct(id: string): Promise<ApiProductDetail> {
 /** Diffusion `product:updated` : enveloppe standard (1-12H). */
 export function flattenProductEvent(data: ApiProductEnvelope): ApiProduct {
   return flattenProduct(data);
+}
+
+/**
+ * 1-21D — capacité incluse : fiches conservées (corbeille comprise) et
+ * plafond, décomptés par le SERVEUR (jamais la longueur d'une page).
+ * Réservée à la gestion des produits (`products.manage`).
+ */
+export interface ProductCapacity {
+  used: number;
+  trashed: number;
+  limit: number;
+}
+
+export async function fetchProductCapacity(): Promise<ProductCapacity> {
+  const { data } = await apiClient.get<ProductCapacity>("/products/capacity");
+  return data;
 }
 
 export async function createProduct(payload: {
@@ -1077,6 +1173,45 @@ export async function fetchSales(productId?: string): Promise<ApiSale[]> {
     params: productId ? { productId } : {},
   });
   return data;
+}
+
+/** 1-20E — Taille d'une page de l'historique des ventes. */
+export const SALES_PAGE_SIZE = 20;
+
+/**
+ * 1-20E — Une page de l'historique (`GET /sales/history`) : `total` porte
+ * sur tout le périmètre autorisé (toute l'organisation ou ses propres
+ * ventes), jamais sur la page. `legacy` : API antérieure sans ce contrat
+ * (404) → historique COMPLET de l'ancien contrat, présenté comme tel (aucune
+ * pagination, total exact = nombre de ventes reçues).
+ */
+export interface SalesPage {
+  items: ApiSale[];
+  total: number;
+  nextCursor: string | null;
+  legacy: boolean;
+}
+
+export async function fetchSalesPage(
+  cursor: string | null,
+): Promise<SalesPage> {
+  try {
+    const { data } = await apiClient.get<Omit<SalesPage, "legacy">>(
+      "/sales/history",
+      { params: { limit: SALES_PAGE_SIZE, ...(cursor ? { cursor } : {}) } },
+    );
+    return { ...data, legacy: false };
+  } catch (error) {
+    if (
+      cursor === null &&
+      axios.isAxiosError(error) &&
+      error.response?.status === 404
+    ) {
+      const all = await fetchSales();
+      return { items: all, total: all.length, nextCursor: null, legacy: true };
+    }
+    throw error;
+  }
 }
 
 // 1-11C.3 : plus aucun `POST /sales` direct — toute vente passe par

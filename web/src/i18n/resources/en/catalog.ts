@@ -47,6 +47,8 @@ const catalogEn: Translation<typeof catalogFr> = {
     noData: "No catalogue data available on this device.",
     empty: "No items.",
     sectionUnavailable: "This section is not available on this device.",
+    partial:
+      "Partial list: only products already displayed online are available on this device.",
     productNote:
       "History and analytics are unavailable offline. The stock shown may be out of date.",
   },
@@ -75,6 +77,20 @@ const catalogEn: Translation<typeof catalogFr> = {
     purged: "This catalogue has been permanently deleted.",
     trashed: "This catalogue has been moved to the trash.",
     noProducts: "No products in this section.",
+    page: {
+      summary_one: "{{count}} product · page {{page}}",
+      summary_other: "{{count}} products · page {{page}}",
+      complete_one: "{{count}} product",
+      complete_other: "{{count}} products",
+      search_one: "{{count}} result of {{scope}} products · page {{page}}",
+      search_other: "{{count}} results of {{scope}} products · page {{page}}",
+      first: "First page",
+      previous: "Previous",
+      next: "Next",
+      navLabel: "Catalogue product pages",
+      changed: "The list has changed since the first page.",
+      showFirst: "Back to the first page",
+    },
     empty: "This catalogue is empty.",
     emptyHint:
       "Use the buttons above to create a sub-catalogue or add a product.",
@@ -175,6 +191,10 @@ const catalogEn: Translation<typeof catalogFr> = {
       view: "View the product",
     },
     viewTrash: "View the trash",
+  },
+  capacity: {
+    count: "{{used}} / {{limit}} products",
+    full: "Capacity reached: {{limit}} product records kept, trash included ({{trashed}} in the trash). New records are refused; sales, viewing and editing remain available.",
   },
   trash: {
     title: "Trash",

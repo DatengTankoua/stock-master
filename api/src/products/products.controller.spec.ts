@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
 import sharp from 'sharp';
-import { ProductsController } from './products.controller';
+import { PRODUCT_IDS_MAX, ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
 import { ResolvedOrganizationContext } from '../organizations/organizations.service';
@@ -69,7 +69,11 @@ describe('ProductsController — transmission du tenant (1-4B)', () => {
 
   const serviceStub = {
     create: jest.fn(),
+    // 1-21D : capacité incluse disponible (pré-contrôle sans effet).
+    assertCapacityAvailable: jest.fn().mockResolvedValue(undefined),
+    capacity: jest.fn(),
     findAll: jest.fn(),
+    findPage: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn(),
     restore: jest.fn(),
@@ -257,16 +261,135 @@ describe('ProductsController — transmission du tenant (1-4B)', () => {
   });
 
   it('findAll : transmet l’org du contexte + sectionId de la query inchangée', async () => {
-    await controller.findAll(SECTION_QUERY, ctxA);
+    await controller.findAll(SECTION_QUERY, undefined, ctxA);
     expect(serviceStub.findAll).toHaveBeenCalledTimes(1);
     expect(serviceStub.findAll).toHaveBeenCalledWith(
       ORG_A,
       SECTION_QUERY,
       FULL,
+      undefined,
     );
 
-    await controller.findAll(undefined, ctxA);
-    expect(serviceStub.findAll).toHaveBeenCalledWith(ORG_A, undefined, FULL);
+    await controller.findAll(undefined, undefined, ctxA);
+    expect(serviceStub.findAll).toHaveBeenCalledWith(
+      ORG_A,
+      undefined,
+      FULL,
+      undefined,
+    );
+  });
+
+  describe('findAll — relecture ciblée `ids` (1-20D)', () => {
+    const A = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+    const B = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+
+    it('identifiants distincts transmis, avec l’org du contexte et la projection', async () => {
+      await controller.findAll(SECTION_QUERY, `${A},${B},${A}`, ctxA);
+      expect(serviceStub.findAll).toHaveBeenLastCalledWith(
+        ORG_A,
+        SECTION_QUERY,
+        FULL,
+        [A, B],
+      );
+    });
+
+    it('projection selon les permissions du demandeur (vendeur : champs standard)', async () => {
+      await controller.findAll(
+        undefined,
+        A,
+        makeContext(ORG_A, OrganizationRole.SELLER, []),
+      );
+      expect(serviceStub.findAll).toHaveBeenLastCalledWith(
+        ORG_A,
+        undefined,
+        STANDARD,
+        [A],
+      );
+    });
+
+    it.each([
+      ['vide', ''],
+      ['identifiant invalide', `${A},nope`],
+      ['tableau (paramètre répété)', [A, B]],
+      [
+        'plus de PRODUCT_IDS_MAX',
+        Array.from({ length: PRODUCT_IDS_MAX + 1 }, (_, i) =>
+          i.toString(16).padStart(24, '0'),
+        ).join(','),
+      ],
+    ])('%s → 400, service jamais appelé', async (_label, ids) => {
+      serviceStub.findAll.mockClear();
+      await expect(
+        Promise.resolve().then(() => controller.findAll(undefined, ids, ctxA)),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(serviceStub.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll — contrat paginé `limit` (1-20F)', () => {
+    const SECTION = 'cccccccccccccccccccccccc';
+
+    it('`limit` → page (org du contexte, rayon, projection), jamais la liste complète', async () => {
+      serviceStub.findAll.mockClear();
+      await controller.findAll(
+        SECTION,
+        undefined,
+        ctxA,
+        '24',
+        undefined,
+        'Sav',
+      );
+      expect(serviceStub.findPage).toHaveBeenLastCalledWith(
+        ORG_A,
+        SECTION,
+        { limit: 24, search: 'Sav' },
+        FULL,
+      );
+      expect(serviceStub.findAll).not.toHaveBeenCalled();
+    });
+
+    it('vendeur : projection standard sur la page', async () => {
+      await controller.findAll(
+        undefined,
+        undefined,
+        makeContext(ORG_A, OrganizationRole.SELLER, []),
+        '10',
+      );
+      expect(serviceStub.findPage).toHaveBeenLastCalledWith(
+        ORG_A,
+        undefined,
+        { limit: 10 },
+        STANDARD,
+      );
+    });
+
+    it.each([
+      ['`ids` avec `limit`', [SECTION, SECTION, '10'] as const],
+      ['rayon invalide', ['nope', undefined, '10'] as const],
+      ['`limit` hors bornes', [SECTION, undefined, '101'] as const],
+      [
+        '`q` sans `limit`',
+        [SECTION, undefined, undefined, undefined, 'x'] as const,
+      ],
+    ])('%s → 400, service jamais appelé', async (_label, args) => {
+      serviceStub.findPage.mockClear();
+      serviceStub.findAll.mockClear();
+      const [sectionId, ids, limit, cursor, q] = args as readonly unknown[];
+      await expect(
+        Promise.resolve().then(() =>
+          controller.findAll(
+            sectionId as string | undefined,
+            ids,
+            ctxA,
+            limit,
+            cursor,
+            q,
+          ),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(serviceStub.findPage).not.toHaveBeenCalled();
+      expect(serviceStub.findAll).not.toHaveBeenCalled();
+    });
   });
 
   it('findOne : transmet l’org du contexte + l’id du paramètre + le scope calculé', async () => {
@@ -302,16 +425,18 @@ describe('ProductsController — transmission du tenant (1-4B)', () => {
       ['seller + analytics.read seul', ['analytics.read'], STANDARD],
     ] as const)('%s', async (_label, permissions, expected) => {
       const ctx = makeContext(ORG_A, OrganizationRole.SELLER, [...permissions]);
-      await controller.findAll(undefined, ctx);
+      await controller.findAll(undefined, undefined, ctx);
       expect(serviceStub.findAll).toHaveBeenLastCalledWith(
         ORG_A,
         undefined,
         expected,
+        undefined,
       );
     });
 
     it('admin : les deux groupes par défaut', async () => {
       await controller.findAll(
+        undefined,
         undefined,
         makeContext(ORG_A, OrganizationRole.ADMIN, []),
       );
@@ -319,6 +444,7 @@ describe('ProductsController — transmission du tenant (1-4B)', () => {
         ORG_A,
         undefined,
         FULL,
+        undefined,
       );
     });
   });

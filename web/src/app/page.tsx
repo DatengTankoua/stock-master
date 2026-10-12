@@ -15,19 +15,22 @@ import { SessionCta } from "@/components/landing/session-cta";
 import { PublicFooter } from "@/components/public/public-footer";
 import { OfferConditions } from "@/components/subscription/subscription-offers";
 import {
+  BEST_SAVING_TERM,
   SUBSCRIPTION_OFFERS,
   TRIAL_DAYS,
   formatFcfa,
   monthlyEquivalentXaf,
 } from "@/lib/subscription-offers";
+import { offerPitch } from "@/lib/subscription-offer-pitch";
 import { getServerT } from "@/i18n/server";
 import { rich } from "@/i18n/rich";
 
 // 1-16B — Accueil public. Tous les contenus décrivent des capacités LIVRÉES
 // (vérifiées dans le code au moment du lot, voir
 // docs/architecture/phase-1-16b-marketing-homepage.md) : aucun témoignage,
-// chiffre client, partenariat ni moyen de paiement annoncé. Tarifs et durée
-// de l'essai lus dans `lib/subscription-offers.ts` (miroir des montants de
+// chiffre client ni partenariat. Tarifs et durée
+// de l'essai lus dans `lib/subscription-offers.ts` (1-21D : calculés depuis le
+// catalogue serveur, sans table propre ; anciennement miroir des montants de
 // l'API, `subscription-pricing.ts` et `TRIAL_DURATION_MS`).
 
 // Même flag d'affichage que la connexion/inscription (0B.5), figé au build ;
@@ -36,14 +39,10 @@ import { rich } from "@/i18n/rich";
 const registrationEnabled =
   process.env.NEXT_PUBLIC_REGISTRATION_ENABLED === "true";
 
-const lowestMonthlyEquivalent = Math.min(
-  ...SUBSCRIPTION_OFFERS.map(monthlyEquivalentXaf),
-);
-// Formule mise en avant : la moins chère en équivalent mensuel (12 mois).
-// Dérivée des données, jamais de RECOMMENDED_TERM importé d'un module
-// "use client" (référence client côté serveur, pas la valeur).
+// Formule mise en avant : « Meilleure économie », calculée depuis le
+// catalogue serveur (`BEST_SAVING_TERM`), jamais une durée codée en dur.
 const bestOffer = SUBSCRIPTION_OFFERS.find(
-  (offer) => monthlyEquivalentXaf(offer) === lowestMonthlyEquivalent,
+  (offer) => offer.term === BEST_SAVING_TERM,
 );
 const monthlyOffer = SUBSCRIPTION_OFFERS.find((offer) => offer.months === 1);
 
@@ -164,9 +163,10 @@ export default async function LandingPage() {
                   ? rich(
                       t("landing.hero.trialNote", {
                         days: TRIAL_DAYS,
-                        price: fcfa(lowestMonthlyEquivalent),
-                        term: bestOffer
-                          ? ts(`offers.term.${bestOffer.term}`)
+                        // Formule mensuelle (catalogue serveur).
+                        price: fcfa(monthlyOffer?.totalXaf ?? 0),
+                        term: monthlyOffer
+                          ? ts(`offers.term.${monthlyOffer.term}`)
                           : "",
                       }),
                       {
@@ -305,6 +305,7 @@ export default async function LandingPage() {
               <ul className="divide-y divide-(--brand-ink)/10 overflow-hidden rounded-2xl border border-(--brand-ink)/15">
                 {SUBSCRIPTION_OFFERS.map((offer) => {
                   const recommended = offer.term === bestOffer?.term;
+                  const pitch = offerPitch(offer, ts, fcfa);
                   return (
                     <li
                       key={offer.term}
@@ -325,19 +326,18 @@ export default async function LandingPage() {
                       <p className="text-right text-2xl font-extrabold tracking-tight whitespace-nowrap tabular-nums">
                         {fcfa(offer.totalXaf)}
                       </p>
-                      <p className="col-span-2 text-sm text-(--public-muted) tabular-nums">
-                        {offer.months > 1
-                          ? offer.highlight === "freeMonths"
-                            ? t("landing.pricing.equivalentFree", {
-                                monthly: fcfa(monthlyEquivalentXaf(offer)),
-                                saving: fcfa(offer.savingXaf),
-                                highlight: ts("offers.highlight.freeMonths"),
-                              })
-                            : t("landing.pricing.equivalent", {
-                                monthly: fcfa(monthlyEquivalentXaf(offer)),
-                                saving: fcfa(offer.savingXaf),
-                              })
-                          : t("landing.pricing.monthByMonth")}
+                      <p className="font-semibold text-pretty">{pitch.title}</p>
+                      <p className="text-right text-xs font-medium whitespace-nowrap text-(--public-muted)">
+                        {ts("offers.paidOnce", {
+                          term: ts(`offers.term.${offer.term}`),
+                        })}
+                      </p>
+                      <p className="col-span-2 text-sm text-pretty text-(--public-muted) tabular-nums">
+                        {pitch.text}
+                        {offer.months > 1 &&
+                          ` ${ts("offers.monthlyEquivalent", {
+                            amount: fcfa(monthlyEquivalentXaf(offer)),
+                          })}`}
                       </p>
                     </li>
                   );

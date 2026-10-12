@@ -94,6 +94,8 @@ const MIGRATION_SCRIPT = join(
 
 const VIEW_KEYS = [
   'amount',
+  // 1-21B : page de paiement hébergée (null hors SasPay).
+  'checkoutUrl',
   'confirmedAt',
   'createdAt',
   'currency',
@@ -534,7 +536,7 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
       expect(created.body).toMatchObject({
         status: 'pending',
         term: 'monthly',
-        amount: 3000,
+        amount: 3500,
         currency: 'XAF',
         payerPhoneMasked: '+237 6•• ••• •56',
       });
@@ -633,7 +635,7 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
         term: 'quarterly',
         clientOperationId,
       });
-      expect(created.body).toMatchObject({ amount: 8500, replayed: false });
+      expect(created.body).toMatchObject({ amount: 10000, replayed: false });
 
       // Catalogue « modifié » (simulation) : nouveau tarif, nouvelle version.
       const original = pricing.getSubscriptionPrice;
@@ -642,13 +644,13 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
         .mockImplementation((term: unknown) => ({
           ...original(term),
           amount: 9900,
-          pricingVersion: 2,
+          pricingVersion: 3,
         }));
       const replay = await pay(token, { term: 'quarterly', clientOperationId });
       expect(replay.status).toBe(201);
       expect(replay.body).toMatchObject({
         paymentId: created.body.paymentId,
-        amount: 8500,
+        amount: 10000,
         replayed: true,
       });
       expect(sim.initiations).toHaveLength(1);
@@ -656,13 +658,13 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
 
       const doc = await paymentDoc(created.body.paymentId);
       expect(doc).toMatchObject({
-        amount: 8500,
-        pricingVersion: 1,
+        amount: 10000,
+        pricingVersion: 2,
         currency: 'XAF',
       });
       sim.settle(String(created.body.reference), 'succeeded');
       const done = await refresh(token, created.body.paymentId);
-      expect(done.body).toMatchObject({ status: 'succeeded', amount: 8500 });
+      expect(done.body).toMatchObject({ status: 'succeeded', amount: 10000 });
       expect(await paymentsOf(orgId)).toHaveLength(1);
     });
   });

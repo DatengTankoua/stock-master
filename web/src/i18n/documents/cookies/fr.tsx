@@ -132,7 +132,7 @@ const content: DocumentContent = {
             {
               name: "stockmaster_payment_intents",
               purpose:
-                "Retrouve un paiement d'abonnement en cours après une coupure (inutilisé tant que le paiement en ligne est fermé).",
+                "Retrouve un paiement d'abonnement en cours après une coupure.",
               duration: "Jusqu'à la fin du paiement",
             },
             {

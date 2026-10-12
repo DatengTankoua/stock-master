@@ -31,7 +31,9 @@ import {
 } from '../organizations/permissions';
 import { User } from '../users/schemas/user.schema';
 import { ParseObjectIdPipe } from '../common/pipes/parse-object-id.pipe';
+import { isValidObjectId } from 'mongoose';
 import { productVisibility } from './product-projection';
+import { parseProductPageQuery } from './product-page';
 import { validateProductImage } from './product-image-validation';
 // 1-12D : limites multipart durcies (GHSA-535w) ; 413 stable (R2).
 import { ProductImageUploadInterceptor } from './product-image-upload.interceptor';
@@ -69,6 +71,28 @@ function requiredPermissionsForUpdate(
  * annoncée au propriétaire (`PushOutboxService.memberActivity`, best effort,
  * APRÈS le service : jamais sur un refus ni un échec). Nom du produit figé.
  */
+/** 1-20D : identifiants au plus dans une relecture ciblée. */
+export const PRODUCT_IDS_MAX = 50;
+
+/** `ids=a,b` → identifiants distincts valides ; refus 400 sinon. */
+export function parseProductIds(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new BadRequestException('ids must be a comma-separated list');
+  }
+  const ids = [...new Set(value.split(',').map((v) => v.trim()))];
+  if (
+    ids.length === 0 ||
+    ids.length > PRODUCT_IDS_MAX ||
+    ids.some((id) => !/^[0-9a-f]{24}$/i.test(id))
+  ) {
+    throw new BadRequestException(
+      `ids must contain 1 to ${PRODUCT_IDS_MAX} product ids`,
+    );
+  }
+  return ids;
+}
+
 @Controller('products')
 export class ProductsController {
   constructor(
@@ -127,6 +151,9 @@ export class ProductsController {
   ) {
     if (!file) throw new BadRequestException('Image file is required');
     const organizationId = organizationContext.organizationId;
+    // 1-21D : capacité incluse vérifiée AVANT l'envoi de la photo (aucun
+    // envoi inutile) ; la décision reste prise dans la transaction.
+    await this.productsService.assertCapacityAvailable(organizationId);
     // Si l'upload échoue, aucun objet n'existe encore : rien à nettoyer.
     const image = await this.storeProductImage(file, organizationId);
     let created: Awaited<ReturnType<ProductsService['create']>>;
@@ -152,19 +179,69 @@ export class ProductsController {
     return created;
   }
 
+  /**
+   * 1-20D : `ids` (facultatif, identifiants séparés par des virgules, au
+   * plus `PRODUCT_IDS_MAX`) restreint la liste à ces produits — relecture
+   * ciblée du web après une vente. Même filtre (organisation du demandeur,
+   * produits actifs, rayon éventuel) et même projection que la liste : un
+   * produit absent de la réponse n'est plus visible dans cette vue. Une API
+   * antérieure ignore ce paramètre et renvoie la liste complète.
+   */
+  /**
+   * 1-20F : `limit` (1 à `PRODUCT_PAGE_MAX_LIMIT`) sélectionne le contrat
+   * PAGINÉ `{ items, total, scopeTotal, nextCursor }`, avec `cursor` (page
+   * suivante) et `q` (nom contenant le texte, casse ignorée) facultatifs.
+   * Sans `limit` : tableau complet, inchangé. `ids` et `limit` s'excluent.
+   */
   @Get()
   findAll(
     // `= undefined` (et non `?`) : un paramètre optionnel ne peut précéder un
     // paramètre requis (TS1016) tandis que le contexte suit.
-    @Query('sectionId') sectionId = undefined,
+    @Query('sectionId') sectionId: string | undefined = undefined,
+    @Query('ids') ids: unknown = undefined,
     @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+    @Query('limit') limit?: unknown,
+    @Query('cursor') cursor?: unknown,
+    @Query('q') q?: unknown,
   ) {
+    const page = parseProductPageQuery({ limit, cursor, q });
+    if (page) {
+      if (ids !== undefined) {
+        throw new BadRequestException('ids and limit are exclusive');
+      }
+      if (
+        sectionId !== undefined &&
+        (typeof sectionId !== 'string' || !isValidObjectId(sectionId))
+      ) {
+        throw new BadRequestException('sectionId must be a product section id');
+      }
+      return this.productsService.findPage(
+        organizationContext.organizationId,
+        sectionId,
+        page,
+        productVisibility(organizationContext),
+      );
+    }
     // 1-12H : projection selon les permissions effectives du demandeur.
     return this.productsService.findAll(
       organizationContext.organizationId,
       sectionId,
       productVisibility(organizationContext),
+      parseProductIds(ids),
     );
+  }
+
+  /**
+   * 1-21D — capacité incluse : fiches conservées (corbeille comprise) et
+   * plafond, décomptés par le serveur (jamais une longueur de page).
+   * Déclarée AVANT `:id`.
+   */
+  @Get('capacity')
+  @RequirePermissions('products.manage')
+  capacity(
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+  ) {
+    return this.productsService.capacity(organizationContext.organizationId);
   }
 
   @Get(':id')

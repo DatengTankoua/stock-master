@@ -26,6 +26,7 @@ const publicEn: Translation<typeof publicFr> = {
     legal: "Legal information",
     login: "Log in",
     register: "Sign up",
+    copyright: "© {{year}} {{name}}",
     pages: {
       guide: "User guide",
       contact: "Contact",
@@ -50,7 +51,7 @@ const publicEn: Translation<typeof publicFr> = {
       title: "Stock Master — Your shop's stock and sales, on your phone",
       description:
         "Real-time sales and stock, restocking guidance and monthly Excel/PDF history. In French and English.",
-      price: "{{monthly}} per month, or {{best}} for {{term}}",
+      price: "{{monthly}} for 1 month, or {{best}} paid once for {{term}}",
       trial: "{{days}}-day free trial, then {{price}}.",
       subscription: "Subscription: {{price}}.",
       ogDescription:
@@ -61,7 +62,7 @@ const publicEn: Translation<typeof publicFr> = {
       title: "Track your stock and sales from your phone",
       text: "Sold two soaps? Stock goes down and connected teammates see the update. Stock Master brings catalogue, sales and clear indicators together to help you run your shop.",
       trialNote:
-        "{{days}}-day free trial, no payment required. Then from <price>{{price}} per month</price> with the {{term}} plan.",
+        "{{days}}-day free trial, no payment required. Then <price>{{price}} for {{term}}</price> with the monthly plan.",
       registrationClosed:
         "Sign-ups are temporarily closed. Shops that already have an account can log in.",
       alreadyRegistered: "Already registered? <login>Log in</login>",
@@ -120,13 +121,8 @@ const publicEn: Translation<typeof publicFr> = {
     },
     pricing: {
       title: "One subscription, the length you choose",
-      text: "One price for the whole shop. The amount shown covers the chosen length. Online payment is not available yet: to renew, the owner contacts support.",
-      trial: "{{days}}-day free trial, no bank card",
-      equivalent:
-        "That is {{monthly}} per month and {{saving}} saved compared with paying monthly.",
-      equivalentFree:
-        "That is {{monthly}} per month and {{saving}} saved compared with paying monthly, or {{highlight}}.",
-      monthByMonth: "Pay month by month.",
+      text: "One price for the whole shop. The amount shown is paid once and covers the whole chosen length. The owner pays from the Subscription area, by Mobile Money (MTN or Orange) on SasPay's secure page; payment fees are covered by Stock Master.",
+      trial: "{{days}}-day free trial, no Mobile Money payment",
       closed: "Sign-ups are temporarily closed. <login>Log in</login>",
     },
     faq: {
@@ -159,9 +155,9 @@ const publicEn: Translation<typeof publicFr> = {
       subscription: {
         question: "How does the subscription work?",
         answer:
-          "The owner chooses a length of 1, 3, 6 or 12 months in the Subscription area. Online payment is not available yet; to renew, the owner contacts support. There is no automatic payment: every renewal is voluntary. The price covers the whole shop, whatever the number of sellers.",
+          "The owner chooses a length of 1, 3, 6 or 12 months in the Subscription area. The owner pays online, once, by Mobile Money (MTN or Orange) on SasPay's secure page; payment fees are covered by Stock Master. There is no automatic payment: every renewal is voluntary. The price covers the whole shop, whatever the number of sellers.",
         answerTrial:
-          "After the {{days}}-day trial, the owner chooses a length of 1, 3, 6 or 12 months in the Subscription area. Online payment is not available yet; to renew, the owner contacts support. There is no automatic payment: every renewal is voluntary. The price covers the whole shop, whatever the number of sellers.",
+          "After the {{days}}-day trial, the owner chooses a length of 1, 3, 6 or 12 months in the Subscription area. The owner pays online, once, by Mobile Money (MTN or Orange) on SasPay's secure page; payment fees are covered by Stock Master. There is no automatic payment: every renewal is voluntary. The price covers the whole shop, whatever the number of sellers.",
       },
       privacy: {
         question: "Can other shops see my data?",

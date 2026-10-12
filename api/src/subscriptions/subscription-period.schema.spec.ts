@@ -122,6 +122,9 @@ describe('SubscriptionPeriod schema (1-14B)', () => {
         'logoKey',
         'logoStorage',
         'name',
+        // 1-21D : jeton technique de sérialisation des créations de fiches
+        // produit (capacité incluse), pas un champ d'abonnement.
+        'productCreationSerial',
         'slug',
         'status',
         'updatedAt',

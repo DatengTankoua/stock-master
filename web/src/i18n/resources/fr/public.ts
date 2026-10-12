@@ -24,6 +24,7 @@ const publicFr = {
     legal: "Informations légales",
     login: "Connexion",
     register: "Inscription",
+    copyright: "© {{year}} {{name}}",
     pages: {
       guide: "Guide d'utilisation",
       contact: "Contact",
@@ -48,7 +49,8 @@ const publicFr = {
       title: "Stock Master — Stock et ventes de votre commerce, sur téléphone",
       description:
         "Ventes et stock en temps réel, aide au réapprovisionnement et historique mensuel Excel/PDF. En français et en anglais.",
-      price: "{{monthly}} par mois, ou {{best}} pour {{term}}",
+      price:
+        "{{monthly}} pour 1 mois, ou {{best}} payés en une fois pour {{term}}",
       trial: "Essai gratuit de {{days}} jours, puis {{price}}.",
       subscription: "Abonnement de {{price}}.",
       ogDescription:
@@ -59,7 +61,7 @@ const publicFr = {
       title: "Suivez votre stock et vos ventes depuis votre téléphone",
       text: "Une vente de deux savons ? Le stock baisse et vos collègues connectés voient la mise à jour. Stock Master rassemble le catalogue, les ventes et les repères utiles pour tenir votre boutique.",
       trialNote:
-        "{{days}} jours d'essai gratuit, aucun paiement requis. Ensuite, à partir de <price>{{price}} par mois</price> avec la formule {{term}}.",
+        "{{days}} jours d'essai gratuit, aucun paiement requis. Ensuite, <price>{{price}} pour {{term}}</price>, avec la formule mensuelle.",
       registrationClosed:
         "Les inscriptions sont momentanément fermées. Les commerces déjà inscrits peuvent se connecter.",
       alreadyRegistered: "Déjà inscrit ? <login>Se connecter</login>",
@@ -118,13 +120,8 @@ const publicFr = {
     },
     pricing: {
       title: "Un abonnement, la durée de votre choix",
-      text: "Un tarif pour tout le commerce. Le montant indiqué couvre la durée choisie. Le paiement en ligne n'est pas disponible : pour renouveler, le propriétaire contacte l'assistance.",
-      trial: "{{days}} jours d'essai gratuit, sans carte bancaire",
-      equivalent:
-        "Soit {{monthly}} par mois et {{saving}} d'économie par rapport au paiement mensuel.",
-      equivalentFree:
-        "Soit {{monthly}} par mois et {{saving}} d'économie par rapport au paiement mensuel, soit {{highlight}}.",
-      monthByMonth: "Paiement mois par mois.",
+      text: "Un tarif pour tout le commerce. Le montant indiqué est payé en une fois et couvre toute la durée choisie. Le propriétaire paie depuis l'espace Abonnement, par Mobile Money (MTN ou Orange) sur la page sécurisée de SasPay ; les frais de paiement sont pris en charge par Stock Master.",
+      trial: "{{days}} jours d'essai gratuit, sans paiement Mobile Money",
       closed:
         "Les inscriptions sont momentanément fermées. <login>Se connecter</login>",
     },
@@ -158,9 +155,9 @@ const publicFr = {
       subscription: {
         question: "Comment fonctionne l'abonnement ?",
         answer:
-          "Le propriétaire choisit une durée de 1, 3, 6 ou 12 mois depuis l'espace Abonnement. Le paiement en ligne n'est pas encore disponible ; pour renouveler, il contacte l'assistance. Il n'y a aucun prélèvement automatique : chaque renouvellement est volontaire. Le prix couvre tout le commerce, quel que soit le nombre de vendeurs.",
+          "Le propriétaire choisit une durée de 1, 3, 6 ou 12 mois depuis l'espace Abonnement. Il paie en ligne, en une fois, par Mobile Money (MTN ou Orange) sur la page sécurisée de SasPay ; les frais de paiement sont pris en charge par Stock Master. Il n'y a aucun prélèvement automatique : chaque renouvellement est volontaire. Le prix couvre tout le commerce, quel que soit le nombre de vendeurs.",
         answerTrial:
-          "Après les {{days}} jours d'essai, le propriétaire choisit une durée de 1, 3, 6 ou 12 mois depuis l'espace Abonnement. Le paiement en ligne n'est pas encore disponible ; pour renouveler, il contacte l'assistance. Il n'y a aucun prélèvement automatique : chaque renouvellement est volontaire. Le prix couvre tout le commerce, quel que soit le nombre de vendeurs.",
+          "Après les {{days}} jours d'essai, le propriétaire choisit une durée de 1, 3, 6 ou 12 mois depuis l'espace Abonnement. Il paie en ligne, en une fois, par Mobile Money (MTN ou Orange) sur la page sécurisée de SasPay ; les frais de paiement sont pris en charge par Stock Master. Il n'y a aucun prélèvement automatique : chaque renouvellement est volontaire. Le prix couvre tout le commerce, quel que soit le nombre de vendeurs.",
       },
       privacy: {
         question: "Les autres commerces voient-ils mes données ?",

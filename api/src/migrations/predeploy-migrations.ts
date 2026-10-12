@@ -44,6 +44,10 @@ export const PREDEPLOY_MIGRATIONS: readonly string[] = Object.freeze([
   'create-invitation-account-token-index.js',
   // 1-18C : TTL des plafonds persistants (comptes, destinataires).
   'create-rate-limit-indexes.js',
+  // 1-20E : historique paginé des ventes (performance, non bloquant).
+  'create-sale-history-indexes.js',
+  // 1-20F : liste paginée des produits (performance, non bloquant).
+  'create-product-page-indexes.js',
 ]);
 
 function main(): number {

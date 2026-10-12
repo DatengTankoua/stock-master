@@ -145,27 +145,34 @@ describe('archive juridique (manifeste et textes)', () => {
     ).toBeUndefined();
   });
 
-  it('conditions d’abonnement : 0.4 en vigueur, 0.3 conservée telle quelle', () => {
+  it('conditions d’abonnement : 0.5 en vigueur (1-21D, 2026-10-13), 0.3 et 0.4 conservées telles quelles', () => {
     const doc = manifest.documents[SUBSCRIPTION_TERMS];
-    expect(doc.current).toBe('0.4');
+    expect(doc.current).toBe('0.5');
+    expect(doc.versions['0.5'].publishedAt).toBe('2026-10-13');
     // Empreinte de la 0.3 publiée et archivée avant la correction : figée.
     expect(doc.versions['0.3'].locales.fr.sha256).toBe(
       '7efc7db353af8c9b842e798fb810c8b0082f16d9fe2c0bf116e7218c45a50e72',
     );
     const current = archive.current(SUBSCRIPTION_TERMS, 'fr')!;
-    const text = archive.text(current);
+    const text = archive.text(current).replace(/[\u00a0\u202f]/g, ' ');
+    expect(text).toContain('Version 0.5, mise à jour le 13 octobre 2026');
     expect(text).toContain(
+      "Capacité incluse. Chaque organisation peut conserver jusqu'à 1 000 fiches produit, y compris celles placées dans la corbeille",
+    );
+    expect(text).toContain('SasPay');
+    expect(text).not.toMatch(/pas encore activé/);
+    const archived = (version: string) =>
+      archive.text({
+        ...current,
+        version,
+        sha256: doc.versions[version].locales.fr.sha256,
+        file: doc.versions[version].locales.fr.file,
+      });
+    // Textes d'époque intacts.
+    expect(archived('0.4')).toContain(
       "Le paiement en ligne n'est pas encore activé. Pour toute demande de renouvellement, contactez support@stock-master.app.",
     );
-    expect(text).not.toMatch(/paiement en ligne est disponible/i);
-    expect(text).not.toMatch(/Mobile Money/);
-    const old = archive.text({
-      ...current,
-      version: '0.3',
-      sha256: doc.versions['0.3'].locales.fr.sha256,
-      file: doc.versions['0.3'].locales.fr.file,
-    });
-    expect(old).toContain('Le paiement en ligne est disponible.');
+    expect(archived('0.3')).toContain('Le paiement en ligne est disponible.');
   });
 
   it('parcours : les conditions d’abonnement ne concernent que le propriétaire', () => {

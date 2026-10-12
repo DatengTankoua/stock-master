@@ -248,7 +248,7 @@ describe('Webhook CamPay (e2e 1-14D.2F)', () => {
     reference,
     external_reference: merchantReference,
     status: 'PENDING',
-    amount: 3000.0,
+    amount: 3500.0,
     currency: 'XAF',
     operator: 'MTN',
     code: 'CP2610030001',
@@ -273,7 +273,7 @@ describe('Webhook CamPay (e2e 1-14D.2F)', () => {
     const params: Record<string, unknown> = {
       status: 'SUCCESSFUL',
       reference,
-      amount: '3000',
+      amount: '3500',
       currency: 'XAF',
       operator: 'MTN',
       code: 'CP2610030001',
@@ -638,7 +638,7 @@ describe('Webhook CamPay (e2e 1-14D.2F)', () => {
         const res = await webhookPost(
           notification(p.reference, p.merchantReference, {
             status,
-            amount: 3000,
+            amount: 3500,
           }),
         );
         expect(res.status).toBe(200);
@@ -653,8 +653,8 @@ describe('Webhook CamPay (e2e 1-14D.2F)', () => {
     });
 
     it.each([
-      ['montant', { amount: 2999 }],
-      ['montant décimal', { amount: 3000.5 }],
+      ['montant', { amount: 3499 }],
+      ['montant décimal', { amount: 3500.5 }],
       ['devise', { currency: 'EUR' }],
       ['référence marchand', { external_reference: 'SM' + 'f'.repeat(24) }],
     ])(

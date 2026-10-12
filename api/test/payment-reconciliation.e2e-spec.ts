@@ -229,7 +229,7 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
     reference,
     external_reference: merchantReference,
     status,
-    amount: 3000.0,
+    amount: 3500.0,
     currency: 'XAF',
     operator: 'MTN',
     code: 'CP2610030002',
@@ -279,7 +279,7 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
     campay.set(
       p.reference,
       statusBody(p.reference, p.merchantReference, 'SUCCESSFUL', {
-        amount: 2999,
+        amount: 3499,
       }),
     );
     expect((await refresh(p.token, p.paymentId)).body.status).toBe('review');
@@ -453,7 +453,7 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
       reconcilable: true,
       providerReference: null,
       merchantReference: p.merchantReference,
-      amount: 3000,
+      amount: 3500,
       currency: 'XAF',
       reconciliations: [],
     });
@@ -478,7 +478,7 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
         referenceAttach: true,
         before: { status: 'uncertain', providerReference: null },
         after: { status: 'succeeded', open: false, grantsPeriod: true },
-        verified: { state: 'succeeded', amount: 3000, currency: 'XAF' },
+        verified: { state: 'succeeded', amount: 3500, currency: 'XAF' },
       },
     });
     expect(planOf(sim).planToken).toMatch(/^[0-9a-f]{32}$/);
@@ -502,7 +502,7 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
       clientOperationId: randomUUID(),
       requestFingerprint: 'f'.repeat(64),
       term: 'monthly',
-      amount: 3000,
+      amount: 3500,
       currency: 'XAF',
       pricingVersion: 1,
       provider: 'unavailable',
@@ -582,7 +582,7 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
       verifiedState: 'succeeded',
       verifiedProviderReference: reference,
       verifiedMerchantReference: p.merchantReference,
-      verifiedAmount: 3000,
+      verifiedAmount: 3500,
       verifiedCurrency: 'XAF',
       result: 'applied',
     });
@@ -636,7 +636,7 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
       decision: 'blocked',
       reason: 'mismatch',
       mismatches: ['amount'],
-      verified: { amount: 2999 },
+      verified: { amount: 3499 },
     });
     // Aucune dérogation : même avec un jeton quelconque, aucune mutation.
     expect((await apply(bad.paymentId, 'b'.repeat(32))).code).toBe(4);
@@ -792,21 +792,21 @@ describe('Rapprochement opérateur par CLI (e2e 1-14D.2G)', () => {
 
   it.each([
     [
-      '3000.0000000000000001 (arrondi par JSON.parse)',
-      '3000.0000000000000001',
+      '3500.0000000000000001 (arrondi par JSON.parse)',
+      '3500.0000000000000001',
       false,
     ],
     [
-      '2999.9999999999999999 (arrondi par JSON.parse)',
-      '2999.9999999999999999',
+      '3499.9999999999999999 (arrondi par JSON.parse)',
+      '3499.9999999999999999',
       false,
     ],
-    ['3000.5', '3000.5', false],
+    ['3500.5', '3500.5', false],
     ['3e3', '3e3', false],
-    ['"3000.0" (chaîne décimale)', '"3000.0"', false],
+    ['"3500.0" (chaîne décimale)', '"3500.0"', false],
     ['montant absent', null, false],
-    ['3000.0 (littéral entier exact)', '3000.0', true],
-    ['"3000" (chaîne entière canonique)', '"3000"', true],
+    ['3500.0 (littéral entier exact)', '3500.0', true],
+    ['"3500" (chaîne entière canonique)', '"3500"', true],
   ])('montant %s', async (_label, literal, accepted) => {
     const u = await uncertainPayment('amount');
     const reference = randomUUID();

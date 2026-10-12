@@ -5,51 +5,59 @@ import { CheckIcon } from "lucide-react";
 import { useT } from "next-i18next/client";
 import { useFormat } from "@/i18n/use-format";
 import {
+  BEST_SAVING_TERM,
   SUBSCRIPTION_OFFERS,
   monthlyEquivalentXaf,
   type SubscriptionOffer,
   type SubscriptionTerm,
 } from "@/lib/subscription-offers";
+import { offerPitch } from "@/lib/subscription-offer-pitch";
 
-// 1-14C.2 — Grille des quatre durées de l'offre unique. Montant TOTAL de la
-// durée en premier ; équivalent mensuel explicitement présenté comme tel.
+// 1-14C.2 — Grille des quatre durées de l'offre unique. 1-21D : accroche,
+// puis montant TOTAL « payés en une fois » (le plus visible), équivalent
+// mensuel présenté comme une simple comparaison, économie calculée.
 // Aucune action de paiement ici : présentation uniquement.
 
 function OfferBody({ offer }: { offer: SubscriptionOffer }) {
   const { t } = useT("subscription");
   const { fcfa } = useFormat();
   const label = t(`offers.term.${offer.term}`);
+  const pitch = offerPitch(offer, t, fcfa);
   return (
     <>
-      <span className="flex items-center justify-between gap-2">
+      <span className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold">{label}</span>
-        {offer.highlight && (
+        {offer.term === BEST_SAVING_TERM && (
           <span className="rounded-full bg-(--brand-orange)/15 px-2 py-0.5 text-[11px] font-semibold text-(--brand-ink)">
-            {offer.highlight === "saving"
-              ? t("offers.highlight.saving", { amount: fcfa(offer.savingXaf) })
-              : t("offers.highlight.freeMonths")}
+            {t("offers.best")}
           </span>
         )}
       </span>
-      <span className="mt-2 block text-2xl font-bold tracking-tight">
+      <span className="mt-1 block text-sm font-medium text-pretty">
+        {pitch.title}
+      </span>
+      <span
+        className="mt-2 block text-2xl font-bold tracking-tight tabular-nums"
+        data-testid={`offer-total-${offer.term}`}
+      >
         {fcfa(offer.totalXaf)}
       </span>
-      <span className="block text-xs text-muted-foreground">
-        {t("offers.forTerm", { term: label })}
-        {offer.months > 1 &&
-          ` · ${t("offers.monthlyEquivalent", { amount: fcfa(monthlyEquivalentXaf(offer)) })}`}
+      <span className="block text-xs font-medium">
+        {t("offers.paidOnce", { term: label })}
       </span>
-      <span className="mt-2 block text-xs font-medium">
-        {offer.savingXaf > 0
-          ? t("offers.saving", { amount: fcfa(offer.savingXaf) })
-          : t("offers.monthlyPayment")}
+      {offer.months > 1 && (
+        <span className="block text-xs text-muted-foreground tabular-nums">
+          {t("offers.monthlyEquivalent", {
+            amount: fcfa(monthlyEquivalentXaf(offer)),
+          })}
+        </span>
+      )}
+      <span className="mt-2 block text-xs text-muted-foreground text-pretty">
+        {pitch.text}
       </span>
     </>
   );
 }
-
-/** Durée mise en avant sur la page publique (meilleur rapport). */
-export const RECOMMENDED_TERM: SubscriptionTerm = "annual";
 
 const PUBLIC_INCLUDED = [
   "catalog",
@@ -69,7 +77,7 @@ export function OfferGrid({ cta }: { cta?: { href: string; label: string } }) {
   return (
     <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-stretch">
       {SUBSCRIPTION_OFFERS.map((offer) => {
-        const recommended = offer.term === RECOMMENDED_TERM;
+        const recommended = offer.term === BEST_SAVING_TERM;
         return (
           <li
             key={offer.term}
@@ -79,11 +87,6 @@ export function OfferGrid({ cta }: { cta?: { href: string; label: string } }) {
                 : "border-border"
             }`}
           >
-            {recommended && (
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-(--brand-solid) px-3 py-1 text-xs font-semibold whitespace-nowrap text-white">
-                {t("offers.best")}
-              </span>
-            )}
             <OfferBody offer={offer} />
             {/* `mb-5` + `mt-auto` du bouton : boutons alignés en bas de
             toutes les cartes, quelle que soit la hauteur du texte. */}

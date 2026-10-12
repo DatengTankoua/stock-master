@@ -12,9 +12,12 @@
  *   tarif ; un paiement figera la version appliquée.
  * - Durées : exactement celles de `SubscriptionTerm` / `TERM_MONTHS`.
  *
- * Le catalogue d'affichage web (`web/src/lib/subscription-offers.ts`) doit
- * rester identique : test de parité dédié (jamais d'import du frontend par
- * le code de production).
+ * SOURCE UNIQUE des tarifs courants (1-21D) : le web importe CE module au
+ * build (`web/src/lib/subscription-offers.ts`, sans table de prix propre)
+ * pour la page publique, l'espace Abonnement et les conditions
+ * d'abonnement. Il doit donc rester PUR (aucune dépendance Nest ni I/O ;
+ * seul import : `subscription-terms`). Jamais d'import du frontend par le
+ * code de production de l'API.
  */
 import {
   SubscriptionTerm,
@@ -22,7 +25,15 @@ import {
   isSubscriptionTerm,
 } from './subscription-terms';
 
-export const SUBSCRIPTION_PRICING_VERSION = 1;
+/**
+ * Historique (les paiements gardent la version et le montant figés à leur
+ * création, jamais réécrits ni comparés au tarif courant) :
+ * - 1 : 3 000 / 8 500 / 16 000 / 30 000 XAF (1-14C.2 à 1-21C) ;
+ * - 2 : 3 500 / 10 000 / 18 500 / 35 000 XAF (1-21D, frais SasPay absorbés ;
+ *   remplace avant toute publication la grille intermédiaire
+ *   3 500 / 9 000 / 16 500 / 30 500, jamais déployée).
+ */
+export const SUBSCRIPTION_PRICING_VERSION = 2;
 
 export const SUBSCRIPTION_PRICING_CURRENCY = 'XAF';
 export type SubscriptionPricingCurrency = typeof SUBSCRIPTION_PRICING_CURRENCY;
@@ -31,10 +42,10 @@ export type SubscriptionPricingCurrency = typeof SUBSCRIPTION_PRICING_CURRENCY;
 export const SUBSCRIPTION_PRICES_XAF: Readonly<
   Record<SubscriptionTerm, number>
 > = Object.freeze({
-  [SubscriptionTerm.MONTHLY]: 3000,
-  [SubscriptionTerm.QUARTERLY]: 8500,
-  [SubscriptionTerm.SEMIANNUAL]: 16000,
-  [SubscriptionTerm.ANNUAL]: 30000,
+  [SubscriptionTerm.MONTHLY]: 3500,
+  [SubscriptionTerm.QUARTERLY]: 10000,
+  [SubscriptionTerm.SEMIANNUAL]: 18500,
+  [SubscriptionTerm.ANNUAL]: 35000,
 });
 
 /** Prix figé d'une durée (copie immuable, sans référence partagée). */
