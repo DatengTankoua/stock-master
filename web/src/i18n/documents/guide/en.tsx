@@ -301,9 +301,12 @@ const content: DocumentContent = {
             <Link href="/conditions-abonnement">Subscription Terms</Link>.
           </li>
           <li>
-            Online payment is not available yet. To renew, the owner writes from
-            Organisation, then Support (“Subscription” category), or to{" "}
-            <MailLink to="support" subject="Subscription renewal" />.
+            To renew, the owner chooses a length in Organisation, then
+            Subscription, and pays once by Mobile Money (MTN or Orange) on
+            SasPay&apos;s secure page. Payment fees are covered by Stock Master.
+            Back in Stock Master, “Check payment” confirms the subscription. For
+            any question: Organisation, then Support (“Subscription” category),
+            or <MailLink to="support" subject="Subscription renewal" />.
           </li>
           <li>
             When the subscription ends without renewal, access to the shop is

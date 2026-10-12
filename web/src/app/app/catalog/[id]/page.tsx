@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useT } from "next-i18next/client";
 import { ProductCard } from "@/components/products/product-card";
 import { CreateProductDialog } from "@/components/products/create-product-dialog";
+import { ProductCapacityNote } from "@/components/products/product-capacity";
 import { UpdateProductDialog } from "@/components/products/update-product-dialog";
 import { SectionCard } from "@/components/sections/section-card";
 import { CreateSectionDialog } from "@/components/sections/create-section-dialog";
@@ -94,6 +95,8 @@ export default function CatalogSectionPage() {
   const canManageProducts = hasPermission(authContext, "products.manage");
   const canAdjustStock = hasPermission(authContext, "stock.adjust");
   const canEditProduct = canManageProducts || canAdjustStock;
+  // 1-21D : capacité incluse relue après une création depuis cet onglet.
+  const [capacityKey, setCapacityKey] = useState(0);
 
   const [section, setSection] = useState<ApiSection | null>(null);
   // 1-15B : section courante supprimée définitivement par un collègue.
@@ -467,11 +470,14 @@ export default function CatalogSectionPage() {
               sectionId={params.id}
               onCreated={async (payload) => {
                 await addProduct(payload);
+                setCapacityKey((key) => key + 1);
               }}
             />
           )}
         </div>
       </div>
+
+      {canManageProducts && <ProductCapacityNote refreshKey={capacityKey} />}
 
       {/* Search bar — only show when there's content (1-20F : tout le
           rayon ; conservée pendant une recherche serveur) */}

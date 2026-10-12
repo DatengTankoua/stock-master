@@ -34,7 +34,8 @@ import {
  * - `GET /checkout-sessions/{id}/status/` → `{ id, status, transaction_id,
  *   transaction_status }` (revérifie le gateway, documenté) ;
  * - `GET /payments/{id}/verify/` → `{ id, status, requested_amount,
- *   debited_amount, net_amount, currency, flow_direction, transaction_type }`
+ *   fee_charge_mode, client_fee, debited_amount, net_amount, currency,
+ *   flow_direction, transaction_type }`
  *   (revérifie le gateway si `PENDING`, documenté) ;
  * - `GET /checkout-sessions/?page=&page_size=` (pagination par numéro,
  *   `next`) : recherche BORNÉE par `metadata.merchantReference` après une
@@ -47,9 +48,10 @@ import {
  * Preuves EXIGÉES avant un succès : session = celle ENREGISTRÉE ; notre
  * référence dans SA `metadata` ; transaction désignée PAR LA SESSION (route
  * de statut et détail concordants), puis relue (`verify`) avec le même
- * identifiant, `INBOUND`/`PAIEMENT` ; montant DEMANDÉ et montant DÉBITÉ
- * égaux au prix (frais absorbés, décision D8) ; devise identique. La
- * `metadata` seule ne prouve rien sur une transaction.
+ * identifiant, `INBOUND`/`PAIEMENT` ; montant DEMANDÉ égal au prix et
+ * montant DÉBITÉ concordant selon le mode de frais confirmé (1-21C,
+ * `sasPayDebitMatchesPrice`) ; devise identique. La `metadata` seule ne
+ * prouve rien sur une transaction.
  *
  * Hypothèses À VÉRIFIER en bac à sable (1-21A, B4) : une session peut-elle
  * porter plusieurs transactions ; un succès peut-il suivre `EXPIRED` ou
@@ -60,9 +62,13 @@ import {
 /** Origine OFFICIELLE de l'API ; jamais fournie par une requête. */
 export const SASPAY_API_ORIGIN = 'https://api.saspay.me';
 export const SASPAY_API_BASE_PATH = '/api/v1';
-/** Hôte(s) de checkout documenté(s) (`checkout_url` : `pay.saspay.me`). */
+/**
+ * Hôtes de checkout : `pay.saspay.me` (documenté) et `checkout.saspay.me`
+ * (réponse LIVE réelle observée en recette 1-21C, le 2026-10-12).
+ */
 export const SASPAY_CHECKOUT_ORIGINS: readonly string[] = Object.freeze([
   'https://pay.saspay.me',
+  'https://checkout.saspay.me',
 ]);
 
 export const SASPAY_COUNTRY = 'CM';
@@ -85,6 +91,8 @@ export const SASPAY_MAX_CALLS_PER_MINUTE = 120;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Montant décimal exact en chaîne, centimes nuls : `"3000"`, `"3000.00"`. */
 const INTEGRAL_DECIMAL = /^(0|[1-9]\d{0,11})(?:\.0{1,2})?$/;
+/** Montant décimal en chaîne, au plus deux décimales : `"517.50"`. */
+const CENTS_DECIMAL = /^(0|[1-9]\d{0,11})(?:\.(\d{1,2}))?$/;
 const SESSION_STATES = new Set(['PENDING', 'PAID', 'EXPIRED', 'CANCELLED']);
 const TRANSACTION_STATES = new Set([
   'PENDING',
@@ -135,6 +143,67 @@ export function parseSasPayAmount(value: unknown): number | null {
   if (typeof value !== 'string' || !INTEGRAL_DECIMAL.test(value)) return null;
   const amount = Number(value.split('.')[0]);
   return Number.isSafeInteger(amount) ? amount : null;
+}
+
+/**
+ * `"517.50"` → 51750 centimes (entier exact, aucun calcul flottant) ; signe,
+ * exposant, plus de deux décimales ou nombre JSON → null.
+ */
+export function parseSasPayCents(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const match = CENTS_DECIMAL.exec(value);
+  if (!match) return null;
+  const cents =
+    Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+
+/**
+ * 1-21C — Débit de la transaction (`verify`) concordant avec le prix, selon
+ * le mode de frais CONFIRMÉ par SasPay (documentation « Comprendre les
+ * montants » et exemple `verify`, consultés le 2026-10-12) :
+ *
+ * | Mode | Débit du payeur | Net marchand |
+ * |---|---|---|
+ * | `ADD_ON` | `debited_amount` = `requested_amount` + `client_fee` | `net_amount` = `requested_amount` |
+ * | `DEDUCTED` | `debited_amount` = `requested_amount` | `net_amount` ≤ `requested_amount` |
+ *
+ * - `requested_amount` doit égaler le prix enregistré (XAF entiers).
+ * - Les frais ne sont jamais calculés ici (aucun taux) : seule l'égalité
+ *   exacte, en centimes, entre les champs renvoyés est contrôlée. Les
+ *   arrondis appliqués par SasPay ne sont pas documentés ; un frais à
+ *   centimes (`"17.50"`) est accepté tel quel.
+ * - `ADD_ON` sans `client_fee` lisible, `net_amount` illisible ou mode
+ *   inconnu → non concordant (vérification opérateur).
+ * - Mode absent (réponses antérieures) : débit exactement égal au prix.
+ */
+export function sasPayDebitMatchesPrice(
+  transaction: Record<string, unknown>,
+  priceXaf: number,
+): boolean {
+  if (!Number.isSafeInteger(priceXaf) || priceXaf <= 0) return false;
+  const price = priceXaf * 100;
+  const requested = parseSasPayCents(transaction.requested_amount);
+  const debited = parseSasPayCents(transaction.debited_amount);
+  if (requested !== price || debited === null) return false;
+  const net =
+    transaction.net_amount === undefined
+      ? undefined
+      : parseSasPayCents(transaction.net_amount);
+  if (net === null) return false;
+  const mode = transaction.fee_charge_mode;
+  if (mode === 'ADD_ON') {
+    const fee = parseSasPayCents(transaction.client_fee);
+    return (
+      fee !== null &&
+      debited === requested + fee &&
+      (net === undefined || net === requested)
+    );
+  }
+  if (mode === 'DEDUCTED' || mode === undefined || mode === null) {
+    return debited === requested && (net === undefined || net <= requested);
+  }
+  return false;
 }
 
 /** Page de paiement : HTTPS, origine de checkout documentée, sans identifiants. */
@@ -451,14 +520,11 @@ export class SasPayPaymentProvider implements PaymentProvider {
     ) {
       throw new PaymentProviderInconsistencyError('inconsistent-attachment');
     }
-    const requested = parseSasPayAmount(tx.requested_amount);
-    const debited = parseSasPayAmount(tx.debited_amount);
-    // Frais absorbés (D8) : le payeur est débité EXACTEMENT du prix ; le
-    // montant net (prix − frais) n'entre pas dans la concordance.
+    // Prix demandé = montant de la session ; débit concordant selon le mode
+    // de frais confirmé par SasPay (`ADD_ON` ou `DEDUCTED`), sinon `null`
+    // (montant non concordant → vérification).
     const amount =
-      session.amount !== null &&
-      requested === session.amount &&
-      debited === session.amount
+      session.amount !== null && sasPayDebitMatchesPrice(tx, session.amount)
         ? session.amount
         : null;
     const currency =

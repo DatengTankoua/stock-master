@@ -1,63 +1,85 @@
 // 1-14C.2 — Offre commerciale Stock Master : UNE offre, quatre durées.
 //
-// Présentation UNIQUEMENT (page publique, espace Abonnement). Ces montants
-// ne servent JAMAIS à attribuer une période depuis le navigateur : seule une
-// attribution serveur (script opérateur, puis paiement en 1-14D) ouvre
-// l'accès. Devise XAF, affichée « FCFA ».
+// Présentation UNIQUEMENT (page publique, espace Abonnement, conditions
+// d'abonnement). Ces montants ne servent JAMAIS à attribuer une période
+// depuis le navigateur : le serveur fixe le montant d'un paiement à partir
+// de la seule durée. Devise XAF, affichée « FCFA ».
+//
+// 1-21D — AUCUNE table de prix ici : durées, mois et montants viennent du
+// catalogue SERVEUR (`api/src/subscriptions/subscription-pricing.ts`),
+// importé au build ; économies, mois offerts, meilleure économie et
+// équivalents mensuels en sont CALCULÉS. Changer un tarif = ce seul fichier
+// serveur (voir son en-tête).
 
-export type SubscriptionTerm =
-  "monthly" | "quarterly" | "semiannual" | "annual";
+import { listSubscriptionPrices } from "../../../api/src/subscriptions/subscription-pricing";
+import type { SubscriptionTerm as ServerSubscriptionTerm } from "../../../api/src/subscriptions/subscription-terms";
 
-// 1-16G : libellés (« 1 mois », « 2 mois offerts »…) dans le namespace
-// `subscription` (`offers.term.*`, `offers.highlight.*`), jamais ici.
+/** Durées du serveur, en valeurs littérales (`"monthly" | …`). */
+export type SubscriptionTerm = `${ServerSubscriptionTerm}`;
+
+// 1-16G : libellés et accroches dans le namespace `subscription`
+// (`offers.term.*`, `offers.pitch.*`), sans aucun montant : ceux-ci sont
+// passés en variables, depuis les valeurs calculées ici.
 export interface SubscriptionOffer {
   term: SubscriptionTerm;
   months: number;
-  /** Montant TOTAL à payer pour la durée choisie (XAF). */
+  /** Montant TOTAL payé en une fois pour la durée choisie (XAF). */
   totalXaf: number;
-  /** Économie par rapport à `months` paiements mensuels (XAF). */
+  /** Économie par rapport à `months` paiements mensuels (XAF), calculée. */
   savingXaf: number;
-  /** Mention complémentaire validée : économie ou « 2 mois offerts ». */
-  highlight?: "saving" | "freeMonths";
+  /**
+   * Mois offerts : l'économie vaut exactement `freeMonths` mensualités
+   * (ex. 12 mois au prix de 10 → 2). Sinon 0 : aucune mention.
+   */
+  freeMonths: number;
 }
-
-/** Prix mensuel de référence (XAF). */
-export const MONTHLY_PRICE_XAF = 3000;
 
 /** Durée de l'essai gratuit (jours), attribué par le serveur à l'inscription. */
 export const TRIAL_DAYS = 7;
 
-export const SUBSCRIPTION_OFFERS: readonly SubscriptionOffer[] = [
-  {
-    term: "monthly",
-    months: 1,
-    totalXaf: 3000,
-    savingXaf: 0,
-  },
-  {
-    term: "quarterly",
-    months: 3,
-    totalXaf: 8500,
-    savingXaf: 500,
-    highlight: "saving",
-  },
-  {
-    term: "semiannual",
-    months: 6,
-    totalXaf: 16000,
-    savingXaf: 2000,
-    highlight: "saving",
-  },
-  {
-    term: "annual",
-    months: 12,
-    totalXaf: 30000,
-    savingXaf: 6000,
-    highlight: "freeMonths",
-  },
-];
+const SERVER_PRICES = listSubscriptionPrices();
 
-/** Équivalent mensuel ARRONDI, toujours présenté comme tel. */
+/** Prix mensuel de référence (XAF), celui de la durée d'un mois. */
+export const MONTHLY_PRICE_XAF = (() => {
+  const monthly = SERVER_PRICES.find((price) => price.months === 1);
+  if (!monthly) throw new Error("Tarif mensuel absent du catalogue serveur.");
+  return monthly.amount;
+})();
+
+/** Mois offerts : économie multiple exact (non nul) du prix mensuel. */
+export function freeMonthsFor(savingXaf: number, monthlyXaf: number): number {
+  if (savingXaf <= 0 || monthlyXaf <= 0 || savingXaf % monthlyXaf !== 0) {
+    return 0;
+  }
+  return savingXaf / monthlyXaf;
+}
+
+export const SUBSCRIPTION_OFFERS: readonly SubscriptionOffer[] =
+  SERVER_PRICES.map((price) => {
+    const savingXaf = price.months * MONTHLY_PRICE_XAF - price.amount;
+    // Une durée plus longue ne doit jamais coûter plus cher que des mois
+    // payés un par un : un tel catalogue échoue au build/prérendu.
+    if (savingXaf < 0) throw new Error(`Offre ${price.term} incohérente.`);
+    return {
+      term: `${price.term}` as SubscriptionTerm,
+      months: price.months,
+      totalXaf: price.amount,
+      savingXaf,
+      freeMonths: freeMonthsFor(savingXaf, MONTHLY_PRICE_XAF),
+    };
+  });
+
+/**
+ * Badge « Meilleure économie » : la durée à la plus forte économie, si elle
+ * est unique et positive ; sinon aucune.
+ */
+export const BEST_SAVING_TERM: SubscriptionTerm | null = (() => {
+  const best = Math.max(...SUBSCRIPTION_OFFERS.map((o) => o.savingXaf));
+  const winners = SUBSCRIPTION_OFFERS.filter((o) => o.savingXaf === best);
+  return best > 0 && winners.length === 1 ? winners[0].term : null;
+})();
+
+/** Équivalent mensuel ARRONDI, toujours présenté comme tel (jamais prélevé). */
 export function monthlyEquivalentXaf(offer: SubscriptionOffer): number {
   return Math.round(offer.totalXaf / offer.months);
 }
@@ -71,13 +93,5 @@ export function knownTerm(
 
 // Chemin relatif : ce module est aussi chargé par un test de l'API
 // (`subscription-pricing.spec.ts`), sans l'alias `@/`.
-/** Montant XAF formaté « 30 000 FCFA » (fr) ou « 30,000 FCFA » (en). */
+/** Montant XAF formaté « 12 345 FCFA » (fr) ou « 12,345 FCFA » (en). */
 export { formatFcfa } from "../i18n/format";
-
-// Cohérence vérifiée au chargement du module : toute modification de tarif
-// incohérente (économie mal calculée) échoue au build/prérendu.
-for (const offer of SUBSCRIPTION_OFFERS) {
-  if (offer.months * MONTHLY_PRICE_XAF - offer.totalXaf !== offer.savingXaf) {
-    throw new Error(`Offre ${offer.term} incohérente.`);
-  }
-}

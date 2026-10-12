@@ -151,6 +151,9 @@ export class ProductsController {
   ) {
     if (!file) throw new BadRequestException('Image file is required');
     const organizationId = organizationContext.organizationId;
+    // 1-21D : capacité incluse vérifiée AVANT l'envoi de la photo (aucun
+    // envoi inutile) ; la décision reste prise dans la transaction.
+    await this.productsService.assertCapacityAvailable(organizationId);
     // Si l'upload échoue, aucun objet n'existe encore : rien à nettoyer.
     const image = await this.storeProductImage(file, organizationId);
     let created: Awaited<ReturnType<ProductsService['create']>>;
@@ -226,6 +229,19 @@ export class ProductsController {
       productVisibility(organizationContext),
       parseProductIds(ids),
     );
+  }
+
+  /**
+   * 1-21D — capacité incluse : fiches conservées (corbeille comprise) et
+   * plafond, décomptés par le serveur (jamais une longueur de page).
+   * Déclarée AVANT `:id`.
+   */
+  @Get('capacity')
+  @RequirePermissions('products.manage')
+  capacity(
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+  ) {
+    return this.productsService.capacity(organizationContext.organizationId);
   }
 
   @Get(':id')

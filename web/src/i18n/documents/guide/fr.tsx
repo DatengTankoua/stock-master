@@ -333,9 +333,13 @@ const content: DocumentContent = {
               .
             </li>
             <li>
-              Le paiement en ligne n&apos;est pas encore disponible. Pour
-              renouveler, le propriétaire écrit depuis Organisation, puis
-              Assistance (catégorie « Abonnement »), ou à{" "}
+              Pour renouveler, le propriétaire choisit une durée dans
+              Organisation, puis Abonnement, et paie en une fois par Mobile
+              Money (MTN ou Orange) sur la page sécurisée de SasPay. Les frais
+              de paiement sont pris en charge par Stock Master. De retour dans
+              Stock Master, « Vérifier le paiement » confirme l&apos;abonnement.
+              Pour toute question : Organisation, puis Assistance (catégorie «
+              Abonnement »), ou{" "}
               <MailLink to="support" subject="Renouvellement de l'abonnement" />
               .
             </li>

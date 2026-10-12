@@ -167,7 +167,7 @@ describe('Paiement par page hébergée SasPay (e2e 1-21B)', () => {
       reference: 'TXN-x',
       type: 'PAIEMENT',
       status: 'SUCCESS',
-      amount: '3000.00',
+      amount: '3500.00',
       currency: 'XAF',
     },
   });
@@ -247,7 +247,21 @@ describe('Paiement par page hébergée SasPay (e2e 1-21B)', () => {
     const caps = await request(server())
       .get(`${base}/capabilities`)
       .set('Authorization', `Bearer ${o.token}`);
-    expect(caps.body).toEqual({ available: true, method: 'hosted-checkout' });
+    // 1-21D : catalogue COURANT exposé en lecture (tarifs réellement déployés).
+    expect(caps.body).toEqual({
+      available: true,
+      method: 'hosted-checkout',
+      pricing: {
+        version: 2,
+        currency: 'XAF',
+        prices: [
+          { term: 'monthly', months: 1, amount: 3500 },
+          { term: 'quarterly', months: 3, amount: 10000 },
+          { term: 'semiannual', months: 6, amount: 18500 },
+          { term: 'annual', months: 12, amount: 35000 },
+        ],
+      },
+    });
 
     const p = await pendingPayment(o.token);
     expect(p.body.payerPhoneMasked).toBeNull();
@@ -257,7 +271,7 @@ describe('Paiement par page hébergée SasPay (e2e 1-21B)', () => {
     expect(JSON.stringify(p.body)).not.toContain(FAKE_SASPAY_KEY);
     const session = fake.sessions.get(p.sessionId)!;
     expect(session).toMatchObject({
-      amount: '3000.00',
+      amount: '3500.00',
       currency: 'XAF',
       customer_email: o.email,
       customer_name: expect.stringContaining('Gérant'),
@@ -270,7 +284,7 @@ describe('Paiement par page hébergée SasPay (e2e 1-21B)', () => {
       provider: 'saspay',
       status: 'pending',
       open: true,
-      amount: 3000,
+      amount: 3500,
       payerPhoneMasked: null,
     });
   });
@@ -405,6 +419,34 @@ describe('Paiement par page hébergée SasPay (e2e 1-21B)', () => {
     expect(await periodsFor(p.id)).toHaveLength(1);
   });
 
+  it('7b. frais ADD_ON (1-21C) : débit = prix + frais confirmés → une période, confirmations répétées sans effet ; frais incohérents → vérification', async () => {
+    const o = await owner('addon');
+    const p = await pendingPayment(o.token);
+    const tx = fake.attempt(p.sessionId, 'SUCCESS', {
+      feeMode: 'ADD_ON',
+      clientFee: '105.50',
+      debited: '3605.50',
+    });
+    expect((await refresh(o.token, p.id)).body.status).toBe('succeeded');
+    await Promise.all([
+      refresh(o.token, p.id),
+      notify(event(tx)),
+      payments.confirmPayment(new Types.ObjectId(p.id)),
+    ]);
+    expect((await doc(p.id))!.providerTransactionId).toBe(tx);
+    expect(await periodsFor(p.id)).toHaveLength(1);
+
+    const o2 = await owner('addon-mismatch');
+    const p2 = await pendingPayment(o2.token);
+    fake.attempt(p2.sessionId, 'SUCCESS', {
+      feeMode: 'ADD_ON',
+      clientFee: '105.50',
+      debited: '3700.00',
+    });
+    expect((await refresh(o2.token, p2.id)).body.status).toBe('review');
+    expect(await periodsFor(p2.id)).toHaveLength(0);
+  });
+
   it('8. attente, tentative échouée sur page ouverte, page expirée (vérification), succès tardif accepté', async () => {
     const o = await owner('states');
     const p = await pendingPayment(o.token);
@@ -435,7 +477,7 @@ describe('Paiement par page hébergée SasPay (e2e 1-21B)', () => {
 
   it('9. discordances → vérification, jamais d’attribution : débit ≠ prix, devise, metadata absente, transaction désignée différemment', async () => {
     const cases: Array<(sessionId: string) => void> = [
-      (s) => fake.attempt(s, 'SUCCESS', { debited: '3053.00' }),
+      (s) => fake.attempt(s, 'SUCCESS', { debited: '3553.00' }),
       (s) => fake.attempt(s, 'SUCCESS', { currency: 'XOF' }),
       (s) => {
         fake.sessions.get(s)!.metadata = {};

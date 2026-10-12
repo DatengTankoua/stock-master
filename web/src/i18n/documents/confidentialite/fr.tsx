@@ -18,7 +18,9 @@ import type { DocumentContent } from "@/i18n/documents/types";
 
 // 1-16G : texte français déplacé depuis la page. Version 0.4 : ajout de
 // la langue choisie parmi les données du compte (seule différence avec la
-// 0.3, archivée et inchangée).
+// 0.3, archivée et inchangée). Version 0.5 (1-21D) : SasPay, prestataire de
+// paiement des abonnements (données transmises, transfert hors du
+// Cameroun) ; 0.3 et 0.4 restent archivées et inchangées.
 const content: DocumentContent = {
   metaTitle: "Politique de confidentialité",
   metaDescription:
@@ -132,8 +134,16 @@ const content: DocumentContent = {
               ;
             </li>
             <li>
-              montant, durée choisie, références de l&apos;opération, état, et
-              numéro de téléphone du payeur sous forme masquée.
+              montant, durée choisie, références de l&apos;opération (dont les
+              identifiants de session et de transaction SasPay), état, dates ;
+            </li>
+            <li>
+              adresse de la page de paiement SasPay, tant que le paiement est en
+              cours ;
+            </li>
+            <li>
+              pour les anciens paiements par numéro de téléphone : ce numéro
+              sous forme masquée.
             </li>
           </ul>
           <h3>Notifications</h3>
@@ -251,8 +261,9 @@ const content: DocumentContent = {
               </tr>
               <tr>
                 <td>
-                  Gérer l&apos;essai et l&apos;abonnement, conserver la preuve
-                  des opérations
+                  Gérer l&apos;essai et l&apos;abonnement, encaisser les
+                  paiements par l&apos;intermédiaire de SasPay, conserver la
+                  preuve des opérations
                 </td>
                 <td>
                   Consentement du propriétaire ; obligation légale de conserver
@@ -326,6 +337,19 @@ const content: DocumentContent = {
               à l&apos;adresse e-mail de votre compte.
             </li>
             <li>
+              <strong>SasPay</strong>, service de paiement édité par Payix LLC,
+              lorsque le propriétaire paie un abonnement en ligne. {SITE.name}{" "}
+              lui transmet le nom et l&apos;adresse e-mail du compte qui paie,
+              le montant, la devise, la durée, la référence du paiement, le pays
+              (Cameroun) et l&apos;adresse de retour vers {SITE.name}. Le numéro
+              Mobile Money et le moyen de paiement sont saisis sur la page de
+              SasPay et traités par SasPay et les opérateurs selon leurs propres
+              conditions. {SITE.name} ne conserve ni ce numéro ni aucun code
+              secret.
+              {/* À COMPLÉTER : durée de conservation chez SasPay et contact
+                  du prestataire, une fois confirmés par écrit. */}
+            </li>
+            <li>
               <strong>Une autorité</strong>, lorsque la loi l&apos;exige.
             </li>
           </ul>
@@ -360,6 +384,11 @@ const content: DocumentContent = {
             Vos données peuvent donc être hébergées ou transmises hors du
             Cameroun. Les pays concernés seront indiqués dès qu&apos;ils auront
             été vérifiés.
+          </p>
+          <p>
+            SasPay est édité par Payix LLC, société des États-Unis (Nouveau-
+            Mexique) immatriculée au Bénin, où se trouve son siège : les données
+            de paiement peuvent être traitées hors du Cameroun.
           </p>
           <p>
             La loi n° 2024/017 soumet tout transfert de données vers un État

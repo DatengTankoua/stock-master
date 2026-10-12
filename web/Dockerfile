@@ -21,6 +21,12 @@ COPY web/package.json web/
 RUN corepack enable pnpm && corepack install
 RUN pnpm install --frozen-lockfile --filter web --os linux --cpu x64 --libc musl
 COPY web/ web/
+# 1-21D : catalogue tarifaire SERVEUR, source unique des prix affichés
+# (importé par web/src/lib/subscription-offers.ts). Modules purs, sans
+# dépendance ni secret.
+COPY api/src/subscriptions/subscription-pricing.ts api/src/subscriptions/subscription-terms.ts api/src/subscriptions/
+# 1-21D : plafond de fiches produit (capacité incluse), module pur.
+COPY api/src/products/product-capacity.ts api/src/products/
 
 # Variables PUBLIQUES uniquement (inlinées par `next build`). Aucun secret
 # n'est transmis comme ARG. L'inscription publique reste fermée par défaut.

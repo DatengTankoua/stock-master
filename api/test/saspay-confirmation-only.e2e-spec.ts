@@ -36,6 +36,7 @@ import {
 import { OWNER_TERMS } from './e2e/legal-acceptance-fixtures';
 import { postRegister } from './e2e/registration-fixtures';
 import { FAKE_SASPAY_KEY, FakeSasPay } from './e2e/fake-saspay';
+import { getSubscriptionPrice } from '../src/subscriptions/subscription-pricing';
 
 /**
  * 1-21B — Nouvelles tentatives DÉSACTIVÉES (fournisseur par défaut,
@@ -179,10 +180,24 @@ describe('Confirmations SasPay sans nouvelles tentatives (e2e 1-21B)', () => {
     const caps = await request(server())
       .get(`${base}/capabilities`)
       .set('Authorization', `Bearer ${o.token}`);
-    expect(caps.body).toEqual({ available: false, method: null });
+    // 1-21D : paiements désactivés, catalogue courant toujours lisible.
+    expect(caps.body).toEqual({
+      available: false,
+      method: null,
+      pricing: {
+        version: 2,
+        currency: 'XAF',
+        prices: [
+          { term: 'monthly', months: 1, amount: 3500 },
+          { term: 'quarterly', months: 3, amount: 10000 },
+          { term: 'semiannual', months: 6, amount: 18500 },
+          { term: 'annual', months: 12, amount: 35000 },
+        ],
+      },
+    });
   });
 
-  it('2. paiement SasPay laissé par un processus précédent : confirmé après redémarrage', async () => {
+  it('2. paiement SasPay laissé par un processus précédent (ancien tarif 3 000 XAF, version 1) : confirmé après redémarrage à son montant enregistré', async () => {
     const o = await owner();
     const placeholder = await seed(o, { provider: 'saspay' });
     const sessionId = fake.addForeignSession(placeholder.reference);
@@ -196,6 +211,13 @@ describe('Confirmations SasPay sans nouvelles tentatives (e2e 1-21B)', () => {
     const res = await refresh(o.token, placeholder.id);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('succeeded');
+    // 1-21D : tarif courant différent (3 500, version 2) ; le paiement garde
+    // son montant et sa version, jamais comparés au tarif courant.
+    expect(getSubscriptionPrice('monthly').amount).not.toBe(3000);
+    expect(res.body.amount).toBe(3000);
+    const stored = await paymentModel.findById(placeholder.id).lean().exec();
+    expect(stored).toMatchObject({ amount: 3000, pricingVersion: 1 });
+    expect(stored!.periodId).not.toBeNull();
   });
 
   it('3. réponse perdue avant le redémarrage : session retrouvée par metadata, adoptée', async () => {

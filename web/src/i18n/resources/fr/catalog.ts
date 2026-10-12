@@ -199,6 +199,11 @@ const catalogFr = {
     },
     viewTrash: "Voir la corbeille",
   },
+  // 1-21D : capacité incluse (plafond et total lus sur le serveur).
+  capacity: {
+    count: "{{used}} / {{limit}} produits",
+    full: "Capacité atteinte : {{limit}} fiches produit conservées, corbeille comprise ({{trashed}} dans la corbeille). Les nouvelles fiches sont refusées ; les ventes, consultations et modifications restent possibles.",
+  },
   trash: {
     title: "Corbeille",
     noPermission: "Tu n'as pas la permission de gérer la corbeille.",

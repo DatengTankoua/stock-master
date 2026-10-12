@@ -22,7 +22,7 @@
     },
     "conditions-abonnement": {
       "route": "/conditions-abonnement",
-      "current": "0.4",
+      "current": "0.5",
       "versions": {
         "0.3": {
           "publishedAt": "2026-10-07",
@@ -45,12 +45,25 @@
               "sha256": "5559b27b80d540ffbed5bb7bd2e22eb5f1b01730324c60248c63b6a56c49ebde"
             }
           }
+        },
+        "0.5": {
+          "publishedAt": "2026-10-13",
+          "locales": {
+            "fr": {
+              "file": "conditions-abonnement/0.5.fr.txt",
+              "sha256": "dc55ec25984f327b776f03dfe080c7fe1da1ca69354084bf216c9a7ee33b9ef2"
+            },
+            "en": {
+              "file": "conditions-abonnement/0.5.en.txt",
+              "sha256": "4e8e01ef9ea51464fe4da7496a49f1b0c570ab6ec68abe0a102604f1065da623"
+            }
+          }
         }
       }
     },
     "confidentialite": {
       "route": "/confidentialite",
-      "current": "0.4",
+      "current": "0.5",
       "versions": {
         "0.3": {
           "publishedAt": "2026-10-07",
@@ -71,6 +84,19 @@
             "en": {
               "file": "confidentialite/0.4.en.txt",
               "sha256": "9d52182daee5db08df3cce68361eaff999ba42b643742f728a5aff4a95ba9969"
+            }
+          }
+        },
+        "0.5": {
+          "publishedAt": "2026-10-13",
+          "locales": {
+            "fr": {
+              "file": "confidentialite/0.5.fr.txt",
+              "sha256": "d5eb073552fe814f47c1655c0970ee7754da82d8389c8d831898086e7cfdd0ce"
+            },
+            "en": {
+              "file": "confidentialite/0.5.en.txt",
+              "sha256": "b7e07ea9169a2f9aa5dc27f8fb124bb6651fb5065a096b7183efb72e5c63c783"
             }
           }
         }

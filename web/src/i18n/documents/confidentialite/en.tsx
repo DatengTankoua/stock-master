@@ -10,7 +10,7 @@ import type { DocumentContent } from "@/i18n/documents/types";
 import { PROVIDER_ROLES_EN } from "@/i18n/documents/providers";
 
 // 1-16G — Traduction anglaise fidèle de la politique de confidentialité
-// 0.4 (la 0.3, archivée en français, n'est pas traduite) (aucune clause, promesse ni coordonnée ajoutée ; les implantations
+// 0.5 (1-21D : SasPay ; la 0.3, archivée en français, n'est pas traduite) (aucune clause, promesse ni coordonnée ajoutée ; les implantations
 // restent écrites telles que déclarées). Statut « projet », `noindex`. Les
 // points « À COMPLÉTER / À VALIDER » du texte français restent ouverts. La
 // traduction ne vaut pas validation juridique.
@@ -108,8 +108,15 @@ const content: DocumentContent = {
           <ul>
             <li>trial and subscription periods: length, dates, origin;</li>
             <li>
-              amount, chosen length, transaction references, status, and the
-              payer&apos;s phone number in masked form.
+              amount, chosen length, transaction references (including the
+              SasPay session and transaction identifiers), status, dates;
+            </li>
+            <li>
+              address of the SasPay payment page, while the payment is in
+              progress;
+            </li>
+            <li>
+              for earlier payments by phone number: that number in masked form.
             </li>
           </ul>
           <h3>Notifications</h3>
@@ -209,8 +216,8 @@ const content: DocumentContent = {
               </tr>
               <tr>
                 <td>
-                  Manage the trial and the subscription, keep proof of
-                  transactions
+                  Manage the trial and the subscription, collect payments
+                  through SasPay, keep proof of transactions
                 </td>
                 <td>
                   Owner&apos;s consent; legal obligation to keep certain
@@ -276,6 +283,16 @@ const content: DocumentContent = {
               account&apos;s email address.
             </li>
             <li>
+              <strong>SasPay</strong>, a payment service published by Payix LLC,
+              when the owner pays for a subscription online. {SITE.name} sends
+              it the name and email address of the paying account, the amount,
+              the currency, the length, the payment reference, the country
+              (Cameroon) and the return address to {SITE.name}. The Mobile Money
+              number and the payment method are entered on SasPay&apos;s page
+              and processed by SasPay and the operators under their own terms.{" "}
+              {SITE.name} keeps neither this number nor any secret code.
+            </li>
+            <li>
               <strong>An authority</strong>, when the law requires it.
             </li>
           </ul>
@@ -308,6 +325,11 @@ const content: DocumentContent = {
             The providers listed above are foreign companies. Your data may
             therefore be hosted or transferred outside Cameroon. The countries
             concerned will be stated as soon as they have been verified.
+          </p>
+          <p>
+            SasPay is published by Payix LLC, a United States company (New
+            Mexico) registered in Benin, where its head office is located:
+            payment data may be processed outside Cameroon.
           </p>
           <p>
             Law No. 2024/017 makes any transfer of data to a foreign State

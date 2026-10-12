@@ -1,0 +1,56 @@
+Conditions d'abonnement
+Version 0.5, mise à jour le 13 octobre 2026.
+Ces conditions décrivent l'essai gratuit et l'abonnement payant à Stock Master : ce qu'ils comprennent, leur durée, leur prix et ce qui se passe à leur échéance. Elles complètent les conditions d'utilisation.
+1. Ce que comprend l'abonnement
+Il existe une seule offre, avec toutes les fonctions de Stock Master. L'abonnement est pris pour un commerce, et non pour une personne :
+- tous les membres du commerce sont inclus, sans supplément par vendeur ;
+- chaque membre accède aux fonctions selon les droits que le commerce lui a donnés ;
+- l'abonnement est géré par le propriétaire du commerce, dans Organisation, puis Abonnement.
+Capacité incluse. Chaque organisation peut conserver jusqu'à 1 000 fiches produit, y compris celles placées dans la corbeille ; chaque produit du catalogue constitue une fiche. Les quantités en stock n'entrent pas dans ce décompte, pas plus que les ventes et leur historique. Cette capacité est la même pour toutes les durées. Lorsqu'elle est atteinte, seule la création de nouvelles fiches est refusée.
+2. Essai gratuit
+- Un essai gratuit de 7 jours démarre automatiquement à la création du commerce.
+- Aucun moyen de paiement n'est demandé pour l'essai.
+- Un commerce ne bénéficie que d'un seul essai.
+- Si les notifications « Fin d'essai ou d'abonnement » sont activées, un rappel est envoyé dans les 24 heures qui précèdent la fin.
+- À la fin de l'essai, l'accès au commerce est limité comme décrit à la section « Expiration ».
+3. Durées et prix
+Le montant indiqué est le total payé en une fois pour toute la durée choisie, en francs CFA (XAF). Il n'est pas prélevé chaque mois : l'équivalent mensuel n'est donné qu'à titre de comparaison.
+Durées et prix de l'abonnement
+Durée | Total payé en une fois | Équivalent mensuel et économie
+1 mois | 3 500 FCFA | Un mois
+3 mois | 10 000 FCFA | environ 3 333 FCFA par mois ; 500 FCFA d'économie par rapport au paiement mensuel
+6 mois | 18 500 FCFA | environ 3 083 FCFA par mois ; 2 500 FCFA d'économie par rapport au paiement mensuel
+12 mois | 35 000 FCFA | environ 2 917 FCFA par mois ; 7 000 FCFA d'économie par rapport au paiement mensuel (2 mois offerts)
+Les frais du prestataire de paiement SasPay sont pris en charge par Stock Master : ils ne s'ajoutent pas au prix. Le montant à payer est affiché sur la page de paiement avant votre validation.
+Le prix applicable est celui en vigueur au moment où le paiement est demandé ; il vous est présenté avant tout paiement. Un paiement déjà demandé et une période déjà accordée ne sont jamais modifiés par un changement de prix.
+4. Début et durée d'une période
+- Une période se compte en mois du calendrier : une période d'un mois commencée le 10 mars se termine le 10 avril à la même heure. Si le jour n'existe pas (31), elle se termine le dernier jour du mois.
+- Une période accordée avant la fin de l'essai ou de la période en cours commence à la fin de celle-ci : le temps déjà accordé n'est jamais perdu.
+- L'état de l'abonnement et ses dates sont visibles dans Organisation, puis Abonnement.
+5. Paiement et renouvellement
+Le propriétaire paie depuis Organisation, puis Abonnement :
+- il choisit une durée ; le montant est fixé par Stock Master à ce moment ;
+- il paie ce montant en une fois sur la page sécurisée de SasPay, prestataire de paiement, par Mobile Money (MTN ou Orange) ;
+- la période est accordée lorsque Stock Master a obtenu de SasPay la confirmation du paiement ; le simple retour sur Stock Master ne suffit pas. Le bouton « Vérifier le paiement » relance cette vérification ;
+- il n'y a aucun renouvellement ni prélèvement automatique : chaque nouvelle période est une décision du propriétaire.
+En cas de difficulté, contactez support@stock-master.app.
+6. Expiration
+À la fin de l'essai ou de la dernière période payée, sans nouvelle période :
+- l'accès aux pages du commerce est bloqué pour tous ses membres, y compris sur les appareils déjà connectés ;
+- le propriétaire voit un écran qui l'invite à renouveler ; les autres membres sont invités à le contacter ;
+- les ventes enregistrées sans connexion et pas encore envoyées restent sur l'appareil ; elles sont envoyées lorsque l'accès est rétabli, dans la limite de 14 jours après leur saisie ;
+- les données du commerce ne sont pas supprimées automatiquement à l'expiration.
+7. Arrêt, rétractation et remboursement
+Comme rien n'est renouvelé automatiquement, il suffit de ne pas renouveler pour arrêter l'abonnement à la fin de la période en cours.
+Une période payée n'est pas remboursée en cas de changement d'avis, de non-utilisation du service ou d'arrêt volontaire, y compris lorsque le paiement a eu lieu avant le début de la période.
+- Par exception, lorsqu'une erreur imputable à Stock Master cause un préjudice au client, celui-ci peut obtenir un remboursement, après vérification de l'incident.
+- Un double débit confirmé pour un même achat n'est pas dû : le montant débité en double est remboursé.
+Pour signaler un incident ou un double débit, écrivez à support@stock-master.app en indiquant le nom du commerce et la référence du paiement.
+Ces règles s'appliquent sans préjudice des droits que la loi applicable vous reconnaît de manière impérative, y compris un éventuel droit de rétractation.
+8. Qui accepte ces conditions
+Ces conditions engagent la personne qui crée le commerce et en devient propriétaire. Elle les accepte en cochant la case prévue à l'inscription, avec les conditions d'utilisation. Cette case n'est jamais cochée d'avance.
+Les administrateurs et les vendeurs invités acceptent les conditions d'utilisation, pas ces conditions. Après un transfert de propriété, l'accord du nouveau propriétaire lui sera demandé dans l'application.
+La preuve de l'acceptation est enregistrée par le serveur comme décrit dans les conditions d'utilisation, avec le commerce concerné.
+9. Réclamations
+Pour toute question ou réclamation sur l'essai, une période ou un paiement, écrivez à support@stock-master.app en indiquant le nom du commerce et l'adresse e-mail du propriétaire.
+Ces conditions ne réduisent aucun droit que la loi vous reconnaît.

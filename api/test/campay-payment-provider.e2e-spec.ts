@@ -180,7 +180,7 @@ describe('Adaptateur CamPay + moteur de confirmation (e2e 1-14D.2D)', () => {
     reference,
     external_reference: merchantReference,
     status: 'PENDING',
-    amount: 3000.0,
+    amount: 3500.0,
     currency: 'XAF',
     operator: 'MTN',
     code: 'CP2610020001',
@@ -285,7 +285,7 @@ describe('Adaptateur CamPay + moteur de confirmation (e2e 1-14D.2D)', () => {
     const [payment] = await paymentsOf(orgId);
     const [collect] = collectCalls();
     expect(JSON.parse(collect.body!)).toEqual({
-      amount: '3000',
+      amount: '3500',
       currency: 'XAF',
       from: PHONE,
       description: 'Abonnement Stock Master (1 mois)',
@@ -433,8 +433,8 @@ describe('Adaptateur CamPay + moteur de confirmation (e2e 1-14D.2D)', () => {
   });
 
   it.each([
-    ['montant différent', { amount: 2999 }],
-    ['montant décimal', { amount: 3000.5 }],
+    ['montant différent', { amount: 3499 }],
+    ['montant décimal', { amount: 3500.5 }],
     ['montant absent', { amount: undefined }],
     ['devise', { currency: 'XOF' }],
     ['référence marchand absente', { external_reference: '' }],
@@ -534,9 +534,9 @@ describe('Adaptateur CamPay + moteur de confirmation (e2e 1-14D.2D)', () => {
     });
 
     it.each([
-      ['3000.0000000000000001', 'review', 0],
-      ['2999.9999999999999999', 'review', 0],
-      ['3000.0', 'succeeded', 1],
+      ['3500.0000000000000001', 'review', 0],
+      ['3499.9999999999999999', 'review', 0],
+      ['3500.0', 'succeeded', 1],
     ])(
       'corps brut `"amount":%s` → %s (%i période `payment`)',
       async (literal, expectedStatus, expectedPeriods) => {

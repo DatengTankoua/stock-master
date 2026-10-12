@@ -3,6 +3,7 @@ import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
 import { ProductsService } from './products.service';
+import { Organization } from '../organizations/schemas/organization.schema';
 import { Product } from './schemas/product.schema';
 import { Sale } from '../sales/schemas/sale.schema';
 import { Section } from '../sections/schemas/section.schema';
@@ -38,6 +39,10 @@ function storageQuotaStub(s3: { deleteStoredObject?: jest.Mock }) {
 function withArrayCreate<T extends object>(model: T): T {
   return new Proxy(model, {
     get(target, prop, receiver) {
+      // 1-21D : capacité incluse neutre (aucune fiche) si non simulée.
+      if (prop === 'countDocuments' && !('countDocuments' in target)) {
+        return () => ({ exec: () => Promise.resolve(0) });
+      }
       if (prop !== 'create' || !('create' in target)) {
         return Reflect.get(target, prop, receiver) as unknown;
       }
@@ -47,6 +52,15 @@ function withArrayCreate<T extends object>(model: T): T {
       ];
     },
   });
+}
+
+/** 1-21D : organisation trouvée (sérialisation des créations). */
+function organizationModelStub() {
+  return {
+    updateOne: jest.fn(() => ({
+      exec: () => Promise.resolve({ matchedCount: 1, modifiedCount: 1 }),
+    })),
+  };
 }
 
 const PRODUCT_OBJECT_ID = '112233445566778899001122';
@@ -153,6 +167,10 @@ describe('ProductsService.decrementStock — décrémentation atomique (0B.7B)',
           useValue: {},
         },
         { provide: getModelToken(Sale.name), useValue: baseOpts.saleModel },
+        {
+          provide: getModelToken(Organization.name),
+          useValue: organizationModelStub(),
+        },
         {
           provide: getModelToken(Section.name),
           useValue: baseOpts.sectionModel,
@@ -460,6 +478,10 @@ describe('ProductsService — isolation multi-tenant catalogue (1-4B)', () => {
           useValue: stockAdjustmentModel,
         },
         { provide: getModelToken(Sale.name), useValue: saleModel },
+        {
+          provide: getModelToken(Organization.name),
+          useValue: organizationModelStub(),
+        },
         { provide: getModelToken(Section.name), useValue: sectionModel },
         { provide: S3Service, useValue: s3Service },
         {
@@ -1631,6 +1653,10 @@ describe('ProductsService — appelants AuditService.log portent la tenant (1-4C
           useValue: { find: jest.fn(() => saleChain) },
         },
         {
+          provide: getModelToken(Organization.name),
+          useValue: organizationModelStub(),
+        },
+        {
           provide: getModelToken(Section.name),
           useValue: sectionModel,
         },
@@ -1731,6 +1757,10 @@ describe('ProductsService.adjustStock — tenant et session (1-4C.2)', () => {
           useValue: {},
         },
         { provide: getModelToken(Sale.name), useValue: {} },
+        {
+          provide: getModelToken(Organization.name),
+          useValue: organizationModelStub(),
+        },
         { provide: getModelToken(Section.name), useValue: {} },
         { provide: S3Service, useValue: {} },
         {

@@ -42,6 +42,9 @@ export interface FakeTransaction {
   requested_amount: string;
   debited_amount: string;
   net_amount: string;
+  /** 1-21C : mode de frais et frais confirmés (défaut : DEDUCTED, sans frais). */
+  fee_charge_mode?: 'ADD_ON' | 'DEDUCTED';
+  client_fee?: string;
   currency: string;
   flow_direction: string;
   transaction_type: string;
@@ -159,9 +162,9 @@ export class FakeSasPay {
       return tx
         ? this.reply(200, {
             message: 'Payment transaction fetched successfully',
+            fee_charge_mode: 'DEDUCTED',
             ...tx,
             reference: `TXN-${tx.id.slice(0, 8)}`,
-            fee_charge_mode: 'DEDUCTED',
           })
         : this.reply(404, null);
     }
@@ -233,7 +236,14 @@ export class FakeSasPay {
   attempt(
     sessionId: string,
     status: FakeTransaction['status'],
-    options: { debited?: string; requested?: string; currency?: string } = {},
+    options: {
+      debited?: string;
+      requested?: string;
+      currency?: string;
+      feeMode?: 'ADD_ON' | 'DEDUCTED';
+      clientFee?: string;
+      net?: string;
+    } = {},
   ): string {
     const s = this.sessions.get(sessionId);
     if (!s) throw new Error('session inconnue');
@@ -243,7 +253,9 @@ export class FakeSasPay {
       status,
       requested_amount: options.requested ?? s.amount,
       debited_amount: options.debited ?? s.amount,
-      net_amount: s.amount,
+      net_amount: options.net ?? s.amount,
+      ...(options.feeMode ? { fee_charge_mode: options.feeMode } : {}),
+      ...(options.clientFee ? { client_fee: options.clientFee } : {}),
       currency: options.currency ?? s.currency,
       flow_direction: 'INBOUND',
       transaction_type: 'PAIEMENT',

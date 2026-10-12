@@ -192,6 +192,10 @@ const catalogEn: Translation<typeof catalogFr> = {
     },
     viewTrash: "View the trash",
   },
+  capacity: {
+    count: "{{used}} / {{limit}} products",
+    full: "Capacity reached: {{limit}} product records kept, trash included ({{trashed}} in the trash). New records are refused; sales, viewing and editing remain available.",
+  },
   trash: {
     title: "Trash",
     noPermission: "You do not have permission to manage the trash.",

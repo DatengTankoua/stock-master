@@ -13,8 +13,11 @@ import {
 } from '../subscriptions.service';
 import { SubscriptionSource, SubscriptionTerm } from '../subscription-terms';
 import {
+  SUBSCRIPTION_PRICING_CURRENCY,
+  SUBSCRIPTION_PRICING_VERSION,
   SubscriptionPricingError,
   getSubscriptionPrice,
+  listSubscriptionPrices,
 } from '../subscription-pricing';
 import { SUBSCRIPTION_CLOCK } from '../subscription-clock';
 import { SubscriptionSignalsService } from '../subscription-signals.service';
@@ -109,6 +112,16 @@ export interface CreatePaymentInput {
 export interface PaymentCapabilities {
   available: boolean;
   method: 'hosted-checkout' | 'mobile-money' | null;
+  /**
+   * 1-21D — catalogue COURANT du serveur, en lecture seule : prix des
+   * nouvelles tentatives (contrôle des tarifs réellement déployés). Jamais
+   * une entrée : le montant d'un paiement reste fixé par la seule durée.
+   */
+  pricing: {
+    version: number;
+    currency: string;
+    prices: { term: string; months: number; amount: number }[];
+  };
 }
 
 /** Projection EXPLICITE exposée au propriétaire. */
@@ -203,13 +216,25 @@ export class SubscriptionPaymentsService {
 
   /** 1-21B — moyen de paiement proposé pour une NOUVELLE tentative. */
   capabilities(): PaymentCapabilities {
-    if (!this.provider.available) return { available: false, method: null };
+    const pricing = {
+      version: SUBSCRIPTION_PRICING_VERSION,
+      currency: SUBSCRIPTION_PRICING_CURRENCY,
+      prices: listSubscriptionPrices().map(({ term, months, amount }) => ({
+        term,
+        months,
+        amount,
+      })),
+    };
+    if (!this.provider.available) {
+      return { available: false, method: null, pricing };
+    }
     return {
       available: true,
       method:
         this.provider.requiresPayerPhone === false
           ? 'hosted-checkout'
           : 'mobile-money',
+      pricing,
     };
   }
 

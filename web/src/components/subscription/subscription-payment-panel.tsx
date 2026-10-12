@@ -36,6 +36,11 @@ import {
   type PaymentIntent,
 } from "@/lib/payment-intent";
 import { createResponseOrder } from "@/lib/refresh-coordinator";
+import {
+  chargedAmountChange,
+  paymentAvailability,
+  type PaymentAvailability,
+} from "@/lib/payment-guards";
 import { useLiveRefresh, useSocketSignals } from "@/hooks/use-live-refresh";
 import { OfferConditions, OfferSelector } from "./subscription-offers";
 import { rich } from "@/i18n/rich";
@@ -84,6 +89,11 @@ import { rich } from "@/i18n/rich";
 
 const PAYMENT_SIGNALS = ["payments:changed"] as const;
 const NO_SIGNALS: readonly string[] = [];
+
+/** Horodatage d'une intention, lu au moment de l'envoi (jamais au rendu). */
+function intentTimestamp(): number {
+  return Date.now();
+}
 
 /** Vue la plus avancée : un succès connu n'est jamais remplacé. */
 function newerView(
@@ -191,7 +201,18 @@ export function SubscriptionPaymentPanel({
   const [online, setOnline] = useState(true);
   const [retryAt, setRetryAt] = useState<number | null>(null);
   // 1-21B : moyen proposé par le serveur ; API antérieure → Mobile Money.
-  const [hosted, setHosted] = useState(false);
+  // 1-21D : `available: false` → paiements désactivés (aucune création).
+  const [availability, setAvailability] =
+    useState<PaymentAvailability>("unknown");
+  const hosted = availability === "hosted-checkout";
+  const paymentsDisabled = availability === "unavailable";
+  // 1-21D : montant enregistré ≠ prix affiché dans cet onglet → confirmation
+  // explicite avant de proposer la page de paiement.
+  const [priceChange, setPriceChange] = useState<{
+    paymentId: string;
+    displayedXaf: number;
+    chargedXaf: number;
+  } | null>(null);
   // 1-21B : paiement désigné par l'adresse de retour (une vérification).
   const returnedPayment = useRef<string | null>(null);
   // Verrou SYNCHRONE contre le double clic (l'état React est asynchrone).
@@ -293,7 +314,7 @@ export function SubscriptionPaymentPanel({
         : new URLSearchParams(window.location.search).get("payment");
     void fetchPaymentCapabilities(token)
       .then((capabilities) => {
-        if (!cancelled) setHosted(capabilities.method === "hosted-checkout");
+        if (!cancelled) setAvailability(paymentAvailability(capabilities));
       })
       .catch(() => undefined);
     void (async () => {
@@ -460,7 +481,9 @@ export function SubscriptionPaymentPanel({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (inFlight.current || blocking || rateLimited) return;
+    if (inFlight.current || blocking || rateLimited || paymentsDisabled) {
+      return;
+    }
     if (!online) {
       setMessage({ tone: "error", key: "payment.messages.offlineCreate" });
       return;
@@ -487,10 +510,12 @@ export function SubscriptionPaymentPanel({
             clientOperationId: newClientOperationId(),
             term: selectedTerm,
             paymentId: null,
-            savedAt: Date.now(),
+            savedAt: intentTimestamp(),
           };
     writePaymentIntent(active);
     setIntent(active);
+    // Prix présenté dans CET onglet au moment de l'envoi.
+    const displayedXaf = offer?.totalXaf ?? null;
     try {
       const created = await createSubscriptionPayment(
         {
@@ -503,6 +528,10 @@ export function SubscriptionPaymentPanel({
       if (!mounted.current) return;
       setPhone("");
       setFormOpen(false);
+      const change = chargedAmountChange(displayedXaf, created.amount);
+      setPriceChange(
+        change ? { paymentId: created.paymentId, ...change } : null,
+      );
       track(created, active.clientOperationId);
       setMessage({
         tone: "info",
@@ -673,7 +702,15 @@ export function SubscriptionPaymentPanel({
     );
   }
 
-  const checkoutUrl = current ? safeCheckoutUrl(current.checkoutUrl) : null;
+  const pendingPriceChange =
+    priceChange !== null && current?.paymentId === priceChange.paymentId
+      ? priceChange
+      : null;
+  // Page de paiement proposée seulement après confirmation d'un prix changé.
+  const checkoutUrl =
+    current && !pendingPriceChange
+      ? safeCheckoutUrl(current.checkoutUrl)
+      : null;
   const copy = current
     ? {
         label: t(`payment.status.${current.status}.label`),
@@ -763,6 +800,30 @@ export function SubscriptionPaymentPanel({
               {t("payment.pinNotice")}
             </p>
           )}
+          {pendingPriceChange && (
+            <div
+              role="alert"
+              className="space-y-3 rounded-lg border border-(--brand-orange) p-3 text-sm"
+              data-testid="payment-price-changed"
+            >
+              <p>
+                {t("payment.priceChanged.text", {
+                  charged: format.fcfa(pendingPriceChange.chargedXaf),
+                  displayed: format.fcfa(pendingPriceChange.displayedXaf),
+                })}
+              </p>
+              <Button
+                type="button"
+                className="h-11 px-5"
+                data-testid="payment-price-confirm"
+                onClick={() => setPriceChange(null)}
+              >
+                {t("payment.priceChanged.confirm", {
+                  amount: format.fcfa(pendingPriceChange.chargedXaf),
+                })}
+              </Button>
+            </div>
+          )}
           {checkoutUrl && (
             <p className="text-xs text-muted-foreground">
               {t("payment.checkout.notice")}
@@ -778,7 +839,9 @@ export function SubscriptionPaymentPanel({
                 className={`${buttonVariants()} h-11 px-5`}
               >
                 <ExternalLinkIcon className="h-4 w-4" aria-hidden />
-                {t("payment.checkout.continue")}
+                {t("payment.checkout.continueAmount", {
+                  amount: format.fcfa(current.amount),
+                })}
               </a>
             )}
             {current.status !== "succeeded" && current.status !== "failed" && (
@@ -807,7 +870,7 @@ export function SubscriptionPaymentPanel({
                 {restricted ? t("payment.openShop") : t("manager.verify")}
               </Button>
             )}
-            {current.status === "failed" && (
+            {current.status === "failed" && !paymentsDisabled && (
               <Button
                 type="button"
                 className="h-11 px-5"
@@ -834,22 +897,35 @@ export function SubscriptionPaymentPanel({
         </p>
       )}
 
-      {!blocking && current?.status !== "failed" && !formOpen && (
-        <Button
-          type="button"
-          className="h-11 px-5"
-          aria-expanded={formOpen}
-          aria-controls="subscription-payment-form"
-          onClick={() => {
-            setFormOpen(true);
-            setMessage(null);
-          }}
+      {paymentsDisabled && (
+        <p
+          role="status"
+          className="rounded-lg bg-muted p-3 text-sm"
+          data-testid="payment-disabled"
         >
-          {t("payment.renew")}
-        </Button>
+          {t("payment.disabled")}
+        </p>
       )}
 
-      {!blocking && formOpen && (
+      {!paymentsDisabled &&
+        !blocking &&
+        current?.status !== "failed" &&
+        !formOpen && (
+          <Button
+            type="button"
+            className="h-11 px-5"
+            aria-expanded={formOpen}
+            aria-controls="subscription-payment-form"
+            onClick={() => {
+              setFormOpen(true);
+              setMessage(null);
+            }}
+          >
+            {t("payment.renew")}
+          </Button>
+        )}
+
+      {!paymentsDisabled && !blocking && formOpen && (
         <form
           id="subscription-payment-form"
           aria-labelledby="subscription-payment-form-title"

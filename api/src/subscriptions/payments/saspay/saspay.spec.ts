@@ -7,6 +7,8 @@ import { PaymentConfigError, resolvePaymentConfig } from './saspay-config';
 import {
   SasPayPaymentProvider,
   parseSasPayAmount,
+  parseSasPayCents,
+  sasPayDebitMatchesPrice,
   unwrapSasPayBody,
   validCheckoutUrl,
 } from './saspay-payment-provider';
@@ -195,6 +197,28 @@ describe('Adaptateur SasPay — formats (1-21B)', () => {
     }
   });
 
+  it('centimes : décimal exact, deux décimales au plus, sans flottant', () => {
+    expect(parseSasPayCents('517.50')).toBe(51750);
+    expect(parseSasPayCents('17.5')).toBe(1750);
+    expect(parseSasPayCents('500')).toBe(50000);
+    expect(parseSasPayCents('0.01')).toBe(1);
+    expect(parseSasPayCents('0.1')! + parseSasPayCents('0.2')!).toBe(
+      parseSasPayCents('0.30'),
+    );
+    for (const bad of [
+      '17.505',
+      '-1.00',
+      '1e3',
+      '05.00',
+      '.50',
+      '',
+      17.5,
+      null,
+    ]) {
+      expect(parseSasPayCents(bad)).toBeNull();
+    }
+  });
+
   it('page de paiement : HTTPS et hôte documenté seulement', () => {
     expect(validCheckoutUrl('https://pay.saspay.me/checkout/abc==')).toBe(
       'https://pay.saspay.me/checkout/abc==',
@@ -217,6 +241,101 @@ describe('Adaptateur SasPay — formats (1-21B)', () => {
     ).toEqual({ id: 1 });
     expect(unwrapSasPayBody({ id: 1 })).toEqual({ id: 1 });
     expect(unwrapSasPayBody({ success: false, error: {} })).toBeUndefined();
+  });
+});
+
+describe('Adaptateur SasPay — débit selon le mode de frais (1-21C)', () => {
+  // Champs de `verify` (exemple documenté : ADD_ON, 2500 + 37.50 = 2537.50).
+  const addOn = {
+    requested_amount: '500.00',
+    fee_charge_mode: 'ADD_ON',
+    client_fee: '17.50',
+    debited_amount: '517.50',
+    net_amount: '500.00',
+  };
+  const deducted = {
+    requested_amount: '500.00',
+    fee_charge_mode: 'DEDUCTED',
+    client_fee: '17.50',
+    debited_amount: '500.00',
+    net_amount: '482.50',
+  };
+
+  it('ADD_ON valide : débit = prix + frais confirmés (centimes exacts), net = prix', () => {
+    expect(sasPayDebitMatchesPrice(addOn, 500)).toBe(true);
+    expect(
+      sasPayDebitMatchesPrice({ ...addOn, net_amount: undefined }, 500),
+    ).toBe(true);
+    // Exemple de la documentation, autre frais : aucun taux supposé.
+    expect(
+      sasPayDebitMatchesPrice(
+        {
+          ...addOn,
+          requested_amount: '2500.00',
+          client_fee: '37.50',
+          debited_amount: '2537.50',
+          net_amount: '2500.00',
+        },
+        2500,
+      ),
+    ).toBe(true);
+    // Écriture décimale abrégée du même montant.
+    expect(
+      sasPayDebitMatchesPrice(
+        { ...addOn, client_fee: '17.5', debited_amount: '517.5' },
+        500,
+      ),
+    ).toBe(true);
+  });
+
+  it('DEDUCTED valide : débit = prix, net ≤ prix ; mode absent : débit = prix', () => {
+    expect(sasPayDebitMatchesPrice(deducted, 500)).toBe(true);
+    expect(
+      sasPayDebitMatchesPrice(
+        {
+          requested_amount: '500.00',
+          debited_amount: '500.00',
+          net_amount: '500.00',
+        },
+        500,
+      ),
+    ).toBe(true);
+    expect(
+      sasPayDebitMatchesPrice(
+        { requested_amount: '500.00', debited_amount: '517.50' },
+        500,
+      ),
+    ).toBe(false);
+  });
+
+  it('mauvais prix demandé → non concordant, quel que soit le mode', () => {
+    for (const tx of [addOn, deducted]) {
+      expect(sasPayDebitMatchesPrice(tx, 3000)).toBe(false);
+      expect(
+        sasPayDebitMatchesPrice({ ...tx, requested_amount: '499.99' }, 500),
+      ).toBe(false);
+      expect(
+        sasPayDebitMatchesPrice({ ...tx, requested_amount: 500 }, 500),
+      ).toBe(false);
+    }
+  });
+
+  it('frais ou débit incohérents → non concordant (jamais « débit ≥ prix »)', () => {
+    const bad: Array<Record<string, unknown>> = [
+      { ...addOn, debited_amount: '518.00' },
+      { ...addOn, debited_amount: '600.00' },
+      { ...addOn, client_fee: undefined },
+      { ...addOn, client_fee: 17.5 },
+      { ...addOn, client_fee: '-17.50' },
+      { ...addOn, client_fee: '17.505', debited_amount: '517.505' },
+      { ...addOn, net_amount: '482.50' },
+      { ...addOn, net_amount: 'n/a' },
+      { ...deducted, debited_amount: '517.50' },
+      { ...deducted, net_amount: '517.50' },
+      { ...addOn, fee_charge_mode: '' },
+      { ...addOn, fee_charge_mode: 'SPLIT' },
+    ];
+    for (const tx of bad) expect(sasPayDebitMatchesPrice(tx, 500)).toBe(false);
   });
 });
 
@@ -244,6 +363,46 @@ describe('Adaptateur SasPay — création (1-21B)', () => {
         data === undefined ? {} : { success: true, data, code: status },
       ),
     });
+
+  it('réponse LIVE réelle (1-21C, anonymisée) : page sur checkout.saspay.me acceptée', async () => {
+    // Forme observée le 2026-10-12 (enveloppe, champs) ; identifiants,
+    // slug, e-mail et nom remplacés.
+    const provider = providerWith(
+      reply(201, {
+        id: '0f0e0d0c-0b0a-4908-8706-050403020101',
+        merchant: '0f0e0d0c-0b0a-4908-8706-050403020102',
+        slug: 'anonymise',
+        checkout_url: 'https://checkout.saspay.me/anonymise',
+        amount: '3000.00',
+        currency: 'XAF',
+        country: 'CM',
+        description: `Abonnement Stock Master (1 mois) ${request.merchantReference}`,
+        customer_email: 'gerant@example.com',
+        customer_name: 'Gérant',
+        customer_phone: '',
+        return_url: request.returnUrl,
+        metadata: { merchantReference: request.merchantReference },
+        fee_charge_mode: '',
+        status: 'PENDING',
+        transaction: null,
+        payment_link: null,
+        paid_at: null,
+        created_by_member: null,
+        expires_at: '2026-10-12T15:44:53.168000Z',
+        created_at: '2026-10-12T15:14:53.352230Z',
+        updated_at: '2026-10-12T15:14:53.352230Z',
+      }),
+    );
+    await expect(provider.initiate(request)).resolves.toEqual({
+      outcome: 'accepted',
+      providerReference: '0f0e0d0c-0b0a-4908-8706-050403020101',
+      redirectUrl: 'https://checkout.saspay.me/anonymise',
+    });
+    expect(
+      validCheckoutUrl('https://checkout.saspay.me.evil.example/x'),
+    ).toBeNull();
+    expect(validCheckoutUrl('http://checkout.saspay.me/x')).toBeNull();
+  });
 
   it('corps envoyé : montant décimal, XAF, CM, métadonnée, retour serveur ; clé seulement en en-tête', async () => {
     let sent: SasPayHttpRequest | undefined;

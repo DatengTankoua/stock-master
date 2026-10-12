@@ -15,6 +15,10 @@ import { EventsModule } from '../events/events.module';
 import { AuditModule } from '../audit/audit.module';
 import { PushModule } from '../push/push.module';
 import { Section, SectionSchema } from '../sections/schemas/section.schema';
+import {
+  Organization,
+  OrganizationSchema,
+} from '../organizations/schemas/organization.schema';
 
 @Module({
   imports: [
@@ -22,6 +26,8 @@ import { Section, SectionSchema } from '../sections/schemas/section.schema';
       { name: Product.name, schema: ProductSchema },
       { name: Sale.name, schema: SaleSchema },
       { name: Section.name, schema: SectionSchema },
+      // 1-21D : sérialisation des créations (capacité incluse).
+      { name: Organization.name, schema: OrganizationSchema },
       // 1-15D : écart figé à la purge (vue d'ensemble).
       {
         name: PurgedStockAdjustment.name,

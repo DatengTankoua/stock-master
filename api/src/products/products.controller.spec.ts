@@ -69,6 +69,9 @@ describe('ProductsController — transmission du tenant (1-4B)', () => {
 
   const serviceStub = {
     create: jest.fn(),
+    // 1-21D : capacité incluse disponible (pré-contrôle sans effet).
+    assertCapacityAvailable: jest.fn().mockResolvedValue(undefined),
+    capacity: jest.fn(),
     findAll: jest.fn(),
     findPage: jest.fn(),
     findOne: jest.fn(),

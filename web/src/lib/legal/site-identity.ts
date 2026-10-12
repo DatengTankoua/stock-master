@@ -13,6 +13,8 @@ export const SITE = Object.freeze({
   domain: "stock-master.app",
   url: "https://stock-master.app",
   country: "Cameroun",
+  /** 1-21D : année du pied de page public (« © 2026 Stock Master »). */
+  copyrightYear: 2026,
 });
 
 /**
@@ -129,7 +131,6 @@ export interface PublicDocument {
 }
 
 const OCTOBER_7_2026 = { fr: "7 octobre 2026", en: "7 October 2026" };
-const OCTOBER_8_2026 = { fr: "8 octobre 2026", en: "8 October 2026" };
 
 // Statut « projet » conservé (non indexé) tant que les validations
 // juridiques manquent ; la version affichée reste 0.x.
@@ -159,11 +160,7 @@ const DRAFT_0_3 = {
 // 1-16C.2 (finalisation) — Conditions d'abonnement 0.4 : le paiement en
 // ligne n'est pas activé (`UnavailablePaymentProvider`). La version 0.3,
 // archivée et éventuellement acceptée, reste dans l'archive sans changement.
-const DRAFT_0_4 = {
-  status: "projet",
-  version: "0.4",
-  updatedAt: OCTOBER_7_2026,
-} as const;
+// (0.4 archivée ; remplacée par la 0.5 en 1-21D.)
 
 // Cookies et accord de traitement : textes modifiés par 03f5459
 // (7 octobre 2026, exports mensuels) sans changement de numéro. Leur état
@@ -177,21 +174,34 @@ const DRAFT_COOKIES_DPA = {
 // 1-16G — Confidentialité 0.4 : la langue choisie rejoint les données du
 // compte (préférence utilisée pour les e-mails et notifications). La 0.3,
 // archivée en français, reste inchangée et n'est jamais traduite.
-const DRAFT_PRIVACY_0_4 = {
+// (0.4 archivée le 8 octobre 2026 ; remplacée par la 0.5 en 1-21D.)
+
+// 1-21D — Paiement en ligne SasPay, frais absorbés, tarifs définitifs :
+// conditions d'abonnement 0.5, confidentialité 0.5 (SasPay destinataire),
+// cookies 0.6 (mention « inutilisé tant que le paiement est fermé » retirée,
+// document non archivé). Les versions 0.3 et 0.4 archivées restent
+// inchangées. `updatedAt` est rendu dans le texte archivé : c'est la date
+// EFFECTIVE de publication, identique à `--published-at` de l'archivage :
+// 2026-10-13, date prévue du lancement. Si le lancement est reporté, la
+// changer AVANT publication (nouvelle date ici et nouvel archivage, la
+// version 0.5 n'étant pas encore publiée).
+const OCTOBER_13_2026 = { fr: "13 octobre 2026", en: "13 October 2026" };
+const DRAFT_1_21D = {
   status: "projet",
-  version: "0.4",
-  updatedAt: OCTOBER_8_2026,
+  version: "0.5",
+  updatedAt: OCTOBER_13_2026,
+} as const;
+const DRAFT_COOKIES_0_6 = {
+  status: "projet",
+  version: "0.6",
+  updatedAt: OCTOBER_13_2026,
 } as const;
 
 // 1-16G — Cookies 0.4 : ajout du cookie de langue `stockmaster.lang`.
 // 1-16H — Cookies 0.5 : clés de session renommées `stockmaster_token` /
 // `stockmaster_user` (anciennement `heyama_token` / `heyama_user`). Document
 // non archivé (non soumis à acceptation) : seul le numéro change.
-const DRAFT_COOKIES_0_5 = {
-  status: "projet",
-  version: "0.5",
-  updatedAt: OCTOBER_8_2026,
-} as const;
+// (0.5 du 8 octobre 2026 ; remplacée par la 0.6 en 1-21D.)
 
 /** Documents juridiques et contractuels, dans l'ordre d'affichage. */
 export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
@@ -208,17 +218,17 @@ export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
   {
     id: "conditions-abonnement",
     href: "/conditions-abonnement",
-    ...DRAFT_0_4,
+    ...DRAFT_1_21D,
   },
   {
     id: "confidentialite",
     href: "/confidentialite",
-    ...DRAFT_PRIVACY_0_4,
+    ...DRAFT_1_21D,
   },
   {
     id: "cookies",
     href: "/cookies",
-    ...DRAFT_COOKIES_0_5,
+    ...DRAFT_COOKIES_0_6,
   },
   {
     id: "traitement-donnees",

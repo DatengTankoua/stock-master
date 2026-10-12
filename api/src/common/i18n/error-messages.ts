@@ -240,6 +240,14 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     {
       en: "Not enough storage space: this upload would exceed the organisation's quota.",
     },
+  // ─── Capacité incluse (1-21D) ─────────────────────────────────────────
+  'Capacité incluse atteinte : nombre maximal de fiches produit conservées, corbeille comprise. Aucune nouvelle fiche ne peut être créée ; les ventes, consultations et modifications restent possibles.':
+    {
+      en: 'Included capacity reached: maximum number of product records kept, trash included. No new record can be created; sales, viewing and editing remain available.',
+    },
+  'Organisation introuvable.': {
+    en: 'Organisation not found.',
+  },
   "L'envoi du fichier a été interrompu. Réessayez.": {
     en: 'The file upload was interrupted. Try again.',
   },

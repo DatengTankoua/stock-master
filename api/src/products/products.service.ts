@@ -28,6 +28,15 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/schemas/audit-log.schema';
 import { Section, SectionDocument } from '../sections/schemas/section.schema';
 import {
+  Organization,
+  OrganizationDocument,
+} from '../organizations/schemas/organization.schema';
+import {
+  PRODUCT_CAPACITY,
+  PRODUCT_CAPACITY_REACHED,
+  productCapacityReached,
+} from './product-capacity';
+import {
   PurgedStockAdjustment,
   PurgedStockAdjustmentDocument,
 } from './schemas/purged-stock-adjustment.schema';
@@ -126,6 +135,8 @@ export class ProductsService {
     @InjectModel(PurgedStockAdjustment.name)
     private stockAdjustmentModel: Model<PurgedStockAdjustmentDocument>,
     private storageQuota: StorageQuotaService,
+    @InjectModel(Organization.name)
+    private organizationModel: Model<OrganizationDocument>,
   ) {}
 
   /**
@@ -324,6 +335,73 @@ export class ProductsService {
     }
   }
 
+  // ─── 1-21D : capacité incluse ──────────────────────────────────────────
+
+  /** Fiches conservées (corbeille comprise) et capacité incluse. */
+  async capacity(
+    organizationId: string,
+  ): Promise<{ used: number; trashed: number; limit: number }> {
+    const organizationOid = new Types.ObjectId(organizationId);
+    const [used, trashed] = await Promise.all([
+      this.productModel.countDocuments({ organizationId: organizationOid }),
+      this.productModel.countDocuments({
+        organizationId: organizationOid,
+        deletedAt: { $ne: null },
+      }),
+    ]);
+    return { used, trashed, limit: PRODUCT_CAPACITY };
+  }
+
+  private capacityReached(used: number): ConflictException {
+    return new ConflictException({
+      code: PRODUCT_CAPACITY_REACHED,
+      // Sans nombre : le plafond est dans `limit` (affiché formaté par le web).
+      message:
+        'Capacité incluse atteinte : nombre maximal de fiches produit conservées, corbeille comprise. Aucune nouvelle fiche ne peut être créée ; les ventes, consultations et modifications restent possibles.',
+      limit: PRODUCT_CAPACITY,
+      used,
+    });
+  }
+
+  /**
+   * Pré-contrôle (avant l'envoi de la photo) : évite un envoi inutile.
+   * Non décisif : la décision est prise dans la transaction de création.
+   */
+  async assertCapacityAvailable(organizationId: string): Promise<void> {
+    const used = await this.productModel.countDocuments({
+      organizationId: new Types.ObjectId(organizationId),
+    });
+    if (productCapacityReached(used)) throw this.capacityReached(used);
+  }
+
+  /**
+   * Décision DANS la transaction de création. L'écriture du document de
+   * l'organisation, AVANT le décompte, met en conflit deux créations
+   * simultanées : la seconde est rejouée par le pilote (`withTransaction`)
+   * et recompte en voyant la première. Un simple « compter puis insérer »
+   * laisserait passer deux créations à 999. Le décompte est celui des
+   * documents : aucune dérive après un échec ou une suppression.
+   */
+  private async reserveCapacity(
+    organizationOid: Types.ObjectId,
+    session: MongooseSession,
+  ): Promise<void> {
+    const touched = await this.organizationModel
+      .updateOne(
+        { _id: organizationOid },
+        { $inc: { productCreationSerial: 1 } },
+        { session },
+      )
+      .exec();
+    if (touched.matchedCount !== 1) {
+      throw new NotFoundException('Organisation introuvable.');
+    }
+    const used = await this.productModel
+      .countDocuments({ organizationId: organizationOid }, { session })
+      .exec();
+    if (productCapacityReached(used)) throw this.capacityReached(used);
+  }
+
   async create(
     organizationId: string,
     dto: CreateProductDto,
@@ -364,7 +442,9 @@ export class ProductsService {
     // porter un `organizationId` falsifié. L'org est imposée par le SERVEUR.
     // 1-17B : création et rattachement de la photo comptabilisée dans la
     // MÊME transaction (jamais une référence sans fichier compté).
+    // 1-21D : capacité incluse décidée dans la MÊME transaction.
     const product = await this.inTransaction(async (session) => {
+      await this.reserveCapacity(new Types.ObjectId(organizationId), session);
       const [created] = await this.productModel.create(
         [
           {

@@ -1013,6 +1013,22 @@ export function flattenProductEvent(data: ApiProductEnvelope): ApiProduct {
   return flattenProduct(data);
 }
 
+/**
+ * 1-21D — capacité incluse : fiches conservées (corbeille comprise) et
+ * plafond, décomptés par le SERVEUR (jamais la longueur d'une page).
+ * Réservée à la gestion des produits (`products.manage`).
+ */
+export interface ProductCapacity {
+  used: number;
+  trashed: number;
+  limit: number;
+}
+
+export async function fetchProductCapacity(): Promise<ProductCapacity> {
+  const { data } = await apiClient.get<ProductCapacity>("/products/capacity");
+  return data;
+}
+
 export async function createProduct(payload: {
   sectionId: string;
   name: string;
