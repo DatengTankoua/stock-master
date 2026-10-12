@@ -222,12 +222,23 @@ describe('Matrice des routes — contrôle commercial (1-14C.1)', () => {
         'GET /organizations/current/subscription/payments/:paymentId',
         // 1-21B : moyen de paiement des nouvelles tentatives (aucun secret).
         'GET /organizations/current/subscription/payments/capabilities',
+        // 1-21E : reçu d'un paiement encaissé (owner-only).
+        'GET /organizations/current/subscription/payments/:paymentId/receipt',
         'POST /organizations/current/subscription/payments',
+        // 1-21E : changer de forfait / annuler la tentative (owner-only).
+        'POST /organizations/current/subscription/payments/:paymentId/abandon',
         'POST /organizations/current/subscription/payments/:paymentId/refresh',
       ].sort((a, b) => a.localeCompare(b)),
     );
     // Paiements : opération owner-only DÉDIÉE, aucune permission délégable.
-    for (const name of ['create', 'list', 'get', 'refresh']) {
+    for (const name of [
+      'create',
+      'list',
+      'get',
+      'refresh',
+      'abandon',
+      'receipt',
+    ]) {
       const paymentHandler = (
         SubscriptionPaymentsController.prototype as unknown as Record<
           string,

@@ -189,3 +189,21 @@
     @apply font-sans;
   }
 }
+
+/* 1-21E — Impression du reçu de paiement : seul le reçu ouvert s'imprime
+   (sélecteurs du reçu plus spécifiques que celui qui masque le reste). */
+@media print {
+  body:has([data-print-receipt="active"]) * {
+    visibility: hidden;
+  }
+  body:has([data-print-receipt="active"]) [data-print-receipt="active"],
+  body:has([data-print-receipt="active"]) [data-print-receipt="active"] * {
+    visibility: visible;
+  }
+  body:has([data-print-receipt="active"]) [data-print-receipt="active"] {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0;
+  }
+}

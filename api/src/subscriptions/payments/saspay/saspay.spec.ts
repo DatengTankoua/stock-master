@@ -6,8 +6,10 @@ import {
 import { PaymentConfigError, resolvePaymentConfig } from './saspay-config';
 import {
   SasPayPaymentProvider,
+  SASPAY_CHECKOUT_TTL_MS,
   parseSasPayAmount,
   parseSasPayCents,
+  parseSasPayDate,
   sasPayDebitMatchesPrice,
   unwrapSasPayBody,
   validCheckoutUrl,
@@ -397,6 +399,8 @@ describe('Adaptateur SasPay — création (1-21B)', () => {
       outcome: 'accepted',
       providerReference: '0f0e0d0c-0b0a-4908-8706-050403020101',
       redirectUrl: 'https://checkout.saspay.me/anonymise',
+      // 1-21E : expiration RÉELLE renvoyée par SasPay, retenue telle quelle.
+      checkoutExpiresAt: new Date('2026-10-12T15:44:53.168Z'),
     });
     expect(
       validCheckoutUrl('https://checkout.saspay.me.evil.example/x'),
@@ -406,18 +410,26 @@ describe('Adaptateur SasPay — création (1-21B)', () => {
 
   it('corps envoyé : montant décimal, XAF, CM, métadonnée, retour serveur ; clé seulement en en-tête', async () => {
     let sent: SasPayHttpRequest | undefined;
-    const provider = providerWith(async (req) => {
-      sent = req;
-      return reply(201, {
-        id: '0f0e0d0c-0b0a-4908-8706-050403020100',
-        checkout_url: 'https://pay.saspay.me/checkout/abc',
-        metadata: { merchantReference: request.merchantReference },
-      })();
+    const now = Date.parse('2026-10-12T10:00:00.000Z');
+    const provider = new SasPayPaymentProvider({
+      environment: 'sandbox',
+      secretKey: TEST,
+      now: () => now,
+      transport: async (req) => {
+        sent = req;
+        return reply(201, {
+          id: '0f0e0d0c-0b0a-4908-8706-050403020100',
+          checkout_url: 'https://pay.saspay.me/checkout/abc',
+          metadata: { merchantReference: request.merchantReference },
+        })();
+      },
     });
     await expect(provider.initiate(request)).resolves.toEqual({
       outcome: 'accepted',
       providerReference: '0f0e0d0c-0b0a-4908-8706-050403020100',
       redirectUrl: 'https://pay.saspay.me/checkout/abc',
+      // 1-21E : aucune expiration renvoyée → celle DEMANDÉE (contrat vérifié).
+      checkoutExpiresAt: new Date(now + SASPAY_CHECKOUT_TTL_MS),
     });
     expect(sent!.url).toBe('https://api.saspay.me/api/v1/checkout-sessions/');
     expect(sent!.headers.Authorization).toBe(`Bearer ${TEST}`);
@@ -431,6 +443,9 @@ describe('Adaptateur SasPay — création (1-21B)', () => {
       metadata: { merchantReference: request.merchantReference },
     });
     expect(JSON.stringify(body)).not.toContain(TEST);
+    expect(body.expires_at).toBe(
+      new Date(now + SASPAY_CHECKOUT_TTL_MS).toISOString(),
+    );
   });
 
   it('classement des réponses : 400/422 refus, 401/403/404/429 et non transmis indisponible, 409/5xx/perdu incertain', async () => {
@@ -476,5 +491,176 @@ describe('Adaptateur SasPay — création (1-21B)', () => {
       providerWith(transport).initiate({ ...request, customer: undefined }),
     ).rejects.toBeInstanceOf(PaymentProviderUnavailableError);
     expect(transport).not.toHaveBeenCalled();
+  });
+});
+
+describe('Adaptateur SasPay — expiration, fermeture, statut (1-21E)', () => {
+  const SESSION = '0f0e0d0c-0b0a-4908-8706-050403020101';
+  const TX = '0f0e0d0c-0b0a-4908-8706-0504030201aa';
+  const REF = 'SM0123456789ABCDEF01234567';
+  const ok = (data: unknown) =>
+    Promise.resolve({
+      status: 200,
+      bodyText: JSON.stringify({ success: true, data, code: 200 }),
+    });
+  /** Faux SasPay minimal : détail, statut, `verify`, fermeture. */
+  function sasPay(state: {
+    status: 'PENDING' | 'PAID' | 'EXPIRED' | 'CANCELLED';
+    tx?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
+    expiresAt?: string | null;
+    cancel?: number | 'lost' | 'not-sent';
+  }) {
+    const calls: string[] = [];
+    const transport: SasPayTransport = (req) => {
+      const path = req.url.replace('https://api.saspay.me/api/v1', '');
+      calls.push(`${req.method} ${path}`);
+      if (path === `/checkout-sessions/${SESSION}/cancel/`) {
+        if (state.cancel === 'lost') {
+          return Promise.reject(new SasPayTransportError('unknown'));
+        }
+        if (state.cancel === 'not-sent') {
+          return Promise.reject(new SasPayTransportError('not-sent'));
+        }
+        const code = state.cancel ?? 200;
+        if (code === 200) state.status = 'CANCELLED';
+        return Promise.resolve({ status: code, bodyText: '{}' });
+      }
+      const tx = state.tx ? TX : null;
+      if (path === `/checkout-sessions/${SESSION}/`) {
+        return ok({
+          id: SESSION,
+          amount: '3500.00',
+          currency: 'XAF',
+          status: state.status,
+          metadata: { merchantReference: REF },
+          transaction: tx,
+          checkout_url: 'https://checkout.saspay.me/s',
+          expires_at: state.expiresAt ?? null,
+        });
+      }
+      if (path === `/checkout-sessions/${SESSION}/status/`) {
+        return ok({
+          id: SESSION,
+          status: state.status,
+          transaction_id: tx,
+          transaction_status: state.tx ?? null,
+        });
+      }
+      if (path === `/payments/${TX}/verify/`) {
+        return ok({
+          id: TX,
+          status: state.tx,
+          requested_amount: '3500.00',
+          debited_amount: '3500.00',
+          net_amount: '3482.00',
+          fee_charge_mode: 'DEDUCTED',
+          currency: 'XAF',
+          flow_direction: 'INBOUND',
+          transaction_type: 'PAIEMENT',
+        });
+      }
+      return Promise.resolve({ status: 404, bodyText: '{}' });
+    };
+    const provider = new SasPayPaymentProvider({
+      environment: 'sandbox',
+      secretKey: TEST,
+      transport,
+    });
+    return { provider, calls, state };
+  }
+  const status = (provider: SasPayPaymentProvider) =>
+    provider.fetchStatus({ by: 'provider', providerReference: SESSION });
+
+  it('dates : ISO lisible seulement', () => {
+    expect(parseSasPayDate('2026-10-12T15:44:53.168000Z')).toEqual(
+      new Date('2026-10-12T15:44:53.168Z'),
+    );
+    for (const value of [null, '', 'demain', 42, '2026-13-45T99:00:00Z']) {
+      expect(parseSasPayDate(value)).toBeNull();
+    }
+  });
+
+  it('session ouverte sans transaction : en attente, expiration RÉELLE lue, page proposée', async () => {
+    const { provider } = sasPay({
+      status: 'PENDING',
+      expiresAt: '2026-10-12T15:44:53Z',
+    });
+    await expect(status(provider)).resolves.toMatchObject({
+      state: 'pending',
+      checkoutClosed: false,
+      transactionState: null,
+      providerTransactionId: null,
+      checkoutUrl: 'https://checkout.saspay.me/s',
+      checkoutExpiresAt: new Date('2026-10-12T15:44:53Z'),
+    });
+  });
+
+  it('session expirée ou annulée sans transaction : close, aucune transaction, page retirée', async () => {
+    for (const closed of ['EXPIRED', 'CANCELLED'] as const) {
+      const { provider } = sasPay({ status: closed });
+      await expect(status(provider)).resolves.toMatchObject({
+        state: 'unresolved',
+        checkoutClosed: true,
+        providerTransactionId: null,
+        transactionState: null,
+        checkoutUrl: null,
+      });
+    }
+  });
+
+  it('session close APRÈS une tentative échouée : non résolue, transaction désignée (FAILED rejouable)', async () => {
+    const { provider } = sasPay({ status: 'EXPIRED', tx: 'FAILED' });
+    await expect(status(provider)).resolves.toMatchObject({
+      state: 'unresolved',
+      checkoutClosed: true,
+      providerTransactionId: TX,
+      transactionState: 'failed',
+    });
+  });
+
+  it('transaction en cours sur page ouverte : en attente, `transactionState: pending`', async () => {
+    const { provider } = sasPay({ status: 'PENDING', tx: 'PENDING' });
+    await expect(status(provider)).resolves.toMatchObject({
+      state: 'pending',
+      transactionState: 'pending',
+    });
+  });
+
+  it('fermeture : route officielle, corps vide ; 200 → fermée ; 409 → plus ouverte', async () => {
+    const open = sasPay({ status: 'PENDING' });
+    await expect(open.provider.cancelCheckout(SESSION)).resolves.toBe(
+      'cancelled',
+    );
+    expect(open.calls).toEqual([`POST /checkout-sessions/${SESSION}/cancel/`]);
+    const paid = sasPay({ status: 'PAID', cancel: 409 });
+    await expect(paid.provider.cancelCheckout(SESSION)).resolves.toBe(
+      'not-open',
+    );
+  });
+
+  it('fermeture : non transmise ou refus avant traitement → indisponible ; perdue, 404, 5xx → incertaine', async () => {
+    await expect(
+      sasPay({ status: 'PENDING', cancel: 'not-sent' }).provider.cancelCheckout(
+        SESSION,
+      ),
+    ).rejects.toBeInstanceOf(PaymentProviderUnavailableError);
+    for (const code of [401, 403, 429]) {
+      await expect(
+        sasPay({ status: 'PENDING', cancel: code }).provider.cancelCheckout(
+          SESSION,
+        ),
+      ).rejects.toBeInstanceOf(PaymentProviderUnavailableError);
+    }
+    for (const cancel of ['lost', 404, 500] as const) {
+      await expect(
+        sasPay({ status: 'PENDING', cancel }).provider.cancelCheckout(SESSION),
+      ).rejects.toBeInstanceOf(PaymentProviderUncertainError);
+    }
+    // Référence illisible : rien n'est envoyé.
+    const bad = sasPay({ status: 'PENDING' });
+    await expect(
+      bad.provider.cancelCheckout('pas-un-uuid'),
+    ).rejects.toBeInstanceOf(PaymentProviderUnavailableError);
+    expect(bad.calls).toEqual([]);
   });
 });

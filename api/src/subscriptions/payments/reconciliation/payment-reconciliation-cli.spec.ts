@@ -260,6 +260,92 @@ const parsed = (argv: string[]) => {
   return command;
 };
 
+describe('1-21E — encaissement en conflit et remboursement externe', () => {
+  it('--grant-renewal-conflict=renewal|additional : mode exigé, transmis au service ; refusé sans mode, avec inspect ou dupliqué', async () => {
+    for (const mode of ['renewal', 'additional'] as const) {
+      expect(
+        parseReconciliationArguments([
+          'reconcile',
+          `--payment-id=${PAYMENT_ID}`,
+          `--grant-renewal-conflict=${mode}`,
+        ]),
+      ).toMatchObject({ apply: false, grantRenewalConflict: mode });
+    }
+    for (const argv of [
+      ['reconcile', `--payment-id=${PAYMENT_ID}`, '--grant-renewal-conflict'],
+      [
+        'reconcile',
+        `--payment-id=${PAYMENT_ID}`,
+        '--grant-renewal-conflict=autre',
+      ],
+      [
+        'inspect',
+        `--payment-id=${PAYMENT_ID}`,
+        '--grant-renewal-conflict=renewal',
+      ],
+      [
+        'reconcile',
+        `--payment-id=${PAYMENT_ID}`,
+        '--grant-renewal-conflict=renewal',
+        '--grant-renewal-conflict=additional',
+      ],
+    ]) {
+      expect(parseReconciliationArguments(argv)).toHaveProperty('error');
+    }
+    const apply = jest.fn().mockResolvedValue(blockedPlan);
+    await run(
+      parsed([...applyArgs(), '--grant-renewal-conflict=renewal']),
+      fakeService({ plan: jest.fn(), apply }),
+    );
+    expect(apply.mock.calls[0][3]).toEqual({
+      closeUnresolved: false,
+      grantRenewalConflict: 'renewal',
+      recordRefund: false,
+    });
+  });
+
+  it('--record-refund : motif `refunded-outside` et ticket exigés ; motif réservé à cette option', () => {
+    expect(
+      parseReconciliationArguments([
+        'reconcile',
+        `--payment-id=${PAYMENT_ID}`,
+        '--record-refund',
+      ]),
+    ).toMatchObject({ apply: false, recordRefund: true });
+    const refundArgs = (extra: string[]) =>
+      applyArgs(extra).filter(
+        (a) => !a.startsWith('--reason=') && !a.startsWith('--ticket='),
+      );
+    expect(
+      parseReconciliationArguments([
+        ...refundArgs(['--record-refund']),
+        '--reason=refunded-outside',
+        '--ticket=REF-42',
+      ]),
+    ).toMatchObject({ apply: true, recordRefund: true });
+    expect(
+      parseReconciliationArguments([
+        ...refundArgs(['--record-refund']),
+        '--reason=refunded-outside',
+      ]),
+    ).toHaveProperty('error');
+    expect(
+      parseReconciliationArguments([
+        ...refundArgs(['--record-refund']),
+        '--reason=support-ticket',
+        '--ticket=REF-42',
+      ]),
+    ).toHaveProperty('error');
+    expect(
+      parseReconciliationArguments([
+        ...refundArgs([]),
+        '--reason=refunded-outside',
+        '--ticket=REF-42',
+      ]),
+    ).toHaveProperty('error');
+  });
+});
+
 describe('1-21B — clôture explicite d’une page de paiement close sans succès', () => {
   it('--close-unresolved : accepté en simulation et en application, transmis au service ; refusé avec inspect ou dupliqué', async () => {
     const simulation = parseReconciliationArguments([
@@ -294,13 +380,20 @@ describe('1-21B — clôture explicite d’une page de paiement close sans succ�
     );
     expect(plan).toHaveBeenCalledWith(PAYMENT_ID, null, {
       closeUnresolved: true,
+      // 1-21E : options distinctes, absentes ici.
+      grantRenewalConflict: undefined,
+      recordRefund: false,
     });
     const apply = jest.fn().mockResolvedValue(blockedPlan);
     await run(
       parsed([...applyArgs(), '--close-unresolved']),
       fakeService({ plan: jest.fn(), apply }),
     );
-    expect(apply.mock.calls[0][3]).toEqual({ closeUnresolved: true });
+    expect(apply.mock.calls[0][3]).toEqual({
+      closeUnresolved: true,
+      grantRenewalConflict: undefined,
+      recordRefund: false,
+    });
   });
 });
 
