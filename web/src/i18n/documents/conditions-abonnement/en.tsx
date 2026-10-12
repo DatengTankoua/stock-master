@@ -8,11 +8,13 @@ import {
   monthlyEquivalentXaf,
 } from "@/lib/subscription-offers";
 import type { DocumentContent } from "@/i18n/documents/types";
+import { formatNumber } from "@/i18n/format";
+import { PRODUCT_CAPACITY } from "@/lib/product-capacity";
 import subscriptionEn from "@/i18n/resources/en/subscription";
 
-// 1-16G — Traduction anglaise fidèle des conditions d'abonnement 0.4 (la
+// 1-16G — Traduction anglaise fidèle des conditions d'abonnement 0.5 (la
 // version 0.3, archivée en français, n'est jamais traduite). Mêmes tarifs,
-// lus dans `lib/subscription-offers.ts`. Statut « projet », `noindex`. La
+// lus dans `lib/subscription-offers.ts` (calculés depuis le catalogue serveur). Statut « projet », `noindex`. La
 // traduction ne vaut pas validation juridique.
 const TERM_LABELS = subscriptionEn.offers.term;
 
@@ -53,6 +55,14 @@ const content: DocumentContent = {
               then Subscription.
             </li>
           </ul>
+          <p>
+            <strong>Included capacity.</strong> Each organisation can keep up to{" "}
+            {formatNumber(PRODUCT_CAPACITY, "en")} product records, including
+            those placed in the trash; each catalogue product is one record.
+            Stock quantities do not count towards this limit, nor do sales and
+            their history. This capacity is the same for every length. Once it
+            is reached, only the creation of new records is refused.
+          </p>
         </>
       ),
     },
@@ -84,8 +94,9 @@ const content: DocumentContent = {
       content: (
         <>
           <p>
-            The amount shown is the total to pay for the chosen length, in CFA
-            francs (XAF).
+            The amount shown is the total paid once for the whole chosen length,
+            in CFA francs (XAF). It is not charged every month: the monthly
+            equivalent is given for comparison only.
           </p>
           <table>
             <caption className="sr-only">
@@ -94,8 +105,8 @@ const content: DocumentContent = {
             <thead>
               <tr>
                 <th scope="col">Length</th>
-                <th scope="col">Total</th>
-                <th scope="col">Monthly equivalent</th>
+                <th scope="col">Total paid once</th>
+                <th scope="col">Monthly equivalent and savings</th>
               </tr>
             </thead>
             <tbody>
@@ -107,16 +118,22 @@ const content: DocumentContent = {
                   </td>
                   <td className="tabular-nums">
                     {offer.months > 1
-                      ? `${formatFcfa(monthlyEquivalentXaf(offer), "en")} (${formatFcfa(offer.savingXaf, "en")} saved)`
-                      : "Pay month by month"}
+                      ? `about ${formatFcfa(monthlyEquivalentXaf(offer), "en")} per month; ${formatFcfa(offer.savingXaf, "en")} saved compared with paying monthly${offer.freeMonths > 0 ? ` (${offer.freeMonths} month${offer.freeMonths > 1 ? "s" : ""} free)` : ""}`
+                      : "One month"}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p>
-            The applicable price is the one displayed when the period is
-            granted. A period already granted is never changed by a price
+            The fees of the payment provider SasPay are covered by {SITE.name}:
+            they are not added to the price. The amount to pay is shown on the
+            payment page before you confirm.
+          </p>
+          <p>
+            The applicable price is the one in force when the payment is
+            requested; it is shown to you before any payment. A payment already
+            requested and a period already granted are never changed by a price
             change.
           </p>
         </>
@@ -149,16 +166,30 @@ const content: DocumentContent = {
       title: "Payment and renewal",
       content: (
         <>
-          <p>
-            Online payment is not yet available. For any renewal request,
-            contact <MailLink to="support" subject="Subscription renewal" />.
-          </p>
+          <p>The owner pays from Organisation, then Subscription:</p>
           <ul>
             <li>
-              There is no automatic renewal or automatic payment: each new
+              they choose a length; the amount is set by {SITE.name} at that
+              moment;
+            </li>
+            <li>
+              they pay this amount once on the secure page of SasPay, the
+              payment provider, by Mobile Money (MTN or Orange);
+            </li>
+            <li>
+              the period is granted once {SITE.name} has obtained confirmation
+              of the payment from SasPay; simply returning to {SITE.name} is not
+              enough. The “Check payment” button runs this check again;
+            </li>
+            <li>
+              there is no automatic renewal or automatic payment: each new
               period is the owner&apos;s decision.
             </li>
           </ul>
+          <p>
+            If you have any difficulty, contact{" "}
+            <MailLink to="support" subject="Subscription renewal" />.
+          </p>
         </>
       ),
     },
@@ -196,10 +227,38 @@ const content: DocumentContent = {
       id: "resiliation",
       title: "Stopping, withdrawal and refunds",
       content: (
-        <p>
-          As nothing is renewed automatically, simply not renewing is enough to
-          stop the subscription at the end of the current period.
-        </p>
+        <>
+          <p>
+            As nothing is renewed automatically, simply not renewing is enough
+            to stop the subscription at the end of the current period.
+          </p>
+          <p>
+            A paid period is not refunded in the event of a change of mind,
+            non-use of the service or voluntary stopping, including when the
+            payment was made before the period starts.
+          </p>
+          <ul>
+            <li>
+              As an exception, when an error attributable to {SITE.name} causes
+              harm to the customer, the customer may obtain a refund, after the
+              incident has been checked.
+            </li>
+            <li>
+              A confirmed double charge for the same purchase is not owed: the
+              amount charged twice is refunded.
+            </li>
+          </ul>
+          <p>
+            To report an incident or a double charge, write to{" "}
+            <MailLink to="support" subject="Subscription refund" />, stating the
+            shop name and the payment reference.
+          </p>
+          <p>
+            These rules apply without prejudice to the rights that the
+            applicable law grants you on a mandatory basis, including any right
+            of withdrawal.
+          </p>
+        </>
       ),
     },
     {

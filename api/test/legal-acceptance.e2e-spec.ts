@@ -809,9 +809,9 @@ describe('Acceptation versionnée des conditions (e2e 1-16C.2)', () => {
 
   // ─── Nouvelle version et archive ─────────────────────────────────────────
 
-  it('conditions d’abonnement 0.3 → 0.4 : ancienne version refusée, preuve 0.3 conservée, nouvelle confirmation demandée', async () => {
+  it('conditions d’abonnement 0.3 → version en vigueur (0.5 depuis 1-21D) : ancienne version refusée, preuve 0.3 conservée, nouvelle confirmation demandée', async () => {
     const cga = current(SUBSCRIPTION_TERMS);
-    expect(cga.version).toBe('0.4');
+    expect(cga.version).toBe('0.5');
     const valid = legalAcceptanceFor(LegalAcceptanceContext.OWNER_REGISTRATION);
     const withOld = {
       ...valid,
@@ -829,7 +829,7 @@ describe('Acceptation versionnée des conditions (e2e 1-16C.2)', () => {
     expect(stale.body.code).toBe('LEGAL_VERSION_OUTDATED');
     expect(stale.body.current).toContainEqual({
       id: SUBSCRIPTION_TERMS,
-      version: '0.4',
+      version: cga.version,
     });
     expect(await counts()).toEqual(before);
 
@@ -862,12 +862,12 @@ describe('Acceptation versionnée des conditions (e2e 1-16C.2)', () => {
       .findById(`${SUBSCRIPTION_TERMS}@0.3/fr`)
       .lean();
 
-    // Retour à l'archive du dépôt : la 0.4 est en vigueur.
+    // Retour à l'archive du dépôt : la version en vigueur s'applique.
     archive.target = realArchive;
     const token = await tokenFor(address, organizationId);
     const s = await status(token);
     expect(s.body.pending).toEqual([
-      { id: SUBSCRIPTION_TERMS, version: '0.4' },
+      { id: SUBSCRIPTION_TERMS, version: cga.version },
     ]);
     legalNow = new Date('2031-04-02T09:00:00.000Z');
     const ok = await confirm(token, {
@@ -878,23 +878,21 @@ describe('Acceptation versionnée des conditions (e2e 1-16C.2)', () => {
     });
     expect(ok.body.status).toBe('recorded');
 
-    // Preuve 0.3 et texte 0.3 inchangés ; 0.4 archivée avec texte et empreinte exacts.
+    // Preuve 0.3 et texte 0.3 inchangés ; version en vigueur archivée avec texte et empreinte exacts.
     expect(await acceptanceModel.findById(proof03!._id).lean()).toEqual(
       proof03,
     );
     expect(
       await versionModel.findById(`${SUBSCRIPTION_TERMS}@0.3/fr`).lean(),
     ).toEqual(text03);
-    const text04 = await versionModel
-      .findById(`${SUBSCRIPTION_TERMS}@0.4/fr`)
+    const textNow = await versionModel
+      .findById(`${SUBSCRIPTION_TERMS}@${cga.version}/fr`)
       .lean();
-    expect(text04!.sha256).toBe(cga.sha256);
-    expect(text04!.text).toBe(
+    expect(textNow!.sha256).toBe(cga.sha256);
+    expect(textNow!.text).toBe(
       readFileSync(join(LEGAL_ARCHIVE_DIR, cga.file), 'utf8'),
     );
-    expect(text04!.text).toContain(
-      "Le paiement en ligne n'est pas encore activé.",
-    );
+    expect(textNow!.text).toContain('SasPay');
     const proofs = await acceptanceModel.find({ userId }).lean();
     expect(proofs).toHaveLength(2);
     expect((await status(token)).body.pending).toEqual([]);

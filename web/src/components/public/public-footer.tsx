@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/brand/wordmark";
 import { LANDING_NAV } from "@/components/landing/landing-nav";
-import { HELP_PAGES, LEGAL_DOCUMENTS } from "@/lib/legal/site-identity";
+import { HELP_PAGES, LEGAL_DOCUMENTS, SITE } from "@/lib/legal/site-identity";
 import { getServerT } from "@/i18n/server";
 
 // 1-16C — Pied de page commun à l'accueil et aux pages publiques. Les
@@ -84,6 +84,18 @@ export async function PublicFooter({ onHome = false }: { onHome?: boolean }) {
             </li>
           ))}
         </Column>
+      </div>
+      {/* 1-21D : mention commune à toutes les pages publiques (FR/EN). */}
+      <div className="border-t border-(--brand-ink)/10">
+        <p
+          className="mx-auto max-w-6xl px-4 py-4 text-xs text-(--public-muted)"
+          data-testid="public-copyright"
+        >
+          {t("footer.copyright", {
+            year: SITE.copyrightYear,
+            name: SITE.name,
+          })}
+        </p>
       </div>
     </footer>
   );

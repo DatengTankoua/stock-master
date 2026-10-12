@@ -121,7 +121,7 @@ const content: DocumentContent = {
             {
               name: "stockmaster_payment_intents",
               purpose:
-                "Finds a subscription payment in progress after an interruption (unused while online payment is closed).",
+                "Finds a subscription payment in progress after an interruption.",
               duration: "Until the payment is finished",
             },
             {

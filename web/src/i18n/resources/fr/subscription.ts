@@ -7,15 +7,25 @@ const subscriptionFr = {
       semiannual: "6 mois",
       annual: "12 mois",
     },
-    highlight: {
-      saving: "{{amount}} d'économie",
-      freeMonths: "2 mois offerts",
+    // 1-21D : accroches sans montant ; économies et mois offerts calculés
+    // depuis le catalogue serveur (`lib/subscription-offers.ts`).
+    pitch: {
+      monthly: {
+        title: "Commencez à votre rythme",
+        text: "Un mois pour gérer votre activité au quotidien.",
+      },
+      quarterly: { title: "Prenez trois mois d'avance" },
+      semiannual: { title: "Six mois pour développer votre activité" },
+      annual: { title: "Un an de gestion" },
+      withFreeMonths_one: "{{title}}, {{count}} mois offert",
+      withFreeMonths_many: "{{title}}, {{count}} mois offerts",
+      withFreeMonths_other: "{{title}}, {{count}} mois offerts",
+      saving: "Économisez {{amount}} par rapport au paiement mensuel.",
     },
-    best: "Le plus avantageux",
-    forTerm: "pour {{term}}",
-    monthlyEquivalent: "soit {{amount}} / mois en équivalent mensuel",
-    saving: "Économie de {{amount}} par rapport au paiement mensuel",
-    monthlyPayment: "Paiement mensuel",
+    best: "Meilleure économie",
+    paidOnce: "payés en une fois pour {{term}}",
+    monthlyEquivalent:
+      "Soit environ {{amount}} par mois, à titre de comparaison.",
     included: {
       catalog: "Catalogue, stock et ventes",
       converter: "Convertisseur EUR ↔ FCFA",
@@ -174,6 +184,8 @@ const subscriptionFr = {
         "Paiement en cours de confirmation. Vérifiez de nouveau dans un instant.",
     },
     messages: {
+      checkoutReady:
+        "Lien de paiement prêt. Continuez vers la page de paiement : l'abonnement sera actif une fois le paiement confirmé par notre serveur.",
       offlineCreate:
         "Hors connexion : la création d'un paiement nécessite Internet.",
       termRequired: "Choisissez une durée.",
@@ -194,6 +206,25 @@ const subscriptionFr = {
     reference: "Référence",
     requestedOn: "Demandé le",
     confirmedOn: "Confirmé le",
+    checkout: {
+      formTitle: "Payer en ligne",
+      help: "Le paiement se fait sur la page sécurisée de SasPay (Mobile Money MTN ou Orange). Aucun numéro ni code secret n'est demandé ici.",
+      continueAmount: "Continuer vers le paiement de {{amount}}",
+      notice:
+        "Revenez ensuite dans Stock Master : l'abonnement n'est activé qu'après confirmation par notre serveur, jamais par le simple retour de la page.",
+      pendingDetail:
+        "Terminez le paiement sur la page SasPay, puis revenez ici et appuyez sur « Vérifier le paiement ».",
+      lockedIntent:
+        "Une demande précédente n'a pas reçu de réponse. Validez de nouveau pour la retrouver : aucun second paiement ne sera demandé. Durée : <b>{{term}}</b>.",
+    },
+    // 1-21D : montant enregistré par le serveur ≠ prix affiché dans l'onglet.
+    priceChanged: {
+      text: "Le tarif a changé depuis l'ouverture de cette page : ce paiement est de {{charged}}, et non {{displayed}}. Vérifiez ce montant avant de continuer.",
+      confirm: "Continuer avec {{amount}}",
+    },
+    // 1-21D : capacités `available: false` (paiements désactivés).
+    disabled:
+      "Le paiement en ligne est momentanément indisponible. Vous pouvez toujours consulter et vérifier un paiement en cours.",
     pinNotice:
       "Le code secret Mobile Money se saisit uniquement sur le téléphone du payeur. Stock Master ne le demande jamais.",
     checking: "Vérification…",

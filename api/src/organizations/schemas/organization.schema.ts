@@ -74,6 +74,17 @@ export class Organization {
     default: OrganizationStatus.ACTIVE,
   })
   status: OrganizationStatus;
+
+  /**
+   * 1-21D — jeton TECHNIQUE de sérialisation des créations de fiches
+   * produit : incrémenté dans la transaction de création, avant le
+   * décompte, pour que deux créations simultanées entrent en conflit
+   * d'écriture (l'une est rejouée et recompte). Ce n'est PAS un compteur de
+   * fiches (le décompte reste celui des documents `products`) : aucune
+   * initialisation ni migration. Absent par défaut, jamais lu ni exposé.
+   */
+  @Prop({ type: Number, required: false, select: false })
+  productCreationSerial?: number;
 }
 
 export const OrganizationSchema = SchemaFactory.createForClass(Organization);

@@ -190,6 +190,27 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     },
 
   // ─── Catalogue, produits, ventes ──────────────────────────────────────
+  // 1-20D à 1-20F : relectures ciblées et pages (entrées manquantes).
+  'ids must be a comma-separated list': {
+    fr: 'ids doit être une liste séparée par des virgules.',
+    en: 'ids must be a comma-separated list.',
+  },
+  'ids must contain 1 to ${…} product ids': {
+    fr: 'ids doit contenir de 1 à ${…} identifiants de produit.',
+    en: 'ids must contain 1 to ${…} product ids.',
+  },
+  'ids and limit are exclusive': {
+    fr: 'ids et limit ne peuvent pas être utilisés ensemble.',
+    en: 'ids and limit are exclusive.',
+  },
+  'sectionId must be a product section id': {
+    fr: 'sectionId doit être un identifiant de section.',
+    en: 'sectionId must be a product section id.',
+  },
+  'Invalid sales cursor': {
+    fr: 'Curseur de l’historique des ventes invalide.',
+    en: 'Invalid sales cursor.',
+  },
   'Image file is required': {
     fr: 'La photo est obligatoire.',
     en: 'Image file is required.',
@@ -219,6 +240,14 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     {
       en: "Not enough storage space: this upload would exceed the organisation's quota.",
     },
+  // ─── Capacité incluse (1-21D) ─────────────────────────────────────────
+  'Capacité incluse atteinte : nombre maximal de fiches produit conservées, corbeille comprise. Aucune nouvelle fiche ne peut être créée ; les ventes, consultations et modifications restent possibles.':
+    {
+      en: 'Included capacity reached: maximum number of product records kept, trash included. No new record can be created; sales, viewing and editing remain available.',
+    },
+  'Organisation introuvable.': {
+    en: 'Organisation not found.',
+  },
   "L'envoi du fichier a été interrompu. Réessayez.": {
     en: 'The file upload was interrupted. Try again.',
   },

@@ -12,23 +12,27 @@ import {
 // juridiques). Sans appel réseau ni état de session : la page reste
 // identique en visite anonyme, session ouverte ou session limitée.
 // 1-16F : contrôle du thème en fin d'en-tête.
+// 1-21D : marges resserrées sous 640 px (zones de clic de 44 px conservées).
 const linkClass =
-  "inline-flex min-h-11 items-center rounded-md px-2 text-sm font-medium text-(--brand-ink)/80 hover:text-(--brand-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--brand-ink)";
+  "inline-flex min-h-11 items-center rounded-md px-1.5 sm:px-2 text-sm font-medium text-(--brand-ink)/80 hover:text-(--brand-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--brand-ink)";
 
 export async function PublicHeader() {
   const { t } = await getServerT("public");
   return (
     <header className="sticky top-0 z-30 border-b border-(--brand-ink)/10 bg-(--public-bg)/95 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+        {/* 1-21D : `block min-w-0` — le lien (et la marque, `max-w-full`)
+            peut rétrécir sur un téléphone étroit au lieu de déborder ; la
+            navigation garde sa taille (`shrink-0`). */}
         <Link
           href="/"
-          className="rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--brand-ink)"
+          className="block min-w-0 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--brand-ink)"
           aria-label={t("header.backHome")}
         >
           <Wordmark size="small" priority />
         </Link>
-        <nav aria-label={t("header.help")}>
-          <ul className="flex items-center gap-1 sm:gap-3">
+        <nav aria-label={t("header.help")} className="shrink-0">
+          <ul className="flex items-center gap-0.5 sm:gap-3">
             <li>
               <Link href="/guide" className={linkClass}>
                 {t("header.guide")}

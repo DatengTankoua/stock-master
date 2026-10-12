@@ -9,12 +9,13 @@ import {
 } from "@/lib/subscription-offers";
 
 // 1-16C — Conditions d'abonnement. Tarifs et essai lus dans
-// `lib/subscription-offers.ts` (miroir vérifié de
-// `api/src/subscriptions/subscription-pricing.ts` et `TRIAL_DURATION_MS`),
-// jamais recopiés. Paiement en ligne : `UnavailablePaymentProvider` en
-// production (CamPay désactivé) ; aucun renouvellement payant n'est décrit
-// tant que sa procédure n'est pas confirmée.
+// `lib/subscription-offers.ts` (1-21D : calculés depuis
+// `api/src/subscriptions/subscription-pricing.ts`, et `TRIAL_DURATION_MS`),
+// jamais recopiés. 1-21D (0.5) : paiement en ligne par SasPay, frais pris en
+// charge par Stock Master (réglage marchand « Déduits » vérifié en LIVE).
 import type { DocumentContent } from "@/i18n/documents/types";
+import { formatNumber } from "@/i18n/format";
+import { PRODUCT_CAPACITY } from "@/lib/product-capacity";
 import subscriptionFr from "@/i18n/resources/fr/subscription";
 
 const TERM_LABELS = subscriptionFr.offers.term;
@@ -59,6 +60,18 @@ const content: DocumentContent = {
               Organisation, puis Abonnement.
             </li>
           </ul>
+          {/* 1-21D : plafond injecté depuis la source unique (API). Le
+              catalogue n'a pas de variantes : chaque produit est une fiche. */}
+          <p>
+            <strong>Capacité incluse.</strong> Chaque organisation peut
+            conserver jusqu&apos;à {formatNumber(PRODUCT_CAPACITY, "fr")} fiches
+            produit, y compris celles placées dans la corbeille ; chaque produit
+            du catalogue constitue une fiche. Les quantités en stock
+            n&apos;entrent pas dans ce décompte, pas plus que les ventes et leur
+            historique. Cette capacité est la même pour toutes les durées.
+            Lorsqu&apos;elle est atteinte, seule la création de nouvelles fiches
+            est refusée.
+          </p>
         </>
       ),
     },
@@ -91,8 +104,10 @@ const content: DocumentContent = {
       content: (
         <>
           <p>
-            Le montant indiqué est le total à payer pour la durée choisie, en
-            francs CFA (XAF).
+            Le montant indiqué est le total payé en une fois pour toute la durée
+            choisie, en francs CFA (XAF). Il n&apos;est pas prélevé chaque mois
+            : l&apos;équivalent mensuel n&apos;est donné qu&apos;à titre de
+            comparaison.
           </p>
           <table>
             <caption className="sr-only">
@@ -101,8 +116,8 @@ const content: DocumentContent = {
             <thead>
               <tr>
                 <th scope="col">Durée</th>
-                <th scope="col">Total</th>
-                <th scope="col">Équivalent mensuel</th>
+                <th scope="col">Total payé en une fois</th>
+                <th scope="col">Équivalent mensuel et économie</th>
               </tr>
             </thead>
             <tbody>
@@ -114,8 +129,8 @@ const content: DocumentContent = {
                   </td>
                   <td className="tabular-nums">
                     {offer.months > 1
-                      ? `${formatFcfa(monthlyEquivalentXaf(offer), "fr")} (${formatFcfa(offer.savingXaf, "fr")} d'économie)`
-                      : "Paiement mois par mois"}
+                      ? `environ ${formatFcfa(monthlyEquivalentXaf(offer), "fr")} par mois ; ${formatFcfa(offer.savingXaf, "fr")} d'économie par rapport au paiement mensuel${offer.freeMonths > 0 ? ` (${offer.freeMonths} mois offert${offer.freeMonths > 1 ? "s" : ""})` : ""}`
+                      : "Un mois"}
                   </td>
                 </tr>
               ))}
@@ -124,9 +139,15 @@ const content: DocumentContent = {
           {/* À COMPLÉTER : régime fiscal et mention « toutes taxes
               comprises » ou montant des taxes (loi 2010/021, art. 31). */}
           <p>
-            Le prix applicable est celui affiché au moment où la période est
-            accordée. Une période déjà accordée n&apos;est jamais modifiée par
-            un changement de prix.
+            Les frais du prestataire de paiement SasPay sont pris en charge par{" "}
+            {SITE.name} : ils ne s&apos;ajoutent pas au prix. Le montant à payer
+            est affiché sur la page de paiement avant votre validation.
+          </p>
+          <p>
+            Le prix applicable est celui en vigueur au moment où le paiement est
+            demandé ; il vous est présenté avant tout paiement. Un paiement déjà
+            demandé et une période déjà accordée ne sont jamais modifiés par un
+            changement de prix.
           </p>
         </>
       ),
@@ -159,23 +180,34 @@ const content: DocumentContent = {
       title: "Paiement et renouvellement",
       content: (
         <>
-          {/* 1-16C.2 (0.4) : remplace l'annonce d'un paiement en ligne
-              disponible (version 0.3), contraire au code
-              (`UnavailablePaymentProvider`). Aucune procédure de paiement ni
-              garantie de renouvellement n'est décrite. */}
-          <p>
-            Le paiement en ligne n&apos;est pas encore activé. Pour toute
-            demande de renouvellement, contactez{" "}
-            <MailLink to="support" subject="Renouvellement de l'abonnement" />.
-          </p>
+          {/* 1-21D (0.5) : procédure livrée en 1-21B et vérifiée en LIVE
+              (1-21C). Aucune garantie propre à SasPay n'est décrite. */}
+          <p>Le propriétaire paie depuis Organisation, puis Abonnement :</p>
           <ul>
             <li>
-              Il n&apos;y a aucun renouvellement ni prélèvement automatique :
+              il choisit une durée ; le montant est fixé par {SITE.name} à ce
+              moment ;
+            </li>
+            <li>
+              il paie ce montant en une fois sur la page sécurisée de SasPay,
+              prestataire de paiement, par Mobile Money (MTN ou Orange) ;
+            </li>
+            <li>
+              la période est accordée lorsque {SITE.name} a obtenu de SasPay la
+              confirmation du paiement ; le simple retour sur {SITE.name} ne
+              suffit pas. Le bouton « Vérifier le paiement » relance cette
+              vérification ;
+            </li>
+            <li>
+              il n&apos;y a aucun renouvellement ni prélèvement automatique :
               chaque nouvelle période est une décision du propriétaire.
             </li>
-            {/* À COMPLÉTER : moyens de paiement acceptés, justificatif
-                remis et délai d'activation, une fois la procédure confirmée. */}
           </ul>
+          <p>
+            En cas de difficulté, contactez{" "}
+            <MailLink to="support" subject="Renouvellement de l'abonnement" />.
+          </p>
+          {/* À COMPLÉTER : justificatif remis et délai d'activation. */}
         </>
       ),
     },
@@ -223,10 +255,40 @@ const content: DocumentContent = {
             renouveler pour arrêter l&apos;abonnement à la fin de la période en
             cours.
           </p>
-          {/* À COMPLÉTER avant tout paiement : arrêt anticipé et
-              remboursement ; droit de rétractation (loi 2010/021, art. 20 ;
-              décret 2011/1521/PM, art. 13 à 15 et 20 ; loi-cadre 2011/012,
-              art. 7), à fixer avec un juriste. */}
+          {/* 1-21D (0.5) : décision commerciale du titulaire. Aucun délai,
+              aucune retenue, aucun montant forfaitaire ni procédure
+              automatisée n'est annoncé (aucun n'existe). */}
+          <p>
+            Une période payée n&apos;est pas remboursée en cas de changement
+            d&apos;avis, de non-utilisation du service ou d&apos;arrêt
+            volontaire, y compris lorsque le paiement a eu lieu avant le début
+            de la période.
+          </p>
+          <ul>
+            <li>
+              Par exception, lorsqu&apos;une erreur imputable à {SITE.name}{" "}
+              cause un préjudice au client, celui-ci peut obtenir un
+              remboursement, après vérification de l&apos;incident.
+            </li>
+            <li>
+              Un double débit confirmé pour un même achat n&apos;est pas dû : le
+              montant débité en double est remboursé.
+            </li>
+          </ul>
+          <p>
+            Pour signaler un incident ou un double débit, écrivez à{" "}
+            <MailLink to="support" subject="Remboursement d'un abonnement" /> en
+            indiquant le nom du commerce et la référence du paiement.
+          </p>
+          <p>
+            Ces règles s&apos;appliquent sans préjudice des droits que la loi
+            applicable vous reconnaît de manière impérative, y compris un
+            éventuel droit de rétractation.
+          </p>
+          {/* À VALIDER par un juriste : applicabilité du droit de
+              rétractation (loi 2010/021, art. 20 ; décret 2011/1521/PM,
+              art. 13 à 15 et 20 ; loi-cadre 2011/012, art. 7) et conformité
+              de la règle de non-remboursement. */}
         </>
       ),
     },

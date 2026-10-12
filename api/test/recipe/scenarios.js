@@ -1009,7 +1009,7 @@ async function quiet(requests, p, ms) {
       ok(
         (await page.locator('[data-testid=payment-amount]').innerText())
           .replace(/\s/g, ' ')
-          .includes('16 000'),
+          .includes('18 500'),
         'montant initial',
       );
       const d = await L.db();
@@ -1034,7 +1034,7 @@ async function quiet(requests, p, ms) {
         await page.locator('[data-testid=payment-history]').innerText()
       ).replace(/\s/g, ' ');
       ok(hist.includes('15 999'), 'historique : montant de l’API');
-      return `affiché : ${amount} (catalogue : 16 000)`;
+      return `affiché : ${amount} (catalogue : 18 500)`;
     },
   );
 
