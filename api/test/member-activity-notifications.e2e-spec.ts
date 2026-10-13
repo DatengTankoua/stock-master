@@ -1020,6 +1020,11 @@ describe('Notifications des membres (e2e 1-19A)', () => {
       .patch(`/sections/${id}/restore`)
       .set(auth(editor.token))
       .expect(200);
+    // 1-22B : seule une entrée de la corbeille est purgeable.
+    await request(server())
+      .delete(`/sections/${id}`)
+      .set(auth(editor.token))
+      .expect(200);
     await request(server())
       .delete(`/sections/${id}/permanent`)
       .set(auth(editor.token))
@@ -1034,7 +1039,8 @@ describe('Notifications des membres (e2e 1-19A)', () => {
       [
         'Moussa a créé la section « Boissons ».',
         'Moussa a modifié la section « Boissons fraîches ».',
-        'Moussa a mis à la corbeille la section « Boissons fraîches ».',
+        // 1-22B : remise à la corbeille avant la purge (regroupée).
+        'Moussa a mis à la corbeille la section « Boissons fraîches » (2 fois).',
         'Moussa a restauré la section « Boissons fraîches ».',
         'Moussa a supprimé définitivement la section « Boissons fraîches ».',
       ].sort(),

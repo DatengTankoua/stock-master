@@ -126,3 +126,39 @@ export function applyTrustProxy(
   const value = expressTrustProxyValue(setting);
   if (value !== undefined) expressInstance.set('trust proxy', value);
 }
+
+/**
+ * 1-22C — description du réglage pour le journal de démarrage : mode et
+ * nombre seulement (les adresses de proxy ne sont pas des secrets, mais le
+ * journal n'en a pas besoin).
+ */
+export function describeTrustProxySetting(setting: TrustProxySetting): string {
+  switch (setting.mode) {
+    case 'none':
+      return 'aucun proxy approuvé (req.ip = adresse de la connexion)';
+    case 'hops':
+      return `${setting.hops} saut(s) approuvé(s) (TRUST_PROXY_HOPS)`;
+    case 'addresses':
+      return `${setting.addresses.length} adresse(s) de proxy approuvée(s) (TRUST_PROXY_ADDRESSES)`;
+  }
+}
+
+/**
+ * 1-22C — avertissement de production : sans proxy approuvé, une API
+ * placée derrière un proxy d'entrée (Railway, nginx…) voit l'adresse du
+ * proxy pour tous les clients, qui partagent alors les limites par IP.
+ * Aucun refus : une API exposée directement n'a pas de proxy à approuver,
+ * et le bon réglage dépend de la topologie réelle, à mesurer.
+ */
+export function trustProxyProductionWarning(
+  setting: TrustProxySetting,
+  nodeEnv: string | undefined,
+): string | null {
+  if (nodeEnv !== 'production' || setting.mode !== 'none') return null;
+  return (
+    'Aucun proxy approuvé : derrière un proxy d’entrée, tous les clients ' +
+    'partagent les limites par IP de l’authentification. Mesurer la ' +
+    'topologie puis régler TRUST_PROXY_ADDRESSES ou TRUST_PROXY_HOPS ' +
+    '(docs/architecture/phase-1-22c-auth-production-config.md).'
+  );
+}

@@ -44,7 +44,7 @@ Toutes les valeurs par défaut du `.env.example` sont compatibles avec le `docke
 |---|---|---|
 | `PORT` | `4000` | Port d'écoute |
 | `MONGODB_URI` | `mongodb://localhost:27017/stockmaster` | URI de connexion MongoDB |
-| `JWT_SECRET` | `change-me-...` | Secret JWT — **changer en production** |
+| `JWT_SECRET` | `dev-only-...` | Secret applicatif (JWT, compteurs anti-abus, empreintes de paiement). En production : au moins 32 octets aléatoires, sinon refus de démarrer (1-22C) |
 | `CORS_ORIGIN` | `http://localhost:3000` | Origines autorisées (séparées par virgule) |
 | `S3_ENDPOINT` | `http://localhost:9000` | URL MinIO ou S3 |
 | `S3_REGION` | `us-east-1` | Région S3 |

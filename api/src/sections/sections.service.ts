@@ -221,7 +221,11 @@ export class SectionsService {
     return section;
   }
 
-  /** Permanently delete from trash */
+  /**
+   * Permanently delete from trash. 1-22B — seule une section DÉJÀ dans la
+   * corbeille est purgeable (même condition atomique que la suppression :
+   * une section active ou restaurée entre-temps → 404).
+   */
   async permanentDelete(
     organizationId: string,
     id: string,
@@ -230,6 +234,7 @@ export class SectionsService {
       .findOneAndDelete({
         _id: id,
         organizationId: new Types.ObjectId(organizationId),
+        deletedAt: { $ne: null },
       })
       .exec();
     if (!section) throw new NotFoundException(`Section ${id} not found`);

@@ -19,9 +19,14 @@
 import {
   SOCKET_AUTH_TOKEN_KEY,
   SocketPrincipal,
+  DEFAULT_SOCKET_MEMBERSHIP_RECHECK_MS,
   installSocketAuthMiddleware,
   scheduleSocketDisconnectAtExpiry,
+  scheduleSocketMembershipCheck,
+  socketMembershipRecheckMs,
+  type SocketMembershipState,
 } from './socket-auth.middleware';
+import { OrganizationRole } from '../organizations/permissions';
 
 /** Handle de timer (fake timers : shim sinonjs avec `refed`/`hasRef`/`unref`). */
 interface TimerHandle {
@@ -729,5 +734,107 @@ describe('scheduleSocketDisconnectAtExpiry — déconnexion à l’expiration du
     expect(disconnect).not.toHaveBeenCalled();
     jest.advanceTimersByTime(1);
     expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('scheduleSocketMembershipCheck — relecture de l’adhésion (1-22B)', () => {
+  const context = {
+    userId: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+    organizationId: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+    membershipId: 'cccccccccccccccccccccccc',
+    role: OrganizationRole.SELLER,
+    permissions: ['products.manage' as const, 'trash.manage' as const],
+  };
+
+  function fakeSocket() {
+    const handlers = new Map<string, () => void>();
+    return {
+      data: { organizationContext: { ...context }, authVersion: 2 },
+      once: jest.fn((event: string, fn: () => void) => handlers.set(event, fn)),
+      off: jest.fn((event: string) => handlers.delete(event)),
+      disconnect: jest.fn(() => handlers.get('disconnect')?.()),
+    };
+  }
+
+  const state = (
+    overrides: Partial<SocketMembershipState['context']> = {},
+    authVersion = 2,
+  ): SocketMembershipState => ({
+    context: { ...context, ...overrides },
+    authVersion,
+  });
+
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('état inchangé (permissions dans un autre ordre) : socket conservé, relecture reprogrammée', async () => {
+    const socket = fakeSocket();
+    const readState = jest
+      .fn()
+      .mockResolvedValue(
+        state({ permissions: ['trash.manage', 'products.manage'] }),
+      );
+    await scheduleSocketMembershipCheck(socket as never, {
+      readState,
+      intervalMs: 1_000,
+    }).checkNow();
+    expect(socket.disconnect).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(readState).toHaveBeenCalledTimes(2);
+    expect(socket.disconnect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'adhésion inactive (lecture refusée)',
+      () => Promise.reject(new Error('denied')),
+    ],
+    [
+      'rôle changé',
+      () => Promise.resolve(state({ role: OrganizationRole.ADMIN })),
+    ],
+    [
+      'permission retirée',
+      () => Promise.resolve(state({ permissions: ['products.manage'] })),
+    ],
+    [
+      'autre adhésion',
+      () =>
+        Promise.resolve(state({ membershipId: 'dddddddddddddddddddddddd' })),
+    ],
+    ['version de session changée', () => Promise.resolve(state({}, 3))],
+  ])('%s → socket fermé, plus aucune relecture', async (_label, read) => {
+    const socket = fakeSocket();
+    const readState = jest.fn(read);
+    await scheduleSocketMembershipCheck(socket as never, {
+      readState,
+      intervalMs: 1_000,
+    }).checkNow();
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    await jest.advanceTimersByTimeAsync(5_000);
+    expect(readState).toHaveBeenCalledTimes(1);
+  });
+
+  it('socket fermé par le client : timer nettoyé, aucune relecture', async () => {
+    const socket = fakeSocket();
+    const readState = jest.fn().mockResolvedValue(state());
+    const check = scheduleSocketMembershipCheck(socket as never, {
+      readState,
+      intervalMs: 1_000,
+    });
+    await check.checkNow();
+    socket.disconnect();
+    await jest.advanceTimersByTimeAsync(5_000);
+    expect(readState).toHaveBeenCalledTimes(1);
+  });
+
+  it('intervalle : 1 à 3600 s acceptés ; toute autre valeur → 60 s', () => {
+    expect(socketMembershipRecheckMs('1')).toBe(1_000);
+    expect(socketMembershipRecheckMs('3600')).toBe(3_600_000);
+    for (const raw of [undefined, '', '0', '3601', '-5', '1.5', 'abc']) {
+      expect(socketMembershipRecheckMs(raw)).toBe(
+        DEFAULT_SOCKET_MEMBERSHIP_RECHECK_MS,
+      );
+    }
   });
 });

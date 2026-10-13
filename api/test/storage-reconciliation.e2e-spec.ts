@@ -416,7 +416,8 @@ describe('E2E 1-17B — réconciliation du stockage', () => {
       salePrice: 2,
       initialQuantity: 1,
       remainingQuantity: 1,
-      deletedAt: null,
+      // 1-22B : seule une entrée de la corbeille est purgeable.
+      deletedAt: new Date(),
     });
     const productId = String(inserted.insertedId);
     const base = await usage();

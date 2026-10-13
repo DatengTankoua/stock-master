@@ -1,4 +1,6 @@
 import {
+  describeTrustProxySetting,
+  trustProxyProductionWarning,
   TRUST_PROXY_MAX_ADDRESSES,
   TrustProxyConfigError,
   applyTrustProxy,
@@ -123,5 +125,38 @@ describe('Confiance proxy (1-14D.2E)', () => {
       expect(set).toHaveBeenCalledWith('trust proxy', ['172.31.250.2']);
       expect(set.mock.calls[0][1]).not.toBe(addresses);
     });
+  });
+});
+
+describe('Description et avertissement de démarrage (1-22C)', () => {
+  it('description : mode et nombre, jamais les adresses', () => {
+    expect(describeTrustProxySetting({ mode: 'none' })).toMatch(/aucun proxy/);
+    expect(describeTrustProxySetting({ mode: 'hops', hops: 1 })).toMatch(
+      /^1 saut/,
+    );
+    const text = describeTrustProxySetting({
+      mode: 'addresses',
+      addresses: ['172.31.250.2'],
+    });
+    expect(text).toMatch(/^1 adresse/);
+    expect(text).not.toContain('172.31.250.2');
+  });
+
+  it('avertissement uniquement en production sans proxy approuvé', () => {
+    expect(trustProxyProductionWarning({ mode: 'none' }, 'production')).toMatch(
+      /partagent les limites/,
+    );
+    expect(
+      trustProxyProductionWarning({ mode: 'none' }, 'development'),
+    ).toBeNull();
+    expect(
+      trustProxyProductionWarning({ mode: 'hops', hops: 1 }, 'production'),
+    ).toBeNull();
+    expect(
+      trustProxyProductionWarning(
+        { mode: 'addresses', addresses: ['172.31.250.2'] },
+        'production',
+      ),
+    ).toBeNull();
   });
 });

@@ -20,10 +20,13 @@ import { SupportModule } from './support/support.module';
 import { ReportsModule } from './reports/reports.module';
 import { LegalModule } from './legal/legal.module';
 import { StorageQuotaModule } from './storage-quota/storage-quota.module';
+import { validateEnvironment } from './common/config/jwt-secret-policy';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    // 1-22C : politique du secret applicatif vérifiée au chargement de la
+    // configuration (API, Socket.IO et CLI) — refus fatal en production.
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     // 1-12D : politique Sharp du processus appliquée au bootstrap.
     ImageSecurityModule,
     MongooseModule.forRootAsync({
