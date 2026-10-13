@@ -12,8 +12,9 @@
  * rattrapage d'historique) n'est lancé ici.
  *
  * Chemin absolu recommandé : le dossier de lancement n'a pas d'effet (les
- * scripts résolvent leurs modules depuis leur propre emplacement). Seule
- * `MONGODB_URI` est lue (variables du service), jamais journalisée.
+ * scripts résolvent leurs modules depuis leur propre emplacement). Sont lus
+ * (variables du service, jamais journalisés) : `NODE_ENV` et `JWT_SECRET`
+ * (1-22C, contrôle préalable en production), puis `MONGODB_URI`.
  * `/app/api` suppose l'image `api/Dockerfile` : à adapter au constructeur
  * réel du service.
  *
@@ -23,6 +24,10 @@
  */
 import { spawnSync } from 'child_process';
 import { join } from 'path';
+import {
+  JwtSecretPolicyError,
+  validateEnvironment,
+} from '../common/config/jwt-secret-policy';
 
 /** Ordre et rôle de chaque migration (rapports des lots cités). */
 export const PREDEPLOY_MIGRATIONS: readonly string[] = Object.freeze([
@@ -50,8 +55,26 @@ export const PREDEPLOY_MIGRATIONS: readonly string[] = Object.freeze([
   'create-product-page-indexes.js',
 ]);
 
-function main(): number {
-  if (!process.env.MONGODB_URI) {
+/**
+ * 1-22C — politique du secret applicatif, vérifiée EN PREMIER : avant la
+ * lecture de `MONGODB_URI`, toute connexion et toute migration. Même règle
+ * que le démarrage de l'API (`validateEnvironment`) : appliquée seulement si
+ * `NODE_ENV=production` (migrations locales et tests inchangés). Seul
+ * l'environnement du processus est lu (aucun fichier `.env`).
+ */
+export function main(env: NodeJS.ProcessEnv = process.env): number {
+  try {
+    validateEnvironment(env);
+  } catch (error) {
+    console.error(
+      error instanceof JwtSecretPolicyError
+        ? `[pré-déploiement] ${error.message}`
+        : '[pré-déploiement] JWT_SECRET : validation impossible.',
+    );
+    console.error('[pré-déploiement] aucune migration exécutée.');
+    return 1;
+  }
+  if (!env.MONGODB_URI) {
     console.error('MONGODB_URI requis.');
     return 1;
   }
@@ -59,7 +82,7 @@ function main(): number {
     console.log(`[pré-déploiement] ${file}`);
     const result = spawnSync(process.execPath, [join(__dirname, file)], {
       stdio: 'inherit',
-      env: process.env,
+      env,
     });
     if (result.status !== 0) {
       console.error(
