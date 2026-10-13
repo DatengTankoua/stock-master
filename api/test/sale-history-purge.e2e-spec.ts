@@ -109,6 +109,8 @@ describe('E2E 1-15D — historique des ventes après purge', () => {
       .send({ productId, quantity, salePrice: 400 });
 
   async function purge(productId: string, token = ownerA) {
+    // 1-22B : seule une entrée de la corbeille est purgeable.
+    await http().delete(`/products/${productId}`).set(auth(token));
     return http().delete(`/products/${productId}/permanent`).set(auth(token));
   }
 
@@ -438,12 +440,18 @@ describe('E2E 1-15D — historique des ventes après purge', () => {
         await hold.wait(); // transaction de vente ouverte, stock écrit
         return product;
       });
-    const deletes = jest.spyOn(productModel, 'findOneAndDelete');
+    // 1-22B : la purge exige la corbeille ; la mise à la corbeille écrit le
+    // même document produit que la vente et attend donc son commit.
+    const updates = jest.spyOn(productModel, 'findOneAndUpdate');
 
     const salePending = sell(id, 2).then((r) => r);
     await until(() => decremented === 1, 'vente en transaction');
+    const updatesBefore = updates.mock.calls.length;
     const purgePending = purge(id).then((r) => r);
-    await until(() => deletes.mock.calls.length >= 1, 'purge tentée');
+    await until(
+      () => updates.mock.calls.length > updatesBefore,
+      'mise à la corbeille tentée',
+    );
     hold.release();
     const [saleRes, purgeRes] = await Promise.all([salePending, purgePending]);
 

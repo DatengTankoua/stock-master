@@ -391,7 +391,7 @@ describe('SectionsService — isolation multi-tenant (1-4A)', () => {
     );
   });
 
-  it('permanentDelete : findOneAndDelete({_id, organizationId}) UNIQUEMENT ; section invisible → 404', async () => {
+  it('permanentDelete : findOneAndDelete({_id, organizationId, dans la corbeille}) UNIQUEMENT ; section invisible ou active → 404', async () => {
     await build();
     const doc = sectionDoc();
     deleteChain.exec.mockResolvedValue(doc);
@@ -401,6 +401,8 @@ describe('SectionsService — isolation multi-tenant (1-4A)', () => {
     expect(sectionModel.findOneAndDelete).toHaveBeenCalledWith({
       _id: SECTION_ID,
       organizationId: new Types.ObjectId(ORG_A),
+      // 1-22B : seule une section DÉJÀ dans la corbeille est purgée.
+      deletedAt: { $ne: null },
     });
 
     deleteChain.exec.mockResolvedValue(null);

@@ -1466,7 +1466,11 @@ describe('OrganizationsService.updateMembership (1-7C)', () => {
           provide: getModelToken(OrganizationMembership.name),
           useValue: membershipModel,
         },
-        { provide: getModelToken(OrganizationInvitation.name), useValue: {} },
+        // 1-22B : invitations en attente du membre modifié (aucune ici).
+        {
+          provide: getModelToken(OrganizationInvitation.name),
+          useValue: { find: jest.fn(() => makeChain([])) },
+        },
         { provide: UsersService, useValue: {} },
         { provide: getConnectionToken(), useValue: fixture.connection },
         { provide: SocketRegistryService, useValue: socketRegistry },
@@ -1721,7 +1725,11 @@ describe('OrganizationsService.transferOwnership (1-7C)', () => {
           provide: getModelToken(OrganizationMembership.name),
           useValue: membershipModel,
         },
-        { provide: getModelToken(OrganizationInvitation.name), useValue: {} },
+        // 1-22B : invitations en attente du membre modifié (aucune ici).
+        {
+          provide: getModelToken(OrganizationInvitation.name),
+          useValue: { find: jest.fn(() => makeChain([])) },
+        },
         { provide: UsersService, useValue: {} },
         { provide: getConnectionToken(), useValue: fixture.connection },
         { provide: SocketRegistryService, useValue: socketRegistry },

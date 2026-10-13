@@ -222,7 +222,7 @@ Les services sont déployés séparément sur des plateformes managées :
 ```env
 PORT=4000
 MONGODB_URI=<uri-atlas>
-JWT_SECRET=<chaine-aleatoire-256-bits>
+JWT_SECRET=<au-moins-32-octets-aleatoires>   # openssl rand -base64 48
 CORS_ORIGIN=https://<votre-domaine-vercel>.vercel.app
 S3_ENDPOINT=https://<ACCOUNT_ID>.<jurisdiction>.r2.cloudflarestorage.com
 S3_REGION=auto

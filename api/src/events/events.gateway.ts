@@ -18,8 +18,12 @@ import {
 import {
   createAllowRequest,
   installSocketAuthMiddleware,
+  scheduleSocketMembershipCheck,
   socketCoverageEndsAt,
+  socketMembershipRecheckMs,
+  type SocketMembershipState,
 } from './socket-auth.middleware';
+import { currentSessionVersion } from '../auth/session-version';
 
 /**
  * Gateway Socket.IO — phase 0B.3 : authentification du handshake + contrôle
@@ -212,6 +216,33 @@ export class EventsGateway {
     // 1-7C : registre en mémoire — permet de déconnecter ce membre après
     // une mutation de membership (suspension/révocation/transfert).
     this.socketRegistry.register(organizationId, userId, client);
+    // 1-22B : relecture APRÈS l'enregistrement (une révocation validée
+    // pendant la poignée de main est vue ici ; une révocation postérieure
+    // trouve le socket dans le registre), puis périodique.
+    void scheduleSocketMembershipCheck(client, {
+      readState: () => this.readMembershipState(userId, organizationId),
+      intervalMs: this.membershipRecheckMs,
+      logger: this.logger,
+    }).checkNow();
+  }
+
+  private readonly membershipRecheckMs = socketMembershipRecheckMs(
+    process.env.SOCKET_MEMBERSHIP_RECHECK_SECONDS,
+  );
+  private readonly logger = new Logger(EventsGateway.name);
+
+  /** État courant (adhésion active + version de session), relu en base. */
+  private async readMembershipState(
+    userId: string,
+    organizationId: string,
+  ): Promise<SocketMembershipState> {
+    const user = await this.usersService.findByIdForAuth(userId);
+    if (!user || !user.emailVerifiedAt) throw new Error('inactive user');
+    const context = await this.organizationsService.resolveActiveContext(
+      userId,
+      organizationId,
+    );
+    return { context, authVersion: currentSessionVersion(user) };
   }
 
   handleDisconnect(client: Socket): void {

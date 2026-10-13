@@ -1500,6 +1500,11 @@ describe('App (e2e — MongoDB éphémère totalement isolée)', () => {
             .patch(`/sections/${idC}/restore`)
             .set('Authorization', `Bearer ${adminToken}`);
           expect(restoreRes.status).toBe(200);
+          // 1-22B : seule une entrée de la corbeille est purgeable.
+          const retrashRes = await request(app.getHttpServer())
+            .delete(`/sections/${idC}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+          expect(retrashRes.status).toBe(200);
           const permRes = await request(app.getHttpServer())
             .delete(`/sections/${idC}/permanent`)
             .set('Authorization', `Bearer ${adminToken}`);
@@ -2022,6 +2027,11 @@ describe('App (e2e — MongoDB éphémère totalement isolée)', () => {
             .patch(`/products/${pa._id}/restore`)
             .set('Authorization', `Bearer ${adminToken}`);
           expect(restoreRes.status).toBe(200);
+          // 1-22B : seule une entrée de la corbeille est purgeable.
+          const retrashRes = await request(app.getHttpServer())
+            .delete(`/products/${pa._id}`)
+            .set('Authorization', `Bearer ${adminToken}`);
+          expect(retrashRes.status).toBe(200);
           const permRes = await request(app.getHttpServer())
             .delete(`/products/${pa._id}/permanent`)
             .set('Authorization', `Bearer ${adminToken}`);

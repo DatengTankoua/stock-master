@@ -1,9 +1,11 @@
 import {
+  canGrantInvitation,
   DEFAULT_PERMISSIONS_BY_ROLE,
   DelegablePermission,
   effectivePermissions,
   hasPermission,
   isPermissionSubset,
+  MembershipStatus,
   OrganizationRole,
   STANDARD_MEMBER_PERMISSIONS,
 } from './permissions';
@@ -97,6 +99,83 @@ describe('permissions effectives (1-12H)', () => {
       isPermissionSubset(
         effectivePermissions(OrganizationRole.SELLER, []),
         actor,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('canGrantInvitation (1-22B — création ET acceptation)', () => {
+  const seller = (
+    permissions: DelegablePermission[],
+    status = MembershipStatus.ACTIVE,
+  ) => ({ role: OrganizationRole.SELLER, status, permissions });
+  const granted = (
+    permissions: DelegablePermission[],
+    role = OrganizationRole.SELLER,
+  ) => ({ role, permissions });
+
+  it('owner actif : accorde tout ; owner suspendu : rien', () => {
+    const owner = { role: OrganizationRole.OWNER, permissions: [] };
+    expect(
+      canGrantInvitation(
+        { ...owner, status: MembershipStatus.ACTIVE },
+        granted(['members.manage'], OrganizationRole.ADMIN),
+      ),
+    ).toBe(true);
+    expect(
+      canGrantInvitation(
+        { ...owner, status: MembershipStatus.SUSPENDED },
+        granted([]),
+      ),
+    ).toBe(false);
+  });
+
+  it('auteur absent, suspendu ou révoqué : jamais', () => {
+    expect(canGrantInvitation(null, granted([]))).toBe(false);
+    for (const status of [
+      MembershipStatus.SUSPENDED,
+      MembershipStatus.REVOKED,
+    ]) {
+      expect(
+        canGrantInvitation(seller(['members.invite'], status), granted([])),
+      ).toBe(false);
+    }
+  });
+
+  it('non-owner : members.invite requis et permissions accordées incluses dans les siennes', () => {
+    expect(canGrantInvitation(seller(['products.manage']), granted([]))).toBe(
+      false,
+    );
+    expect(
+      canGrantInvitation(
+        seller(['members.invite', 'products.manage']),
+        granted(['products.manage']),
+      ),
+    ).toBe(true);
+    expect(
+      canGrantInvitation(
+        seller(['members.invite']),
+        granted(['products.manage']),
+      ),
+    ).toBe(false);
+    // Rôle admin accordé = ses permissions par défaut : hors de portée d'un vendeur.
+    expect(
+      canGrantInvitation(
+        seller(['members.invite']),
+        granted([], OrganizationRole.ADMIN),
+      ),
+    ).toBe(false);
+  });
+
+  it('changement de rôle conservant l’autorité (vendeur → admin) : toujours accordable', () => {
+    expect(
+      canGrantInvitation(
+        {
+          role: OrganizationRole.ADMIN,
+          status: MembershipStatus.ACTIVE,
+          permissions: [],
+        },
+        granted(['products.manage']),
       ),
     ).toBe(true);
   });

@@ -446,6 +446,110 @@ export function scheduleSocketSubscriptionCheck(
   arm();
 }
 
+/** 1-22B — relecture périodique par défaut de l'adhésion d'un socket ouvert. */
+export const DEFAULT_SOCKET_MEMBERSHIP_RECHECK_MS = 60_000;
+
+/**
+ * Intervalle de relecture (`SOCKET_MEMBERSHIP_RECHECK_SECONDS`, entier de 1
+ * à 3600) ; toute autre valeur → défaut (60 s), jamais une désactivation.
+ */
+export function socketMembershipRecheckMs(raw: string | undefined): number {
+  if (raw === undefined || !/^\d{1,4}$/.test(raw)) {
+    return DEFAULT_SOCKET_MEMBERSHIP_RECHECK_MS;
+  }
+  const seconds = Number(raw);
+  return seconds >= 1 && seconds <= 3600
+    ? seconds * 1000
+    : DEFAULT_SOCKET_MEMBERSHIP_RECHECK_MS;
+}
+
+/** État courant relu côté serveur pour un socket ouvert. */
+export interface SocketMembershipState {
+  context: ResolvedOrganizationContext;
+  authVersion: number;
+}
+
+/**
+ * 1-22B — revalide l'adhésion d'un socket DÉJÀ enregistré : tout de suite
+ * (`checkNow`, appelé après l'enregistrement : couvre une révocation validée
+ * pendant la poignée de main, que `disconnectMember` n'a pas pu fermer),
+ * puis à intervalle fixe (révocation par une autre instance ou hors API).
+ * Ferme le socket (fail-closed) si l'adhésion n'est plus active, si le rôle
+ * ou les permissions ont changé depuis la poignée de main, si la version de
+ * session a changé, ou si la lecture échoue. Une reconnexion repasse la
+ * poignée de main avec l'état courant. Timer `unref()`, nettoyé sur
+ * `disconnect`. Garantie bornée par l'intervalle, PAS une révocation
+ * distribuée instantanée.
+ */
+export function scheduleSocketMembershipCheck(
+  socket: Socket,
+  deps: {
+    readState: () => Promise<SocketMembershipState>;
+    intervalMs: number;
+    logger?: Logger;
+  },
+): { checkNow: () => Promise<void> } {
+  let timer: NodeJS.Timeout | undefined;
+  let stopped = false;
+  const onDisconnect = (): void => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  socket.once('disconnect', onDisconnect);
+
+  const close = (): void => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    socket.off('disconnect', onDisconnect);
+    socket.disconnect(true);
+  };
+
+  const arm = (): void => {
+    if (stopped) return;
+    timer = setTimeout(() => void checkNow(), deps.intervalMs);
+    timer.unref?.();
+  };
+
+  const checkNow = async (): Promise<void> => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+    if (stopped) return;
+    let state: SocketMembershipState | null = null;
+    try {
+      state = await deps.readState();
+    } catch {
+      // Adhésion inactive/absente ou lecture impossible : fermeture.
+    }
+    if (stopped) return;
+    if (!state || !sameMembership(socket, state)) {
+      deps.logger?.warn('Socket.IO: membership changed — closing socket');
+      close();
+      return;
+    }
+    arm();
+  };
+
+  return { checkNow };
+}
+
+function sameMembership(socket: Socket, state: SocketMembershipState): boolean {
+  const data = socket.data as {
+    organizationContext?: ResolvedOrganizationContext;
+    authVersion?: unknown;
+  };
+  const known = data.organizationContext;
+  if (!known) return false;
+  const sorted = (values: readonly string[]) => [...values].sort().join(',');
+  return (
+    known.membershipId === state.context.membershipId &&
+    known.organizationId === state.context.organizationId &&
+    known.role === state.context.role &&
+    sorted(known.permissions) === sorted(state.context.permissions) &&
+    data.authVersion === state.authVersion
+  );
+}
+
 /**
  * Fabrique la fonction `allowRequest` engine.io (option supportée par les
  * types installés) :

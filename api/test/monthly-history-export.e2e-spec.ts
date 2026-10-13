@@ -578,6 +578,10 @@ describe('E2E 1-16D — historique mensuel exportable', () => {
       { _id: purged },
       { $set: { name: 'Nom final' } },
     );
+    // 1-22B : seule une entrée de la corbeille est purgeable.
+    expect(
+      (await http().delete(`/products/${purged}`).set(auth(ownerA))).status,
+    ).toBe(200);
     expect(
       (await http().delete(`/products/${purged}/permanent`).set(auth(ownerA)))
         .status,

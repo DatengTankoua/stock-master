@@ -25,6 +25,7 @@ import {
 } from './schemas/invitation.schema';
 import {
   CURRENT_PERMISSION_CATALOG,
+  canGrantInvitation,
   DelegablePermission,
   effectivePermissions,
   mergeUnknownPermissions,
@@ -433,21 +434,14 @@ export class OrganizationsService {
         userId: new Types.ObjectId(invitedById),
       })
       .exec();
-    if (!actor || actor.status !== MembershipStatus.ACTIVE) {
+    // 1-22B : même règle que l'acceptation (`canGrantInvitation`).
+    if (
+      !canGrantInvitation(actor, {
+        role: dto.role,
+        permissions: dto.permissions ?? [],
+      })
+    ) {
       throw new ForbiddenException(PERMISSION_DENIED_RESPONSE);
-    }
-    const actorEffective = effectivePermissions(actor.role, actor.permissions);
-    if (actor.role !== OrganizationRole.OWNER) {
-      if (!actorEffective.has('members.invite')) {
-        throw new ForbiddenException(PERMISSION_DENIED_RESPONSE);
-      }
-      const invitedEffective = effectivePermissions(
-        dto.role,
-        dto.permissions ?? [],
-      );
-      if (!isPermissionSubset(invitedEffective, actorEffective)) {
-        throw new ForbiddenException(PERMISSION_DENIED_RESPONSE);
-      }
     }
 
     // Origine vérifiée AVANT toute lecture/écriture d'invitation : sans lien
@@ -628,6 +622,7 @@ export class OrganizationsService {
     const session = await this.connection.startSession();
     let result: MemberView | undefined;
     let targetUserId: string | undefined;
+    let revokedInvitations = 0;
 
     try {
       await session.withTransaction(async () => {
@@ -713,6 +708,16 @@ export class OrganizationsService {
         if (dto.status !== undefined) target.status = dto.status;
 
         await target.save({ session });
+        // 1-22B — invitations en attente émises par ce membre et qu'il ne
+        // pourrait plus accorder : révoquées dans la MÊME transaction. Une
+        // acceptation concurrente écrit le même document invitation (conflit
+        // d'écriture) : l'une des deux transactions est rejouée, jamais les
+        // deux validées. Un changement qui conserve l'autorité ne révoque rien.
+        revokedInvitations = await this.revokeUngrantableInvitations(
+          orgOid,
+          target,
+          session,
+        );
         targetUserId = targetUserIdStr;
         result = this.toMemberView(target);
       });
@@ -730,7 +735,48 @@ export class OrganizationsService {
     // 1-15C : puis signal aux autres membres (le membre visé, déconnecté,
     // relit son contexte à la reconnexion).
     this.socketRegistry.signalOrganization(organizationId, 'members:changed');
+    if (revokedInvitations > 0) {
+      this.socketRegistry.signalOrganization(
+        organizationId,
+        'invitations:changed',
+      );
+    }
     return result;
+  }
+
+  /**
+   * 1-22B — supprime (= révoque, même convention que `revokeInvitation`)
+   * les invitations en attente émises par `member` que son état courant ne
+   * permet plus d'accorder (`canGrantInvitation`). Retourne leur nombre.
+   */
+  private async revokeUngrantableInvitations(
+    organizationId: Types.ObjectId,
+    member: OrganizationMembershipDocument,
+    session: MongooseSession,
+  ): Promise<number> {
+    const memberUserId =
+      (member.userId as unknown as { _id?: Types.ObjectId })._id ??
+      member.userId;
+    const pending = await this.invitationModel
+      .find({
+        organizationId,
+        invitedById: memberUserId,
+        status: InvitationStatus.PENDING,
+      })
+      .session(session)
+      .exec();
+    let revoked = 0;
+    for (const invitation of pending) {
+      if (canGrantInvitation(member, invitation)) continue;
+      const deleted = await this.invitationModel
+        .deleteOne(
+          { _id: invitation._id, status: InvitationStatus.PENDING },
+          { session },
+        )
+        .exec();
+      revoked += deleted.deletedCount;
+    }
+    return revoked;
   }
 
   /**

@@ -226,6 +226,38 @@ export function isPermissionSubset(
   return true;
 }
 
+/**
+ * 1-22B — une adhésion `inviter` peut-elle accorder `granted` (rôle +
+ * permissions d'une invitation) ? Règle UNIQUE, appliquée à la création de
+ * l'invitation ET à son acceptation : adhésion active ; owner sans borne ;
+ * sinon `members.invite` et permissions accordées incluses dans les siennes.
+ */
+export function canGrantInvitation(
+  inviter: {
+    role: OrganizationRole;
+    status: MembershipStatus;
+    permissions: readonly DelegablePermission[];
+  } | null,
+  granted: {
+    role: OrganizationRole;
+    permissions: readonly DelegablePermission[];
+  },
+): boolean {
+  if (!inviter || inviter.status !== MembershipStatus.ACTIVE) return false;
+  if (inviter.role === OrganizationRole.OWNER) return true;
+  const inviterEffective = effectivePermissions(
+    inviter.role,
+    inviter.permissions,
+  );
+  return (
+    inviterEffective.has('members.invite') &&
+    isPermissionSubset(
+      effectivePermissions(granted.role, granted.permissions),
+      inviterEffective,
+    )
+  );
+}
+
 /** Corps 403 UNIFORME (même contrat que `PermissionGuard`, 1-7A). */
 export const PERMISSION_DENIED_RESPONSE = Object.freeze({
   code: 'PERMISSION_DENIED',

@@ -9,7 +9,9 @@ import {
 } from './events/origin.helpers';
 import {
   applyTrustProxy,
+  describeTrustProxySetting,
   resolveTrustProxySetting,
+  trustProxyProductionWarning,
 } from './common/trust-proxy';
 import type { ExpressSettings } from './common/trust-proxy';
 import { API_APPLICATION_OPTIONS } from './common/application-options';
@@ -44,6 +46,15 @@ async function bootstrap() {
   // proxys identifiés) ou `TRUST_PROXY_HOPS` (N sauts), jamais les deux ;
   // toute valeur invalide → erreur fatale au démarrage.
   const trustProxy = resolveTrustProxySetting(process.env);
+  // 1-22C : mode journalisé ; avertissement si rien n'est approuvé en production.
+  new Logger('Bootstrap').log(
+    `Confiance proxy : ${describeTrustProxySetting(trustProxy)}`,
+  );
+  const trustProxyWarning = trustProxyProductionWarning(
+    trustProxy,
+    process.env.NODE_ENV,
+  );
+  if (trustProxyWarning) new Logger('Bootstrap').warn(trustProxyWarning);
 
   // 1-18C : anti-robot de l'inscription et plafonds persistants, validés
   // STRICTEMENT (valeur invalide, clé de test ou simulation en production →
