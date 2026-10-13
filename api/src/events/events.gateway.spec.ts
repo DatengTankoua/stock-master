@@ -268,6 +268,8 @@ describe('EventsGateway (unité)', () => {
         },
         join: jest.fn(),
         disconnect: jest.fn(),
+        once: jest.fn(),
+        off: jest.fn(),
       };
 
       gateway.handleConnection(client as never);
@@ -317,6 +319,8 @@ describe('EventsGateway (unité)', () => {
         },
         join: jest.fn(),
         disconnect: jest.fn(),
+        once: jest.fn(),
+        off: jest.fn(),
       };
 
       gateway.handleConnection(client as never);

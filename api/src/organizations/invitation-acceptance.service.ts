@@ -26,6 +26,7 @@ import {
   OrganizationInvitationDocument,
 } from './schemas/invitation.schema';
 import {
+  canGrantInvitation,
   InvitationStatus,
   OrganizationRole,
   OrganizationStatus,
@@ -176,6 +177,7 @@ export class InvitationAcceptanceService {
       invitation.organizationId,
     );
     if (!organization) throw this.invalidOrExpired();
+    await this.assertInviterCanGrant(invitation);
     if (invitation.email !== normalizedEmail(principal.email)) {
       throw this.accountMismatch();
     }
@@ -228,6 +230,8 @@ export class InvitationAcceptanceService {
           session,
         );
         if (!organization) throw this.invalidOrExpired();
+        // 1-22B : autorité de l'auteur relue DANS la transaction.
+        await this.assertInviterCanGrant(invitation, session);
 
         const membership = await this.createMembership(
           invitation,
@@ -282,6 +286,7 @@ export class InvitationAcceptanceService {
       invitation.organizationId,
     );
     if (!organization) throw this.invalidOrExpired();
+    await this.assertInviterCanGrant(invitation);
 
     const delivery = new Promise<void>((resolve) => setImmediate(resolve))
       .then(() => this.claimAccountLink(invitation._id, organization.name, now))
@@ -335,6 +340,8 @@ export class InvitationAcceptanceService {
           session,
         );
         if (!organization) throw this.invalidOrExpired();
+        // 1-22B : autorité de l'auteur relue DANS la transaction.
+        await this.assertInviterCanGrant(invitation, session);
 
         // Seule la personne qui contrôle l'adresse lit ce refus.
         if (await this.usersService.findByEmail(invitation.email, session)) {
@@ -407,6 +414,29 @@ export class InvitationAcceptanceService {
       .findOne({ _id: organizationId, status: OrganizationStatus.ACTIVE })
       .session(session ?? null)
       .exec();
+  }
+
+  /**
+   * 1-22B — l'auteur de l'invitation doit encore pouvoir l'accorder
+   * (`canGrantInvitation`, même règle qu'à la création) : adhésion active,
+   * `members.invite` et permissions accordées incluses dans les siennes.
+   * Sinon l'invitation est inutilisable (même refus qu'une invitation
+   * expirée : aucun détail sur l'auteur n'est divulgué).
+   */
+  private async assertInviterCanGrant(
+    invitation: OrganizationInvitationDocument,
+    session?: MongooseSession,
+  ): Promise<void> {
+    const inviter = await this.membershipModel
+      .findOne({
+        organizationId: invitation.organizationId,
+        userId: invitation.invitedById,
+      })
+      .session(session ?? null)
+      .exec();
+    if (!canGrantInvitation(inviter, invitation)) {
+      throw this.invalidOrExpired();
+    }
   }
 
   /**

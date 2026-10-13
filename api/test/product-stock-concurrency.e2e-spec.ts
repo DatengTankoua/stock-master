@@ -340,6 +340,10 @@ describe('E2E 1-15E — stock : modifications concurrentes', () => {
 
   it('produit supprimé définitivement pendant la modification : 404, rien recréé, aucune émission', async () => {
     const id = await seed(`Purge-${Date.now()}`);
+    // 1-22B : seule une entrée de la corbeille est purgeable.
+    expect(
+      (await http().delete(`/products/${id}`).set(auth(ownerA))).status,
+    ).toBe(200);
     const emit = jest.spyOn(eventsGateway, 'emitToOrganization');
     const held = holdStockUpdates();
     const pending = patchProduct(id, { additionalStock: '5' });

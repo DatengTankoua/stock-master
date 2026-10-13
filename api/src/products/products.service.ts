@@ -895,9 +895,15 @@ export class ProductsService {
     // §6 — le produit est d'abord localisé par filtre composite tenant :
     // un produit étranger/absent provoque un 404 AVANT tout traitement :
     // aucun fichier d'une autre organisation n'est jamais touché.
-    const product = await this.productModel
-      .findOne({ _id: id, organizationId: orgOid })
-      .exec();
+    // 1-22B — seul un produit DÉJÀ dans la corbeille est purgeable :
+    // `trash.manage` ne retire jamais un produit actif du catalogue (la mise
+    // à la corbeille relève de `products.manage`). Actif = même 404.
+    const inTrash = {
+      _id: id,
+      organizationId: orgOid,
+      deletedAt: { $ne: null },
+    };
+    const product = await this.productModel.findOne(inTrash).exec();
     if (!product) throw new NotFoundException(`Product ${id} not found`);
     // 1-15D — suppression du document ET conservation de l'historique de
     // ses ventes dans la MÊME transaction. Une vente concurrente écrit le
@@ -910,8 +916,10 @@ export class ProductsService {
     try {
       await session.withTransaction(async () => {
         removed = undefined;
+        // Condition relue dans la transaction : un produit restauré entre
+        // la lecture ci-dessus et ici n'est jamais supprimé.
         const target = await this.productModel
-          .findOneAndDelete({ _id: id, organizationId: orgOid }, { session })
+          .findOneAndDelete(inTrash, { session })
           .exec();
         if (!target) return;
         await this.preserveSaleHistory(orgOid, target, session);
@@ -928,6 +936,10 @@ export class ProductsService {
     } finally {
       await session.endSession();
     }
+    // 1-22B — rien supprimé par CETTE requête (restauré ou déjà purgé entre
+    // les deux lectures) : jamais un succès annoncé pour une suppression qui
+    // n'a pas eu lieu.
+    if (!removed) throw new NotFoundException(`Product ${id} not found`);
     // 1-15B — suppression DÉFINITIVE, distincte de la mise à la corbeille
     // (`product:deleted`) : le produit n'est plus restaurable. Identifiant
     // seul, émis seulement si cette requête a réellement supprimé le

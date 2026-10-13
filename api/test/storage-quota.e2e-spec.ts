@@ -443,6 +443,10 @@ describe('E2E 1-17B — quotas de stockage', () => {
 
   it('suppression en échec : comptée tant qu’elle n’est pas confirmée, puis reprise sans double libération', async () => {
     const id = productIds[productIds.length - 1];
+    // 1-22B : seule une entrée de la corbeille est purgeable.
+    expect(
+      (await http().delete(`/products/${id}`).set(auth(ownerA))).status,
+    ).toBe(200);
     faults.failDelete = true;
     const purged = await http()
       .delete(`/products/${id}/permanent`)
@@ -533,6 +537,11 @@ describe('E2E 1-17B — quotas de stockage', () => {
   it('logos : comptés dans le même quota, remplacement et suppression libèrent l’ancien', async () => {
     // Remise à un état connu : 2 photos stockées (+ ancienne photo du
     // produit 1, toujours comptée) → purge du produit 1 pour libérer.
+    // 1-22B : seule une entrée de la corbeille est purgeable.
+    expect(
+      (await http().delete(`/products/${productIds[1]}`).set(auth(ownerA)))
+        .status,
+    ).toBe(200);
     const res1 = await http()
       .delete(`/products/${productIds[1]}/permanent`)
       .set(auth(ownerA));

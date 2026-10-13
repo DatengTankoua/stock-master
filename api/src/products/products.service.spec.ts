@@ -1338,10 +1338,13 @@ describe('ProductsService — isolation multi-tenant catalogue (1-4B)', () => {
       productModel.findOneAndDelete.mock.invocationCallOrder[0],
     );
 
-    // Supprimé entre-temps par une autre requête : aucune émission.
+    // Supprimé ou restauré entre-temps par une autre requête (1-22B) :
+    // 404, aucune émission.
     eventsGateway.emitToOrganization.mockClear();
     deleteChain.exec.mockResolvedValue(null);
-    await service.permanentDelete(ORG_A, PRODUCT_ID);
+    await expect(
+      service.permanentDelete(ORG_A, PRODUCT_ID),
+    ).rejects.toBeInstanceOf(NotFoundException);
     // Produit étranger ou absent : 404 sans émission.
     productOneChain.exec.mockResolvedValue(null);
     await service.permanentDelete(ORG_A, PRODUCT_ID).catch(() => undefined);
@@ -1373,8 +1376,13 @@ describe('ProductsService — isolation multi-tenant catalogue (1-4B)', () => {
       storageCleanup: 'deleted',
     });
     expect(res).not.toHaveProperty('purchasePrice');
+    // 1-22B : seul un produit DÉJÀ dans la corbeille est purgé.
     expect(productModel.findOneAndDelete).toHaveBeenCalledWith(
-      { _id: PRODUCT_ID, organizationId: new Types.ObjectId(ORG_A) },
+      {
+        _id: PRODUCT_ID,
+        organizationId: new Types.ObjectId(ORG_A),
+        deletedAt: { $ne: null },
+      },
       { session: tx.session },
     );
     expect(s3Service.deleteStoredObject).toHaveBeenCalledTimes(1);
@@ -1414,7 +1422,7 @@ describe('ProductsService — isolation multi-tenant catalogue (1-4B)', () => {
     );
   });
 
-  it('permanentDelete : ancienne URL → jamais supprimée (`retained`) ; déjà purgé ailleurs → `not_needed`', async () => {
+  it('permanentDelete : ancienne URL → jamais supprimée (`retained`) ; déjà purgé ailleurs → 404, aucun fichier touché', async () => {
     await build();
     const legacy = productDoc({
       imageKey: null,
@@ -1430,9 +1438,9 @@ describe('ProductsService — isolation multi-tenant catalogue (1-4B)', () => {
 
     productOneChain.exec.mockResolvedValue(productDoc());
     deleteChain.exec.mockResolvedValue(null);
-    expect(
-      (await service.permanentDelete(ORG_A, PRODUCT_ID)).storageCleanup,
-    ).toBe('not_needed');
+    await expect(
+      service.permanentDelete(ORG_A, PRODUCT_ID),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(s3Service.deleteStoredObject).not.toHaveBeenCalled();
   });
 
@@ -1479,7 +1487,9 @@ describe('ProductsService — isolation multi-tenant catalogue (1-4B)', () => {
     await build();
     productOneChain.exec.mockResolvedValue(productDoc());
     deleteChain.exec.mockResolvedValue(null);
-    await service.permanentDelete(ORG_A, PRODUCT_ID);
+    await expect(
+      service.permanentDelete(ORG_A, PRODUCT_ID),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(saleModel.updateMany).not.toHaveBeenCalled();
     expect(eventsGateway.emitToOrganization).not.toHaveBeenCalled();
   });
