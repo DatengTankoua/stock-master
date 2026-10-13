@@ -76,6 +76,20 @@ export class FakeSasPay {
   statusOutage = false;
   /** `status/` désigne une autre transaction que le détail. */
   inconsistentStatusRoute = false;
+  /**
+   * 1-21E — fermeture (`POST …/cancel/`, documentée) : `normal` (PENDING →
+   * CANCELLED, sinon 409 `not_pending`), réponse perdue APRÈS fermeture,
+   * non transmise, ou 200 sans effet (fermeture non confirmée).
+   */
+  cancelBehavior: 'normal' | 'lost-after-cancel' | 'not-sent' | 'ignored' =
+    'normal';
+  /**
+   * 1-21E — réponse INCOMPLÈTE : champ de transaction absent du détail
+   * (`transaction`) ou de la route de statut (`transaction_id`).
+   */
+  omitTransactionField: 'detail' | 'status' | null = null;
+  /** 1-21E — exécuté à la réception d'une fermeture (course avec un paiement). */
+  beforeCancel: ((session: FakeSession) => void) | null = null;
 
   readonly transport: SasPayTransport = (request) => this.handle(request);
 
@@ -120,6 +134,12 @@ export class FakeSasPay {
     if (this.statusOutage) throw new SasPayTransportError('unknown');
 
     let m: RegExpExecArray | null;
+    if (
+      request.method === 'POST' &&
+      (m = /^\/checkout-sessions\/([^/]+)\/cancel\/$/.exec(path))
+    ) {
+      return this.cancel(m[1]);
+    }
     if (request.method === 'GET' && path === '/checkout-sessions/') {
       const page = Number(url.searchParams.get('page') ?? 1);
       const size = Number(url.searchParams.get('page_size') ?? 20);
@@ -142,7 +162,7 @@ export class FakeSasPay {
       const s = this.sessions.get(m[1]);
       if (!s) return this.reply(404, null);
       const tx = s.transaction ? this.transactions.get(s.transaction) : null;
-      return this.reply(200, {
+      const live: Record<string, unknown> = {
         id: s.id,
         slug: s.slug,
         status: s.status,
@@ -151,11 +171,19 @@ export class FakeSasPay {
           : s.transaction,
         transaction_status: tx?.status ?? null,
         transaction_reference: tx ? `TXN-${tx.id.slice(0, 8)}` : null,
-      });
+      };
+      if (this.omitTransactionField === 'status') {
+        delete live.transaction_id;
+        delete live.transaction_status;
+      }
+      return this.reply(200, live);
     }
     if ((m = /^\/checkout-sessions\/([^/]+)\/$/.exec(path))) {
       const s = this.sessions.get(m[1]);
-      return s ? this.reply(200, this.view(s)) : this.reply(404, null);
+      if (!s) return this.reply(404, null);
+      const detail = this.view(s);
+      if (this.omitTransactionField === 'detail') delete detail.transaction;
+      return this.reply(200, detail);
     }
     if ((m = /^\/payments\/([^/]+)\/verify\/$/.exec(path))) {
       const tx = this.transactions.get(m[1]);
@@ -204,6 +232,29 @@ export class FakeSasPay {
       });
     }
     return this.reply(201, view);
+  }
+
+  private cancel(sessionId: string): SasPayHttpResponse {
+    const behavior = this.cancelBehavior;
+    if (behavior === 'not-sent') throw new SasPayTransportError('not-sent');
+    const s = this.sessions.get(sessionId);
+    if (!s) return this.reply(404, null);
+    this.beforeCancel?.(s);
+    if (behavior === 'ignored') return this.reply(200, this.view(s));
+    if (s.status !== 'PENDING') {
+      return {
+        status: 409,
+        bodyText: JSON.stringify({
+          message: `Session déjà '${s.status}'.`,
+          code: 'not_pending',
+        }),
+      };
+    }
+    s.status = 'CANCELLED';
+    if (behavior === 'lost-after-cancel') {
+      throw new SasPayTransportError('unknown');
+    }
+    return this.reply(200, this.view(s));
   }
 
   view(s: FakeSession): Record<string, unknown> {
@@ -273,6 +324,36 @@ export class FakeSasPay {
       if (s.transaction === transactionId && status === 'SUCCESS')
         s.status = 'PAID';
     }
+  }
+
+  /**
+   * 1-21E — Le payeur valide sur la PAGE (ancien lien, autre onglet) : refusé
+   * si la session n'est plus ouverte (« Paiement indisponible » observé en
+   * production) : `null`, aucune transaction créée.
+   */
+  payOnPage(
+    sessionId: string,
+    status: FakeTransaction['status'],
+  ): string | null {
+    const s = this.sessions.get(sessionId);
+    if (!s || s.status !== 'PENDING') return null;
+    return this.attempt(sessionId, status);
+  }
+
+  /**
+   * 1-21E — Cas PATHOLOGIQUE (non documenté, jamais exclu) : transaction
+   * rattachée à une session déjà close, puis réglée.
+   */
+  lateTransaction(
+    sessionId: string,
+    status: FakeTransaction['status'],
+  ): string {
+    const s = this.sessions.get(sessionId);
+    if (!s) throw new Error('session inconnue');
+    const closed = s.status;
+    const id = this.attempt(sessionId, status);
+    if (status !== 'SUCCESS') s.status = closed;
+    return id;
   }
 
   close(sessionId: string, status: 'EXPIRED' | 'CANCELLED'): void {

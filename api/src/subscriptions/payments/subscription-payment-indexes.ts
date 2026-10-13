@@ -10,7 +10,12 @@ import { SUBSCRIPTION_PAYMENTS_COLLECTION } from './schemas/subscription-payment
  * 3. unique partiel `{ provider, providerReference }` (référence renseignée) ;
  * 4. unique partiel `{ organizationId }` lorsque `open: true` — un seul
  *    paiement ouvert par organisation ;
- * 5. `{ organizationId, _id: -1 }` (non unique) — historique paginé.
+ * 5. `{ organizationId, _id: -1 }` (non unique) — historique paginé ;
+ * 6. (1-21B) unique partiel `{ provider, providerTransactionId }` ;
+ * 7. (1-21E) unique partiel `{ autoGrantRenewalId }` — une attribution
+ *    automatique par renouvellement ;
+ * 8. (1-21E) unique partiel `{ replacesPaymentId }` — une tentative n'est
+ *    remplacée qu'une fois.
  *
  * Même contrat que `subscription-period-indexes.ts` : création EXPLICITE et
  * idempotente (migration, tests éphémères), jamais au démarrage ;
@@ -52,6 +57,24 @@ export const SUBSCRIPTION_PAYMENT_INDEXES: readonly RequiredPaymentIndex[] =
       unique: true,
       partialFilterExpression: Object.freeze({
         providerTransactionId: Object.freeze({ $type: 'string' }),
+      }),
+    }),
+    // 1-21E : au plus UNE attribution automatique par renouvellement.
+    Object.freeze({
+      name: 'autoGrantRenewalId_1',
+      key: Object.freeze({ autoGrantRenewalId: 1 } as const),
+      unique: true,
+      partialFilterExpression: Object.freeze({
+        autoGrantRenewalId: Object.freeze({ $type: 'objectId' }),
+      }),
+    }),
+    // 1-21E : tentatives qui en remplacent une autre (succès tardif).
+    Object.freeze({
+      name: 'replacesPaymentId_1',
+      key: Object.freeze({ replacesPaymentId: 1 } as const),
+      unique: true,
+      partialFilterExpression: Object.freeze({
+        replacesPaymentId: Object.freeze({ $type: 'objectId' }),
       }),
     }),
     Object.freeze({
@@ -184,7 +207,7 @@ export async function verifySubscriptionPaymentIndexes(
 }
 
 /**
- * Idempotent : no-op si les 5 index exacts existent. Sinon vérifie TOUS les
+ * Idempotent : no-op si les index exacts existent. Sinon vérifie TOUS les
  * index requis puis crée les absents ; un index de même clé mal configuré
  * (ou un TTL) fait échouer AVANT toute création, sans jamais rien remplacer.
  * Revérifie ensuite.

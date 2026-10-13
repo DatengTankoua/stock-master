@@ -1,4 +1,5 @@
 import {
+  GrantRenewalConflictMode,
   ReconciliationError,
   PaymentReconciliationService,
 } from './payment-reconciliation.service';
@@ -35,6 +36,12 @@ export const RECONCILIATION_USAGE = [
   '  reconcile --payment-id=<id> [--reference=<uuid>]            (simulation)',
   '            [--close-unresolved]  page de paiement close sans succès,',
   '                                  absence de débit confirmée par le prestataire',
+  '            [--grant-renewal-conflict=renewal|additional]  encaissement en',
+  '                                  conflit de renouvellement, accord du client :',
+  '                                  renewal = forfait initial retenu (règle le',
+  '                                  renouvellement), additional = achat en plus',
+  '            [--record-refund]     remboursement effectué hors de Stock Master',
+  '                                  (--reason=refunded-outside et --ticket requis)',
   '  reconcile --payment-id=<id> [--reference=<uuid>] --apply --plan=<jeton>',
   '            --operation-id=<uuid v4> --operator=<identifiant>',
   `            --reason=${Object.values(ReconciliationReason).join('|')} [--ticket=<référence>]`,
@@ -48,6 +55,8 @@ export type ReconciliationCommand =
       reference: string | null;
       apply: false;
       closeUnresolved?: boolean;
+      grantRenewalConflict?: GrantRenewalConflictMode;
+      recordRefund?: boolean;
     }
   | {
       command: 'reconcile';
@@ -60,6 +69,8 @@ export type ReconciliationCommand =
       reasonCode: ReconciliationReason;
       reasonTicket: string | null;
       closeUnresolved?: boolean;
+      grantRenewalConflict?: GrantRenewalConflictMode;
+      recordRefund?: boolean;
     };
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
@@ -67,6 +78,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PLAN_TOKEN = /^[0-9a-f]{32}$/;
+/** 1-21E : motif réservé au remboursement externe consigné. */
+const REFUND_REASON: string = ReconciliationReason.REFUNDED_OUTSIDE;
 const OPERATOR = /^[A-Za-z0-9._@-]{2,64}$/;
 const TICKET = /^[A-Za-z0-9._:#/-]{1,64}$/;
 
@@ -99,6 +112,8 @@ export function parseReconciliationArguments(
   const values: Record<string, string> = {};
   let apply = false;
   let closeUnresolved = false;
+  let grantRenewalConflict: GrantRenewalConflictMode | null = null;
+  let recordRefund = false;
   for (const arg of rest) {
     if (arg === '--apply') {
       if (apply) return { error: '--apply dupliqué' };
@@ -109,6 +124,26 @@ export function parseReconciliationArguments(
     if (arg === '--close-unresolved') {
       if (closeUnresolved) return { error: '--close-unresolved dupliqué' };
       closeUnresolved = true;
+      continue;
+    }
+    // 1-21E : attribution explicite d'un encaissement en conflit.
+    if (arg.startsWith('--grant-renewal-conflict')) {
+      if (grantRenewalConflict) {
+        return { error: '--grant-renewal-conflict dupliqué' };
+      }
+      const mode = arg.slice('--grant-renewal-conflict'.length);
+      if (mode !== '=renewal' && mode !== '=additional') {
+        return {
+          error: '--grant-renewal-conflict=renewal|additional requis',
+        };
+      }
+      grantRenewalConflict = mode.slice(1) as GrantRenewalConflictMode;
+      continue;
+    }
+    // 1-21E : remboursement externe consigné.
+    if (arg === '--record-refund') {
+      if (recordRefund) return { error: '--record-refund dupliqué' };
+      recordRefund = true;
       continue;
     }
     const separator = arg.indexOf('=');
@@ -129,7 +164,13 @@ export function parseReconciliationArguments(
   }
   const paymentId = values.paymentId.toLowerCase();
   if (command === 'inspect') {
-    if (apply || closeUnresolved || Object.keys(values).length !== 1) {
+    if (
+      apply ||
+      closeUnresolved ||
+      grantRenewalConflict ||
+      recordRefund ||
+      Object.keys(values).length !== 1
+    ) {
       return { error: 'inspect accepte seulement --payment-id' };
     }
     return { command, paymentId };
@@ -148,6 +189,8 @@ export function parseReconciliationArguments(
       reference,
       apply: false,
       ...(closeUnresolved ? { closeUnresolved } : {}),
+      ...(grantRenewalConflict ? { grantRenewalConflict } : {}),
+      ...(recordRefund ? { recordRefund } : {}),
     };
   }
   if (!values.planToken || !PLAN_TOKEN.test(values.planToken)) {
@@ -170,6 +213,18 @@ export function parseReconciliationArguments(
   if (values.reasonTicket !== undefined && !TICKET.test(values.reasonTicket)) {
     return { error: '--ticket invalide' };
   }
+  // 1-21E : un remboursement se consigne avec son motif et son ticket.
+  if (
+    recordRefund &&
+    (values.reasonCode !== REFUND_REASON || values.reasonTicket === undefined)
+  ) {
+    return {
+      error: '--record-refund exige --reason=refunded-outside et --ticket',
+    };
+  }
+  if (!recordRefund && values.reasonCode === REFUND_REASON) {
+    return { error: '--reason=refunded-outside exige --record-refund' };
+  }
   return {
     command,
     paymentId,
@@ -181,6 +236,8 @@ export function parseReconciliationArguments(
     reasonCode: values.reasonCode as ReconciliationReason,
     reasonTicket: values.reasonTicket ?? null,
     ...(closeUnresolved ? { closeUnresolved } : {}),
+    ...(grantRenewalConflict ? { grantRenewalConflict } : {}),
+    ...(recordRefund ? { recordRefund } : {}),
   };
 }
 
@@ -220,6 +277,8 @@ export async function runReconciliationCommand(
     if (!command.apply) {
       const plan = await service.plan(command.paymentId, command.reference, {
         closeUnresolved: command.closeUnresolved === true,
+        grantRenewalConflict: command.grantRenewalConflict,
+        recordRefund: command.recordRefund === true,
       });
       output.out({ command: 'reconcile', mode: 'simulation', plan });
       return plan.decision === 'ready'
@@ -236,7 +295,11 @@ export async function runReconciliationCommand(
         reasonTicket: command.reasonTicket,
         planToken: command.planToken,
       },
-      { closeUnresolved: command.closeUnresolved === true },
+      {
+        closeUnresolved: command.closeUnresolved === true,
+        grantRenewalConflict: command.grantRenewalConflict,
+        recordRefund: command.recordRefund === true,
+      },
     );
     if ('decision' in result) {
       output.out({

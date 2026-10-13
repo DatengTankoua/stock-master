@@ -147,6 +147,19 @@ export class SubscriptionPaymentsController {
     return this.payments.getPayment(toContext(organizationContext), paymentId);
   }
 
+  /**
+   * 1-21E — Reçu de paiement (encaissement confirmé) : lecture locale,
+   * propriétaire réel de l'organisation COURANTE seulement.
+   */
+  @Get(':paymentId/receipt')
+  @SkipThrottle({ ...OTHER_THROTTLERS, [PAYMENT_WRITE_THROTTLER]: true })
+  receipt(
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+    @Param('paymentId') paymentId: string,
+  ) {
+    return this.payments.receipt(toContext(organizationContext), paymentId);
+  }
+
   @Post(':paymentId/refresh')
   @HttpCode(200)
   @SkipThrottle({ ...OTHER_THROTTLERS, [PAYMENT_READ_THROTTLER]: true })
@@ -164,6 +177,32 @@ export class SubscriptionPaymentsController {
       throw unexpectedBody();
     }
     return this.payments.refreshPayment(
+      toContext(organizationContext),
+      paymentId,
+    );
+  }
+
+  /**
+   * 1-21E — « Changer de forfait » : ferme la page hébergée chez le
+   * prestataire quand c'est sûr (aucune transaction), après vérification.
+   * Corps vide STRICT ; aucune nouvelle session, aucun montant modifié.
+   */
+  @Post(':paymentId/abandon')
+  @HttpCode(200)
+  @SkipThrottle({ ...OTHER_THROTTLERS, [PAYMENT_READ_THROTTLER]: true })
+  abandon(
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+    @Param('paymentId') paymentId: string,
+    @Body() body: unknown,
+  ) {
+    if (
+      body !== undefined &&
+      body !== null &&
+      (typeof body !== 'object' || Object.keys(body).length > 0)
+    ) {
+      throw unexpectedBody();
+    }
+    return this.payments.abandonPayment(
       toContext(organizationContext),
       paymentId,
     );

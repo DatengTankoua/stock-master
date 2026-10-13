@@ -359,6 +359,14 @@ function startControlServer(stack) {
         case 'POST /sim/saspay/pay': {
           const paid = stack.saspay.pay(body.slug, body.outcome);
           if (!paid) return send(404, { ok: false, error: 'session inconnue' });
+          // 1-21E : page d'une session close → « Paiement indisponible ».
+          if (paid.unavailable) {
+            return send(409, {
+              ok: false,
+              error: 'Paiement indisponible',
+              status: paid.session.status,
+            });
+          }
           let webhookStatus = null;
           if (body.notify) {
             const event =
@@ -399,11 +407,48 @@ function startControlServer(stack) {
               })
             : send(404, { ok: false });
         }
+        // 1-21E : succès tardif sur une session close, notification signée.
+        case 'POST /sim/saspay/late': {
+          const late = stack.saspay.late(body.slug);
+          if (!late) return send(404, { ok: false });
+          const signed = stack.saspay.signedWebhook(
+            C.FAKE.saspayWebhookSecret,
+            'transaction.success',
+            late.transactionId,
+            late.session,
+          );
+          const res = await fetch(`${C.API_URL}/payments/webhooks/saspay`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-webhook-signature': signed.signature,
+              'x-webhook-timestamp': signed.timestamp,
+              'x-webhook-event': 'transaction.success',
+            },
+            body: signed.raw,
+          });
+          return send(200, { ok: true, webhookStatus: res.status });
+        }
+        // 1-21E : échéance atteinte (et session close si `close`).
+        case 'POST /sim/saspay/expire': {
+          const session = stack.saspay.expire(body.slug, body.close === true);
+          return session
+            ? send(200, { ok: true, status: session.status })
+            : send(404, { ok: false });
+        }
         case 'GET /sim/saspay/stats':
           return send(200, {
             sessions: stack.saspay.sessions.size,
             transactions: stack.saspay.transactions.size,
             calls: stack.saspay.calls.length,
+            cancels: stack.saspay.calls.filter((c) =>
+              c.path.endsWith('/cancel/'),
+            ).length,
+            statuses: [...stack.saspay.sessions.values()].map((x) => ({
+              slug: x.slug,
+              status: x.status,
+              amount: x.amount,
+            })),
           });
         default:
           return send(404, { error: 'route inconnue' });

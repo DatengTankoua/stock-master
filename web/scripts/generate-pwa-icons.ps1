@@ -48,15 +48,15 @@ function New-ResizedPng {
 }
 
 $transparent = [System.Drawing.Color]::Transparent
-$navy = [System.Drawing.Color]::FromArgb(255, 0x06, 0x2B, 0x5C)
 $white = [System.Drawing.Color]::FromArgb(255, 0xFF, 0xFF, 0xFF)
 
 # Direct variants: full-bleed, transparency preserved.
 New-ResizedPng -SourcePath $sourceIcon -DestPath (Join-Path $iconsDir "icon-192.png") -Size 192 -Background $transparent -Scale 1.0
 New-ResizedPng -SourcePath $sourceIcon -DestPath (Join-Path $iconsDir "icon-512.png") -Size 512 -Background $transparent -Scale 1.0
 
-# Maskable: opaque brand-navy background, artwork kept within the 80% safe zone.
-New-ResizedPng -SourcePath $sourceIcon -DestPath (Join-Path $iconsDir "icon-maskable-512.png") -Size 512 -Background $navy -Scale 0.8
+# Maskable: opaque white background (1-21D, formerly brand navy), artwork
+# kept within the 80% safe zone.
+New-ResizedPng -SourcePath $sourceIcon -DestPath (Join-Path $iconsDir "icon-maskable-512.png") -Size 512 -Background $white -Scale 0.8
 
 # Apple touch icon: opaque white background (iOS renders transparency as black).
 New-ResizedPng -SourcePath $sourceIcon -DestPath (Join-Path $iconsDir "apple-touch-icon.png") -Size 180 -Background $white -Scale 1.0

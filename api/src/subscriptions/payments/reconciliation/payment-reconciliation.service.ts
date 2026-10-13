@@ -12,6 +12,7 @@ import type { SubscriptionClock } from '../../subscription-clock';
 import {
   SubscriptionPayment,
   SubscriptionPaymentDocument,
+  SubscriptionPaymentIncident,
   SubscriptionPaymentStatus,
 } from '../schemas/subscription-payment.schema';
 import {
@@ -98,7 +99,19 @@ export type ReconciliationBlockReason =
   // explicite de l'opérateur (`--close-unresolved`).
   | 'provider-unresolved'
   | 'close-unresolved-not-applicable'
-  | 'provider-inconsistent';
+  | 'provider-inconsistent'
+  // 1-21E : encaissement d'une tentative remplacée ou d'un renouvellement
+  // déjà attribué : aucune période sans décision explicite (accord du
+  // client, `--grant-renewal-conflict`).
+  | 'renewal-conflict'
+  | 'grant-renewal-conflict-not-applicable'
+  // 1-21E : renouvellement déjà réglé par une autre tentative (le forfait
+  // initial ne peut plus être retenu ; achat supplémentaire seulement).
+  | 'renewal-already-settled'
+  // 1-21E : remboursement consigné → plus aucune action ; option sans objet.
+  | 'refunded'
+  | 'record-refund-not-applicable'
+  | 'conflicting-options';
 
 /** Faits VÉRIFIÉS exposés (normalisés) ; jamais la réponse brute. */
 export interface VerifiedFacts {
@@ -149,6 +162,39 @@ export interface ReconciliationOptions {
    * débit. Sans effet sur tout autre état vérifié.
    */
   closeUnresolved?: boolean;
+  /**
+   * 1-21E — Attribuer une période à un encaissement EN CONFLIT de
+   * renouvellement (tentative remplacée, renouvellement déjà attribué) :
+   * l'opérateur atteste l'accord du client (achat supplémentaire, ou ancien
+   * forfait retenu). Attribution manuelle : ne revendique pas l'attribution
+   * automatique du renouvellement. Sans effet sur tout autre paiement.
+   */
+  grantRenewalConflict?: GrantRenewalConflictMode;
+  /**
+   * 1-21E — Consigner un remboursement effectué HORS de Stock Master pour un
+   * encaissement en résolution (aucune période attribuée). Définitif.
+   */
+  recordRefund?: boolean;
+}
+
+/**
+ * 1-21E — `renewal` : le client retient le forfait de CE paiement pour son
+ * renouvellement (règle le renouvellement : une seule attribution, toute
+ * attribution ultérieure du même renouvellement est refusée) ;
+ * `additional` : achat SUPPLÉMENTAIRE explicitement accepté (période en
+ * plus, le renouvellement n'est pas réglé par ce paiement).
+ */
+export type GrantRenewalConflictMode = 'renewal' | 'additional';
+
+/** 1-21E — options du plan, dans l'empreinte et le jeton. */
+function optionMarkers(options: ReconciliationOptions): string[] {
+  return [
+    ...(options.closeUnresolved ? ['close-unresolved'] : []),
+    ...(options.grantRenewalConflict
+      ? [`grant-renewal-conflict:${options.grantRenewalConflict}`]
+      : []),
+    ...(options.recordRefund ? ['record-refund'] : []),
+  ];
 }
 
 export interface ReconciliationOperation {
@@ -209,6 +255,12 @@ export interface PaymentInspection {
   merchantReference: string;
   providerReference: string | null;
   incidentCode: string | null;
+  /** 1-21E — encaissement confirmé (statut financier), ISO ou `null`. */
+  collectedAt: string | null;
+  /** 1-21E — renouvellement, tentative remplacée, attribution automatique. */
+  renewalId: string;
+  replacesPaymentId: string | null;
+  renewalAutoGranted: boolean;
   periodId: string | null;
   createdAt: string | null;
   initiatedAt: string | null;
@@ -330,6 +382,12 @@ export class PaymentReconciliationService {
       merchantReference: payment.merchantReference,
       providerReference: payment.providerReference ?? null,
       incidentCode: payment.incidentCode ?? null,
+      collectedAt: payment.collectedAt
+        ? new Date(payment.collectedAt).toISOString()
+        : null,
+      renewalId: (payment.renewalId ?? payment._id).toHexString(),
+      replacesPaymentId: payment.replacesPaymentId?.toHexString() ?? null,
+      renewalAutoGranted: payment.autoGrantRenewalId != null,
       periodId: payment.periodId ? payment.periodId.toHexString() : null,
       createdAt: iso(payment.createdAt),
       initiatedAt: iso(payment.initiatedAt),
@@ -384,7 +442,7 @@ export class PaymentReconciliationService {
       operation.reasonTicket,
       operation.planToken,
       // 1-21B : absent des anciennes empreintes (rejeu inchangé).
-      ...(options.closeUnresolved ? ['close-unresolved'] : []),
+      ...optionMarkers(options),
     ]);
 
     // 1. Rejeu AVANT tout réseau : même identifiant → même résultat.
@@ -447,7 +505,31 @@ export class PaymentReconciliationService {
               session,
               current,
               status,
+              { claimRenewal: options.grantRenewalConflict !== 'additional' },
             );
+          } else if (plan.action === ReconciliationAction.RECORD_REFUND) {
+            const updated = await this.paymentModel
+              .updateOne(
+                {
+                  _id: current._id,
+                  status: SubscriptionPaymentStatus.REVIEW,
+                  periodId: null,
+                  refundedAt: null,
+                },
+                {
+                  $set: {
+                    refundedAt: now,
+                    incidentCode: SubscriptionPaymentIncident.REFUNDED_OUTSIDE,
+                    open: false,
+                    lastCheckedAt: now,
+                  },
+                },
+                { session },
+              )
+              .exec();
+            if (updated.modifiedCount !== 1) {
+              throw new Error('Reconciliation lost its race');
+            }
           } else {
             const set =
               plan.action === ReconciliationAction.MARK_PENDING
@@ -536,6 +618,21 @@ export class PaymentReconciliationService {
         const concurrent = await this.findOperation(operation.operationId);
         if (concurrent) return this.replay(concurrent, fingerprint);
       }
+      // 1-21E : renouvellement réglé entre-temps par une autre tentative
+      // (index unique) : rollback complet, aucune seconde période.
+      if (
+        subscriptionPaymentDuplicateKeyIndex(error) === 'autoGrantRenewalId_1'
+      ) {
+        return {
+          decision: 'blocked',
+          reason: 'renewal-already-settled',
+          paymentId: plan.paymentId,
+          before: plan.before,
+          consultedReference: plan.consultedReference,
+          verified: plan.verified,
+          mismatches: [],
+        };
+      }
       if (
         subscriptionPaymentDuplicateKeyIndex(error) ===
         'provider_1_providerReference_1'
@@ -564,6 +661,16 @@ export class PaymentReconciliationService {
         (await this.buildPlan(paymentId, candidate).catch(() => null))?.plan ??
           null,
       );
+    }
+    // 1-21E : forfait initial retenu → le renouvellement est réglé ; la
+    // poursuite des autres tentatives ouvertes est suspendue (au mieux).
+    if (
+      plan.action === ReconciliationAction.SUCCEED &&
+      options.grantRenewalConflict !== 'additional'
+    ) {
+      await this.payments
+        .suspendReplacements(new Types.ObjectId(plan.paymentId))
+        .catch(() => undefined);
     }
     return this.toApplied(outcome.record, 'applied');
   }
@@ -616,7 +723,16 @@ export class PaymentReconciliationService {
       },
     });
 
-    if (!RECONCILABLE_STATUSES.includes(payment.status)) {
+    // 1-21E : remboursement consigné → définitif, plus aucune action.
+    if (payment.refundedAt) return blocked('refunded');
+    if (optionMarkers(options).length > 1)
+      return blocked('conflicting-options');
+    // 1-21E : tentative close sans encaissement (`checkout_closed`), au-delà
+    // des fenêtres automatiques : rapprochable pour un succès tardif SEULEMENT.
+    const closedAttempt =
+      payment.status === SubscriptionPaymentStatus.FAILED &&
+      payment.incidentCode === SubscriptionPaymentIncident.CHECKOUT_CLOSED;
+    if (!RECONCILABLE_STATUSES.includes(payment.status) && !closedAttempt) {
       return blocked('status-not-reconcilable');
     }
     // 1-21B : adaptateur DU paiement (jamais celui d'un autre prestataire).
@@ -666,6 +782,47 @@ export class PaymentReconciliationService {
       return blocked('mismatch', reference, verified, mismatches);
     }
 
+    // 1-21E : remboursement externe d'un encaissement EN RÉSOLUTION (aucune
+    // période), toujours réussi chez le prestataire.
+    if (options.recordRefund) {
+      if (
+        payment.status !== SubscriptionPaymentStatus.REVIEW ||
+        !payment.collectedAt ||
+        payment.periodId ||
+        status.state !== 'succeeded'
+      ) {
+        return blocked('record-refund-not-applicable', reference, verified);
+      }
+      const refundAfter = {
+        status: SubscriptionPaymentStatus.REVIEW,
+        open: false,
+        grantsPeriod: false,
+      };
+      const refundToken = sha256([
+        'reconciliation-plan-v1',
+        payment._id.toHexString(),
+        before,
+        reference,
+        ReconciliationAction.RECORD_REFUND,
+        verified,
+        ...optionMarkers(options),
+      ]).slice(0, 32);
+      return {
+        plan: {
+          decision: 'ready',
+          action: ReconciliationAction.RECORD_REFUND,
+          paymentId: payment._id.toHexString(),
+          before,
+          consultedReference: reference,
+          referenceAttach: persisted === null,
+          verified,
+          after: refundAfter,
+          planToken: refundToken,
+        },
+        status,
+      };
+    }
+
     if (options.closeUnresolved && status.state !== 'unresolved') {
       return blocked('close-unresolved-not-applicable', reference, verified);
     }
@@ -676,6 +833,31 @@ export class PaymentReconciliationService {
       status.state === 'unresolved'
         ? ReconciliationAction.FAIL
         : ACTION_BY_STATE[status.state];
+    // 1-21E : jamais d'attribution silencieuse d'un encaissement en conflit
+    // de renouvellement ; l'option n'a d'effet que sur ce cas.
+    if (closedAttempt && action !== ReconciliationAction.SUCCEED) {
+      return blocked('status-not-reconcilable', reference, verified);
+    }
+    const conflict =
+      action === ReconciliationAction.SUCCEED &&
+      (await this.payments.renewalConflictOf(payment));
+    if (
+      conflict &&
+      options.grantRenewalConflict === 'renewal' &&
+      (await this.payments.renewalSettledByOther(payment))
+    ) {
+      return blocked('renewal-already-settled', reference, verified);
+    }
+    if (options.grantRenewalConflict && !conflict) {
+      return blocked(
+        'grant-renewal-conflict-not-applicable',
+        reference,
+        verified,
+      );
+    }
+    if (conflict && !options.grantRenewalConflict) {
+      return blocked('renewal-conflict', reference, verified);
+    }
     if (action === ReconciliationAction.MARK_PENDING && !payment.open) {
       // `review` issu d'un paiement fermé : jamais de réouverture (index du
       // paiement ouvert unique), traitement hors de ce CLI.
@@ -699,7 +881,7 @@ export class PaymentReconciliationService {
       reference,
       action,
       verified,
-      ...(options.closeUnresolved ? ['close-unresolved'] : []),
+      ...optionMarkers(options),
     ]).slice(0, 32);
     return {
       plan: {

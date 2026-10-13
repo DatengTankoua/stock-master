@@ -42,7 +42,38 @@ export enum SubscriptionPaymentIncident {
   CHECKOUT_UNRESOLVED = 'checkout_unresolved',
   /** 1-21B — réponses du prestataire incohérentes : vérification opérateur. */
   PROVIDER_INCONSISTENT = 'provider_inconsistent',
+  /**
+   * 1-21E — page close (expirée, ou fermée à la demande du propriétaire)
+   * SANS aucune transaction engagée, statut revérifié chez le prestataire :
+   * aucun débit possible, paiement clos (`failed`), nouvelle tentative
+   * libérée. Un succès vérifié ultérieur resterait attribué (jamais perdu).
+   */
+  CHECKOUT_CLOSED = 'checkout_closed',
+  /**
+   * 1-21E — encaissement CONFIRMÉ alors que son renouvellement a déjà reçu
+   * son attribution automatique (autre tentative) : aucune seconde période,
+   * paiement conservé (`review`, `collectedAt`), traitement opérateur.
+   */
+  RENEWAL_ALREADY_GRANTED = 'renewal_already_granted',
+  /**
+   * 1-21E — encaissement CONFIRMÉ d'une tentative REMPLACÉE par une autre
+   * (changement de forfait) : l'ancien forfait n'est jamais attribué
+   * silencieusement ; paiement conservé (`review`, `collectedAt`).
+   */
+  REPLACED_PAYMENT_COLLECTED = 'replaced_payment_collected',
+  /**
+   * 1-21E — encaissement REMBOURSÉ hors de Stock Master, consigné par
+   * l'opérateur (CLI, audité) : plus aucune attribution possible.
+   */
+  REFUNDED_OUTSIDE = 'refunded_outside',
 }
+
+/** 1-21E — incidents d'un encaissement confirmé en attente de résolution. */
+export const COLLECTED_CONFLICT_INCIDENTS: readonly SubscriptionPaymentIncident[] =
+  Object.freeze([
+    SubscriptionPaymentIncident.RENEWAL_ALREADY_GRANTED,
+    SubscriptionPaymentIncident.REPLACED_PAYMENT_COLLECTED,
+  ]);
 
 /**
  * Registre des demandes de paiement d'abonnement. `autoIndex: false` : les
@@ -145,6 +176,68 @@ export class SubscriptionPayment {
    */
   @Prop({ type: String, default: null })
   providerCheckoutUrl: string | null;
+
+  /**
+   * 1-21E — Fin de validité de la page hébergée : renvoyée par le
+   * prestataire, sinon demandée à la création. Fixée une fois, jamais
+   * repoussée par un rechargement ; `null` avant 1-21E (création + durée).
+   */
+  @Prop({ type: Date, default: null })
+  providerCheckoutExpiresAt: Date | null;
+
+  /**
+   * 1-21E — RENOUVELLEMENT auquel appartient la tentative : son propre `_id`
+   * pour une première tentative, celui de la tentative remplacée sinon.
+   * Absent (paiements antérieurs) = son propre `_id`. Immuable.
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null, immutable: true })
+  renewalId: Types.ObjectId | null;
+
+  /**
+   * 1-21E — Tentative REMPLACÉE par celle-ci (changement de forfait ou
+   * nouvelle tentative après une page close), écrit à l'insertion : la
+   * relation survit à tout redémarrage. Immuable.
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null, immutable: true })
+  replacesPaymentId: Types.ObjectId | null;
+
+  /**
+   * 1-21E — Renouvellement dont CE paiement porte l'attribution
+   * AUTOMATIQUE (moteur de confirmation) : index unique partiel → au plus
+   * une attribution automatique par renouvellement, entre processus.
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  autoGrantRenewalId: Types.ObjectId | null;
+
+  /**
+   * 1-21E — STATUT FINANCIER : encaissement confirmé par le prestataire
+   * (vérifié), indépendamment de l'attribution d'une période. Jamais remis
+   * à `null` ; un paiement encaissé n'est jamais `failed`.
+   */
+  @Prop({ type: Date, default: null })
+  collectedAt: Date | null;
+
+  /**
+   * 1-21E — Montant DÉBITÉ au payeur (centimes de la devise), lu chez le
+   * prestataire à l'encaissement ; `null` (paiements antérieurs) = `amount`.
+   */
+  @Prop({ type: Number, default: null })
+  paidAmountMinor: number | null;
+
+  /**
+   * 1-21E — Poursuite SUSPENDUE : une tentative remplacée du même
+   * renouvellement a été encaissée ; aucun lien proposé.
+   */
+  @Prop({ type: Date, default: null })
+  renewalConflictAt: Date | null;
+
+  /**
+   * 1-21E — Remboursement effectué HORS de Stock Master et consigné par
+   * l'opérateur (audit de rapprochement). Définitif : aucune attribution par
+   * webhook, vérification, rapprochement périodique ni CLI.
+   */
+  @Prop({ type: Date, default: null })
+  refundedAt: Date | null;
 
   /**
    * 1-21B — Transaction du prestataire RATTACHÉE (lue sur sa session) :
