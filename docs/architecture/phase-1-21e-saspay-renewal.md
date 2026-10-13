@@ -371,7 +371,7 @@ d'un paiement encaissé.
 | Adaptateur SasPay | `saspay/saspay-payment-provider.ts` : `expires_at`, absence explicite de transaction, montant débité, `POST …/cancel/` |
 | Modèle et index | `schemas/subscription-payment.schema.ts`, `subscription-payment-indexes.ts` (2 index) |
 | Moteur | `subscription-payments.service.ts` : situations, clôture, `abandonPayment`, renouvellement, conflits, suspension, `sweepOnce`, reçu |
-| Routes et erreurs | `subscription-payments.controller.ts` (`abandon`, `receipt`), `payment-errors.ts` |
+| Routes et erreurs | `subscription-payments.controller.ts` (`abandon`, `receipt`), `payment-errors.ts`, `common/i18n/error-messages.ts` (traductions EN) |
 | Rapprochement | `reconciliation/payment-reconciliation.service.ts`, `payment-reconciliation-cli.ts` (`--grant-renewal-conflict=renewal\|additional`, `--record-refund`, `inspect`, tentative close rapprochable), `subscription-payment-reconciliation.schema.ts` (motif `refunded-outside`, action `record-refund`) ; nouveau `payment-reconciliation-sweep.ts` ; `main.ts` |
 | Web | `subscription-payment-panel.tsx`, `lib/subscription-payments.ts`, `lib/payment-guards.ts`, `i18n/resources/{fr,en}/subscription.ts`, `app/globals.css` |
 | Recette locale | `test/recipe/saspay-sim.js`, `launcher.js` : fermeture, page refusant une session close, expiration, succès tardif |
@@ -382,11 +382,17 @@ d'un paiement encaissé.
 
 | Contrôle | Résultat |
 |---|---|
-| Unitaires `src/subscriptions` (isolés des `.env`), après la clôture | **418 / 418** |
+| Unitaires **complets** de l'API (isolés des `.env`), après la clôture | **1 798 / 1 798** (98 fichiers) |
 | E2E ciblés après la clôture : `saspay-checkout`, `payment-reconciliation*` | **87 / 87** (3 fichiers) |
 | E2E paiements complets, **avant** la clôture : `saspay-checkout`, `saspay-confirmation-only`, `subscription-payments`, `subscription-payment-foundation`, `payment-reconciliation*`, `realtime-subscription-payments` | 162 / 162 (8 fichiers) ; non relancés depuis, conformément à la consigne de tests ciblés |
 | Migration compilée des index exécutée deux fois sur base éphémère | créés, puis « déjà présents » |
 | Typage (code de production), ESLint (API et web), contrôle i18n FR/EN | propres |
+
+Le catalogue des messages d'erreur de l'API (`common/i18n/error-messages.ts`)
+n'avait pas reçu les deux nouveaux messages (`PAYMENT_CHANGE_UNAVAILABLE`,
+`PAYMENT_RECEIPT_UNAVAILABLE`). Les exécutions limitées à
+`src/subscriptions` ne l'ont pas vu ; la suite complète l'a signalé
+(`i18n.spec.ts`). Les deux entrées FR/EN ont été ajoutées.
 
 **Tests de clôture (V1 à V5) :**
 
