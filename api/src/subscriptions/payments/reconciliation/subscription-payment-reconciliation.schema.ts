@@ -22,6 +22,11 @@ export enum ReconciliationReason {
    * le prestataire a confirmé à l'opérateur qu'aucun débit n'a eu lieu.
    */
   PROVIDER_CHECKOUT_CLOSED = 'provider-checkout-closed',
+  /**
+   * 1-21E — Remboursement effectué HORS de Stock Master (tableau de bord du
+   * prestataire), confirmé à l'opérateur ; référence du ticket exigée.
+   */
+  REFUNDED_OUTSIDE = 'refunded-outside',
 }
 
 /** Action appliquée : déduite du statut VÉRIFIÉ, jamais saisie. */
@@ -29,6 +34,8 @@ export enum ReconciliationAction {
   SUCCEED = 'succeed',
   MARK_PENDING = 'mark-pending',
   FAIL = 'fail',
+  /** 1-21E — remboursement externe consigné (aucune période, définitif). */
+  RECORD_REFUND = 'record-refund',
 }
 
 /**

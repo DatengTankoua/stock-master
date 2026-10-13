@@ -96,6 +96,12 @@ const VIEW_KEYS = [
   'amount',
   // 1-21B : page de paiement hébergée (null hors SasPay).
   'checkoutUrl',
+  // 1-21E : échéance de la page et situation (null hors page hébergée).
+  'checkoutExpiresAt',
+  'checkoutExpiresInMs',
+  'situation',
+  // 1-21E : statut financier (encaissement confirmé).
+  'collected',
   'confirmedAt',
   'createdAt',
   'currency',
@@ -450,6 +456,12 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
           ),
           await getPayment(candidate, paymentId),
           await refresh(candidate, paymentId),
+          // 1-21E : reçu, owner-only comme les autres routes.
+          await call(
+            'get',
+            `/organizations/current/subscription/payments/${paymentId}/receipt`,
+            candidate,
+          ),
         ];
         for (const res of responses) {
           expect(res.status).toBe(403);
@@ -539,6 +551,12 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
         amount: 3500,
         currency: 'XAF',
         payerPhoneMasked: '+237 6•• ••• •56',
+        // 1-21E : Mobile Money inchangé (aucune page hébergée).
+        checkoutUrl: null,
+        checkoutExpiresAt: null,
+        checkoutExpiresInMs: null,
+        situation: null,
+        collected: false,
       });
       expect(created.body.reference).toMatch(/^SM[0-9A-F]{24}$/);
       const read = await getPayment(token, created.body.paymentId);

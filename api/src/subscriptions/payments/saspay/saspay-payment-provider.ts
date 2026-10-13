@@ -1,5 +1,6 @@
 import { MonotonicClock, systemMonotonicClock } from '../../subscription-clock';
 import {
+  CheckoutCancellationResult,
   PAYMENT_CURRENCY,
   PaymentCollectionRequest,
   PaymentInitiationResult,
@@ -39,7 +40,12 @@ import {
  *   (revérifie le gateway si `PENDING`, documenté) ;
  * - `GET /checkout-sessions/?page=&page_size=` (pagination par numéro,
  *   `next`) : recherche BORNÉE par `metadata.merchantReference` après une
- *   réponse perdue.
+ *   réponse perdue ;
+ * - 1-21E — `POST /checkout-sessions/{id}/cancel/` (corps vide) : `PENDING`
+ *   → `CANCELLED` ; `409 not_pending` pour une session payée, expirée ou
+ *   déjà annulée (documentation consultée le 2026-10-12). Rien n'y est dit
+ *   d'une transaction en cours : la fermeture n'est demandée que pour une
+ *   session SANS transaction, et seul le statut relu ensuite fait foi.
  *
  * Enveloppe : `{ success, data, code }` documentée, mais certains exemples
  * l'omettent (et `/countries/` répond enveloppé contrairement à sa page) :
@@ -55,8 +61,12 @@ import {
  *
  * Hypothèses À VÉRIFIER en bac à sable (1-21A, B4) : une session peut-elle
  * porter plusieurs transactions ; un succès peut-il suivre `EXPIRED` ou
- * `CANCELLED`. En attendant : session close ou transaction échouée sans
- * succès → `unresolved` (paiement ouvert, à vérifier), jamais `failed`.
+ * `CANCELLED`. Une transaction `FAILED` peut être rejouée (`/retry/`, même
+ * identifiant, documenté) : `FAILED` n'est donc pas définitif. En attendant :
+ * session close ou transaction échouée sans succès → `unresolved` (jamais
+ * `failed`), avec `checkoutClosed` pour une session close. 1-21E : close
+ * SANS aucune transaction (aucun débit possible, « une session ne débite
+ * rien tant qu'elle n'est pas payée », documenté) → le moteur la clôt.
  */
 
 /** Origine OFFICIELLE de l'API ; jamais fournie par une requête. */
@@ -254,6 +264,15 @@ class OutboundBudget {
   }
 }
 
+/** 1-21E — Date ISO 8601 lisible (`expires_at`), sinon `null`. */
+export function parseSasPayDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 interface SessionFacts {
   id: string;
   amount: number | null;
@@ -262,6 +281,9 @@ interface SessionFacts {
   merchantReference: string | null;
   transaction: string | null;
   checkoutUrl: string | null;
+  expiresAt: Date | null;
+  /** 1-21E : `transaction` PRÉSENT et nul (absence affirmée). */
+  transactionExplicitlyNull: boolean;
 }
 
 export class SasPayPaymentProvider implements PaymentProvider {
@@ -272,6 +294,7 @@ export class SasPayPaymentProvider implements PaymentProvider {
   /** Aucune idempotence documentée pour la création d'une session. */
   readonly idempotentInitiation = false;
   readonly requiresPayerPhone = false;
+  readonly checkoutTtlMs = SASPAY_CHECKOUT_TTL_MS;
 
   private readonly transport: SasPayTransport;
   private readonly monotonic: MonotonicClock;
@@ -336,6 +359,8 @@ export class SasPayPaymentProvider implements PaymentProvider {
       // Requête invalide : rien n'est envoyé.
       throw new PaymentProviderUnavailableError();
     }
+    // 1-21E : fin de validité DEMANDÉE, retenue si SasPay n'en renvoie pas.
+    const requestedExpiry = new Date(this.now() + SASPAY_CHECKOUT_TTL_MS);
     let response: SasPayHttpResponse;
     try {
       response = await this.call('POST', '/checkout-sessions/', deadline, {
@@ -347,7 +372,7 @@ export class SasPayPaymentProvider implements PaymentProvider {
         customer_name: customer.name.trim().slice(0, 100),
         ...(request.returnUrl ? { return_url: request.returnUrl } : {}),
         metadata: { merchantReference: request.merchantReference },
-        expires_at: new Date(this.now() + SASPAY_CHECKOUT_TTL_MS).toISOString(),
+        expires_at: requestedExpiry.toISOString(),
       });
     } catch (error) {
       if (
@@ -390,6 +415,9 @@ export class SasPayPaymentProvider implements PaymentProvider {
       outcome: 'accepted',
       providerReference: id,
       redirectUrl: checkoutUrl,
+      checkoutExpiresAt:
+        (isRecord(session) ? parseSasPayDate(session.expires_at) : null) ??
+        requestedExpiry,
     };
   }
 
@@ -472,12 +500,25 @@ export class SasPayPaymentProvider implements PaymentProvider {
       throw new PaymentProviderInconsistencyError('inconsistent-attachment');
     }
     const transactionId = liveTransaction ?? session.transaction;
+    // 1-21E : absence de transaction AFFIRMÉE par les deux routes (champ
+    // présent et nul) ; un champ manquant n'est jamais une preuve.
+    const liveExplicitlyNull =
+      Object.prototype.hasOwnProperty.call(live.data, 'transaction_id') &&
+      live.data.transaction_id === null &&
+      (live.data.transaction_status === undefined ||
+        live.data.transaction_status === null);
+    const transactionAbsenceConfirmed =
+      transactionId === null &&
+      session.transactionExplicitlyNull &&
+      liveExplicitlyNull;
 
     const base = {
       providerReference: sessionId,
       merchantReference: session.merchantReference,
       providerTransactionId: transactionId,
       checkoutUrl: liveStatus === 'PENDING' ? session.checkoutUrl : null,
+      checkoutExpiresAt: session.expiresAt,
+      checkoutClosed: liveStatus === 'EXPIRED' || liveStatus === 'CANCELLED',
     };
 
     if (transactionId === null) {
@@ -490,6 +531,8 @@ export class SasPayPaymentProvider implements PaymentProvider {
         state: liveStatus === 'PENDING' ? 'pending' : 'unresolved',
         amount: session.amount,
         currency: session.currency,
+        transactionState: null,
+        transactionAbsenceConfirmed,
       };
     }
 
@@ -536,7 +579,22 @@ export class SasPayPaymentProvider implements PaymentProvider {
     // Échec ou annulation : nouvelle tentative possible sur une page encore
     // ouverte ; sinon à vérifier (succès tardif non exclu par le contrat).
     else state = liveStatus === 'PENDING' ? 'pending' : 'unresolved';
-    return { ...base, state, amount, currency };
+    const transactionState =
+      txStatus === 'SUCCESS'
+        ? 'succeeded'
+        : txStatus === 'PENDING'
+          ? 'pending'
+          : 'failed';
+    const debited = parseSasPayCents(tx.debited_amount);
+    return {
+      ...base,
+      state,
+      amount,
+      currency,
+      transactionState,
+      transactionAbsenceConfirmed: false,
+      paidAmountMinor: state === 'succeeded' ? debited : null,
+    };
   }
 
   private sessionFacts(data: Record<string, unknown>): SessionFacts | null {
@@ -556,7 +614,49 @@ export class SasPayPaymentProvider implements PaymentProvider {
       merchantReference: metadataReference(data.metadata),
       transaction,
       checkoutUrl: validCheckoutUrl(data.checkout_url),
+      expiresAt: parseSasPayDate(data.expires_at),
+      transactionExplicitlyNull:
+        Object.prototype.hasOwnProperty.call(data, 'transaction') &&
+        data.transaction === null,
     };
+  }
+
+  // ─── Fermeture (1-21E) ─────────────────────────────────────────────────────
+
+  async cancelCheckout(
+    providerReference: string,
+  ): Promise<CheckoutCancellationResult> {
+    const id = uuidOrNull(providerReference);
+    // Référence illisible : rien n'est envoyé.
+    if (!id) throw new PaymentProviderUnavailableError();
+    const deadline = this.monotonic() + SASPAY_INITIATE_BUDGET_MS;
+    let response: SasPayHttpResponse;
+    try {
+      response = await this.call(
+        'POST',
+        `/checkout-sessions/${id}/cancel/`,
+        deadline,
+        {},
+      );
+    } catch (error) {
+      if (
+        error instanceof SasPayTransportError &&
+        error.failure === 'not-sent'
+      ) {
+        throw new PaymentProviderUnavailableError();
+      }
+      throw new PaymentProviderUncertainError();
+    }
+    if (response.status === 200) return 'cancelled';
+    // Documenté : session payée, expirée ou déjà annulée.
+    if (response.status === 409) return 'not-open';
+    // Refus avant traitement (authentification, portée, limite) : rien fait.
+    if ([401, 403, 429].includes(response.status)) {
+      throw new PaymentProviderUnavailableError();
+    }
+    // 404 (session enregistrée introuvable), 5xx, codes inattendus : issue
+    // inconnue ; la relecture du statut tranchera.
+    throw new PaymentProviderUncertainError();
   }
 
   /**

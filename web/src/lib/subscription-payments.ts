@@ -2,6 +2,11 @@ import axios from "axios";
 import { apiClient } from "./api";
 import { parseRetryAfterMs } from "./offline-sales-policy";
 import type { SubscriptionTerm } from "./subscription-offers";
+import {
+  checkoutDeadline,
+  type PaymentAbandonOutcome,
+  type PaymentSituation,
+} from "./payment-guards";
 
 // 1-14D.2C — Client des paiements d'abonnement (contrats 1-14D.2B).
 //
@@ -33,6 +38,19 @@ export interface ApiSubscriptionPayment {
    * absente d'une API antérieure). Ouvrir cette page ne prouve rien.
    */
   checkoutUrl?: string | null;
+  /** 1-21E : fin de validité de la page (ISO), absente d'une API antérieure. */
+  checkoutExpiresAt?: string | null;
+  /** 1-21E : validité restante au moment de la réponse (ms). */
+  checkoutExpiresInMs?: number | null;
+  /** 1-21E : situation précise d'un paiement par page hébergée. */
+  situation?: PaymentSituation | null;
+  /** 1-21E : encaissement confirmé (statut financier), distinct de `status`. */
+  collected?: boolean;
+  /**
+   * 1-21E — CLIENT seulement : échéance locale du lien (horloge de CET
+   * onglet, réception + validité restante), jamais envoyée au serveur.
+   */
+  checkoutDeadline?: number | null;
   createdAt: string | null;
   initiatedAt: string | null;
   confirmedAt: string | null;
@@ -51,6 +69,14 @@ export const BLOCKING_PAYMENT_STATUSES: ReadonlySet<SubscriptionPaymentStatus> =
 export const PAYMENT_HISTORY_PAGE_SIZE = 5;
 
 const PAYMENTS_PATH = "/organizations/current/subscription/payments";
+
+/** 1-21E : échéance locale calculée À LA RÉCEPTION (jamais au rendu). */
+function stamp<T extends ApiSubscriptionPayment>(payment: T): T {
+  return {
+    ...payment,
+    checkoutDeadline: checkoutDeadline(payment.checkoutExpiresInMs, Date.now()),
+  };
+}
 
 const explicitBearer = (token?: string) =>
   token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
@@ -120,7 +146,7 @@ export async function createSubscriptionPayment(
     },
     explicitBearer(token),
   );
-  return data;
+  return stamp(data);
 }
 
 /** Lecture LOCALE (aucun appel au prestataire). */
@@ -132,7 +158,7 @@ export async function fetchSubscriptionPayment(
     `${PAYMENTS_PATH}/${encodeURIComponent(paymentId)}`,
     explicitBearer(token),
   );
-  return data;
+  return stamp(data);
 }
 
 /** Vérification EXTERNE, uniquement sur action explicite (corps vide). */
@@ -143,6 +169,62 @@ export async function refreshSubscriptionPayment(
   const { data } = await apiClient.post<ApiSubscriptionPayment>(
     `${PAYMENTS_PATH}/${encodeURIComponent(paymentId)}/refresh`,
     undefined,
+    explicitBearer(token),
+  );
+  return stamp(data);
+}
+
+/**
+ * 1-21E — « Changer de forfait » / « Annuler cette tentative » : le SERVEUR
+ * vérifie le paiement chez le prestataire, ferme la page seulement si c'est
+ * sûr, et renvoie l'issue établie. Action explicite uniquement (corps vide),
+ * jamais relancée automatiquement.
+ */
+export async function abandonSubscriptionPayment(
+  paymentId: string,
+  token?: string,
+): Promise<{
+  outcome: PaymentAbandonOutcome;
+  payment: ApiSubscriptionPayment;
+}> {
+  const { data } = await apiClient.post<{
+    outcome: PaymentAbandonOutcome;
+    payment: ApiSubscriptionPayment;
+  }>(
+    `${PAYMENTS_PATH}/${encodeURIComponent(paymentId)}/abandon`,
+    undefined,
+    explicitBearer(token),
+  );
+  return { outcome: data.outcome, payment: stamp(data.payment) };
+}
+
+/** 1-21E — Reçu d'un paiement encaissé (projection exacte de l'API). */
+export interface ApiPaymentReceipt {
+  kind: "payment-receipt";
+  receiptNumber: string;
+  paymentId: string;
+  issuer: { name: string };
+  organization: { name: string };
+  term: SubscriptionTerm;
+  months: number;
+  amountPaidMinor: number;
+  currency: "XAF";
+  paidAt: string;
+  provider: string;
+  providerTransactionId: string | null;
+  application: "applied" | "in-resolution" | "refunded";
+  /** 1-21E : remboursement externe consigné (ISO), sinon `null`. */
+  refundedAt?: string | null;
+  period: { startsAt: string; endsAt: string } | null;
+}
+
+/** 1-21E — Lecture LOCALE du reçu (aucun appel au prestataire). */
+export async function fetchPaymentReceipt(
+  paymentId: string,
+  token?: string,
+): Promise<ApiPaymentReceipt> {
+  const { data } = await apiClient.get<ApiPaymentReceipt>(
+    `${PAYMENTS_PATH}/${encodeURIComponent(paymentId)}/receipt`,
     explicitBearer(token),
   );
   return data;
@@ -158,7 +240,7 @@ export async function listSubscriptionPayments(
     PAYMENTS_PATH,
     { ...explicitBearer(token), params },
   );
-  return data;
+  return { ...data, items: data.items.map(stamp) };
 }
 
 // ─── Erreurs ─────────────────────────────────────────────────────────────────
@@ -177,6 +259,10 @@ export type PaymentErrorKind =
   | { kind: "service-unavailable" }
   | { kind: "status-unavailable" }
   | { kind: "confirmation-pending" }
+  /** 1-21E : aucune page hébergée à fermer (collecte Mobile Money). */
+  | { kind: "change-unavailable" }
+  /** 1-21E : aucun reçu pour un paiement non encaissé. */
+  | { kind: "receipt-unavailable" }
   /** Réponse serveur inattendue (5xx…) : issue inconnue. */
   | { kind: "unexpected"; status: number };
 
@@ -223,6 +309,10 @@ export function classifyPaymentError(
       return { kind: "status-unavailable" };
     case "PAYMENT_CONFIRMATION_PENDING":
       return { kind: "confirmation-pending" };
+    case "PAYMENT_CHANGE_UNAVAILABLE":
+      return { kind: "change-unavailable" };
+    case "PAYMENT_RECEIPT_UNAVAILABLE":
+      return { kind: "receipt-unavailable" };
   }
   if (status === 401) return { kind: "unauthorized" };
   if (status === 403) return { kind: "forbidden", code };

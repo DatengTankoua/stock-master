@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -11,7 +12,19 @@ import {
   SubscriptionGrantError,
   SubscriptionsService,
 } from '../subscriptions.service';
-import { SubscriptionSource, SubscriptionTerm } from '../subscription-terms';
+import {
+  SubscriptionSource,
+  SubscriptionTerm,
+  TERM_MONTHS,
+} from '../subscription-terms';
+import {
+  SubscriptionPeriod,
+  SubscriptionPeriodDocument,
+} from '../schemas/subscription-period.schema';
+import {
+  Organization,
+  OrganizationDocument,
+} from '../../organizations/schemas/organization.schema';
 import {
   SUBSCRIPTION_PRICING_CURRENCY,
   SUBSCRIPTION_PRICING_VERSION,
@@ -24,6 +37,7 @@ import { SubscriptionSignalsService } from '../subscription-signals.service';
 import { PushOutboxService } from '../../push/push-outbox.service';
 import type { SubscriptionClock } from '../subscription-clock';
 import {
+  COLLECTED_CONFLICT_INCIDENTS,
   OPEN_PAYMENT_STATUSES,
   SubscriptionPayment,
   SubscriptionPaymentDocument,
@@ -58,9 +72,11 @@ import type { MongooseSession } from '../subscriptions.service';
 import {
   invalidPayerPhone,
   paymentAlreadyPending,
+  paymentChangeUnavailable,
   paymentConfirmationPending,
   paymentNotFound,
   paymentOperationConflict,
+  paymentReceiptUnavailable,
   paymentServiceUnavailable,
   paymentStatusUnavailable,
 } from './payment-errors';
@@ -138,13 +154,130 @@ export interface SubscriptionPaymentView {
    * seulement) ; aucun secret, aucune nouvelle session.
    */
   checkoutUrl: string | null;
+  /**
+   * 1-21E — fin de validité de la page hébergée (ISO), même après son
+   * expiration ; `null` sans page hébergée.
+   */
+  checkoutExpiresAt: string | null;
+  /**
+   * 1-21E — durée de validité RESTANTE au moment de la réponse (ms), page
+   * proposée seulement : le navigateur en déduit son échéance sans dépendre
+   * de son horloge. `null` sans page proposée.
+   */
+  checkoutExpiresInMs: number | null;
+  /** 1-21E — situation précise d'un paiement par page hébergée (voir type). */
+  situation: PaymentSituation | null;
+  /**
+   * 1-21E — STATUT FINANCIER : encaissement confirmé par le prestataire,
+   * distinct de l'attribution (`status: succeeded` = période attribuée).
+   */
+  collected: boolean;
   createdAt: string | null;
   initiatedAt: string | null;
   confirmedAt: string | null;
   failedAt: string | null;
 }
 
+/**
+ * 1-21E — Distinctions EXPOSÉES (page hébergée seulement ; `null` sinon) :
+ * - `checkout-open` : page valide, aucun paiement confirmé ;
+ * - `checkout-expired` : page expirée, résultat de la tentative pas encore
+ *   vérifié (aucun lien proposé ; « Vérifier » tranche) ;
+ * - `checkout-link-missing` : paiement ouvert dont la page n'est pas (encore)
+ *   connue (réponse perdue) ; « Vérifier » la retrouve sans en créer ;
+ * - `attempt-unresolved` : page close APRÈS une transaction non réussie :
+ *   SasPay ne garantit pas qu'elle ne puisse plus aboutir → rapprochement ;
+ * - `closure-unconfirmed` : page close, mais l'absence de transaction n'est
+ *   pas affirmée par SasPay (réponse incomplète) → rapprochement ;
+ * - `checkout-closed` : page close sans aucune transaction (clos, `failed`) ;
+ * - `renewal-suspended` : une tentative remplacée du même renouvellement a
+ *   été encaissée ; la poursuite de celle-ci est suspendue (aucun lien) ;
+ * - `collected-in-resolution` : paiement REÇU (encaissement confirmé), dont
+ *   la prise en compte exige une résolution (aucune période attribuée) ;
+ * - `refunded` : encaissement remboursé hors de Stock Master, consigné.
+ */
+export type PaymentSituation =
+  | 'checkout-open'
+  | 'checkout-expired'
+  | 'checkout-link-missing'
+  | 'attempt-unresolved'
+  | 'closure-unconfirmed'
+  | 'checkout-closed'
+  | 'renewal-suspended'
+  | 'collected-in-resolution'
+  | 'refunded';
+
+/**
+ * 1-21E — Issue de « Changer de forfait » (`abandonPayment`) :
+ * - `released` : page fermée chez le prestataire (ou déjà close) sans aucune
+ *   transaction, paiement clos : un nouveau paiement est possible ;
+ * - `succeeded` : le paiement avait abouti (période attribuée) ;
+ * - `in-progress` : une transaction est en cours de validation ;
+ * - `attempt-recorded` : une tentative (échouée) existe sur la page encore
+ *   ouverte : la page n'est pas fermée (SasPay permet de rejouer une
+ *   transaction échouée) ; le payeur peut encore finaliser sur la même page ;
+ * - `awaiting-resolution` : page close après une tentative, ou paiement en
+ *   vérification : rapprochement nécessaire ;
+ * - `not-found-at-provider` : page introuvable chez le prestataire (réponse
+ *   perdue) : jamais une preuve d'absence ;
+ * - `provider-incomplete` : réponse de SasPay sans affirmation explicite de
+ *   l'absence de transaction (champ manquant) : rien n'est fermé ;
+ * - `cancel-unconfirmed` : fermeture demandée mais page encore ouverte à la
+ *   relecture : rien n'est libéré.
+ */
+export type PaymentAbandonOutcome =
+  | 'released'
+  | 'succeeded'
+  | 'in-progress'
+  | 'attempt-recorded'
+  | 'awaiting-resolution'
+  | 'not-found-at-provider'
+  | 'provider-incomplete'
+  | 'cancel-unconfirmed';
+
+/** 1-21E — Vérification serveur : vue + statut OBSERVÉ chez le prestataire. */
+interface ConfirmationCheck {
+  view: SubscriptionPaymentView;
+  /** `null` : aucun statut lu (état local terminal, introuvable…). */
+  observed: ProviderPaymentStatus | null;
+}
+
 export type PaymentRecord = SubscriptionPayment & { _id: Types.ObjectId };
+
+/**
+ * 1-21E — REÇU DE PAIEMENT (jamais une facture) : uniquement pour un
+ * encaissement CONFIRMÉ côté serveur. Valeurs ENREGISTRÉES (montant débité,
+ * sinon montant figé ; devise ; durée), jamais le tarif courant. Aucun
+ * secret, aucun lien de paiement, aucun téléphone, aucun net marchand.
+ */
+export interface PaymentReceiptView {
+  kind: 'payment-receipt';
+  /** Référence stable : la référence marchand du paiement. */
+  receiptNumber: string;
+  paymentId: string;
+  issuer: { name: 'Stock Master' };
+  organization: { name: string };
+  term: SubscriptionTerm;
+  months: number;
+  /** Montant payé par le client (centimes de la devise), tel qu'encaissé. */
+  amountPaidMinor: number;
+  currency: 'XAF';
+  /** Date de l'encaissement confirmé (ISO). */
+  paidAt: string;
+  /** Prestataire et transaction (référence non secrète), si connue. */
+  provider: string;
+  providerTransactionId: string | null;
+  /**
+   * `applied` : période attribuée ; `in-resolution` : encaissement reçu,
+   * prise en compte en attente de résolution (aucune période) ;
+   * `refunded` : remboursé hors de Stock Master (aucune période).
+   */
+  application: 'applied' | 'in-resolution' | 'refunded';
+  /** Date du remboursement consigné (ISO), sinon `null`. */
+  refundedAt: string | null;
+  /** Période RÉELLEMENT attribuée par ce paiement, sinon `null`. */
+  period: { startsAt: string; endsAt: string } | null;
+}
 
 /** États pouvant encore aboutir à un succès VÉRIFIÉ (jamais `review`). */
 const FINALIZABLE_STATUSES: readonly SubscriptionPaymentStatus[] =
@@ -155,6 +288,16 @@ const isStrictObjectId = (value: unknown): value is string =>
 
 const iso = (date: Date | null | undefined): string | null =>
   date ? date.toISOString() : null;
+
+/**
+ * 1-21E — Encaissement CONFIRMÉ (statut financier) : enregistré depuis
+ * 1-21E (`collectedAt`) ; avant, un paiement `succeeded` l'était forcément.
+ */
+export const isCollected = (
+  payment: Pick<PaymentRecord, 'status' | 'collectedAt'>,
+): boolean =>
+  !!payment.collectedAt ||
+  payment.status === SubscriptionPaymentStatus.SUCCEEDED;
 
 /**
  * 1-14D.2B — Demandes de paiement d'abonnement et moteur de confirmation.
@@ -183,10 +326,16 @@ const iso = (date: Date | null | undefined): string | null =>
 @Injectable()
 export class SubscriptionPaymentsService {
   private readonly fingerprintKey: Buffer;
+  private readonly logger = new Logger('SubscriptionPayments');
 
   constructor(
     @InjectModel(SubscriptionPayment.name)
     private readonly paymentModel: Model<SubscriptionPaymentDocument>,
+    // 1-21E : reçu (nom de l'organisation, période réellement attribuée).
+    @InjectModel(Organization.name)
+    private readonly organizationModel: Model<OrganizationDocument>,
+    @InjectModel(SubscriptionPeriod.name)
+    private readonly periodModel: Model<SubscriptionPeriodDocument>,
     private readonly subscriptions: SubscriptionsService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
     @Inject(SUBSCRIPTION_CLOCK) private readonly clock: SubscriptionClock,
@@ -211,7 +360,7 @@ export class SubscriptionPaymentsService {
   /** 1-21B — vérifications concurrentes d'un même paiement regroupées. */
   private readonly confirmations = new Map<
     string,
-    Promise<SubscriptionPaymentView>
+    Promise<ConfirmationCheck>
   >();
 
   /** 1-21B — moyen de paiement proposé pour une NOUVELLE tentative. */
@@ -301,6 +450,9 @@ export class SubscriptionPaymentsService {
     // 4. Persistance + réservation atomique (tarif FIGÉ à cet instant).
     const _id = new Types.ObjectId();
     const merchantReference = merchantReferenceFor(_id);
+    // 1-21E : même renouvellement que la dernière tentative non aboutie
+    // (relation durable, écrite à l'insertion), sinon nouveau.
+    const renewal = await this.renewalFor(organizationId, _id);
     try {
       await this.paymentModel.create({
         _id,
@@ -319,6 +471,8 @@ export class SubscriptionPaymentsService {
         open: true,
         payerPhoneMasked:
           needsPhone && payerPhone ? maskPayerPhone(payerPhone) : null,
+        renewalId: renewal.renewalId,
+        replacesPaymentId: renewal.replacesPaymentId,
       });
     } catch (error) {
       const index = subscriptionPaymentDuplicateKeyIndex(error);
@@ -330,7 +484,11 @@ export class SubscriptionPaymentsService {
         );
         if (winner) return this.replay(winner, requestedBy, fingerprint);
       }
-      if (index === 'organizationId_1_single_open_payment') {
+      if (
+        index === 'organizationId_1_single_open_payment' ||
+        // 1-21E : création concurrente qui a remplacé la même tentative.
+        index === 'replacesPaymentId_1'
+      ) {
         const other = await this.paymentModel
           .findOne({ organizationId, open: true })
           .select({ _id: 1 })
@@ -353,6 +511,63 @@ export class SubscriptionPaymentsService {
     } finally {
       this.signalPayments(organizationId);
     }
+  }
+
+  /**
+   * 1-21E — Renouvellement d'une NOUVELLE tentative. Elle rejoint celui de
+   * la dernière tentative de l'organisation si celle-ci est close sans
+   * encaissement (page fermée, expirée, échec) et que ce renouvellement n'a
+   * reçu aucune attribution automatique : elle la REMPLACE. Sinon (premier
+   * paiement, renouvellement terminé, achat supplémentaire volontaire) :
+   * nouveau renouvellement. Dérivé de la base seule (aucun état mémoire).
+   */
+  private async renewalFor(
+    organizationId: Types.ObjectId,
+    _id: Types.ObjectId,
+  ): Promise<{
+    renewalId: Types.ObjectId;
+    replacesPaymentId: Types.ObjectId | null;
+  }> {
+    const fresh = { renewalId: _id, replacesPaymentId: null };
+    const last = await this.paymentModel
+      .findOne({ organizationId })
+      .sort({ _id: -1 })
+      .select({
+        _id: 1,
+        status: 1,
+        open: 1,
+        renewalId: 1,
+        collectedAt: 1,
+      })
+      .lean<
+        Pick<
+          PaymentRecord,
+          '_id' | 'status' | 'open' | 'renewalId' | 'collectedAt'
+        >
+      >()
+      .exec();
+    if (
+      !last ||
+      last.open ||
+      last.collectedAt ||
+      last.status !== SubscriptionPaymentStatus.FAILED
+    ) {
+      return fresh;
+    }
+    const renewalId = last.renewalId ?? last._id;
+    const granted = await this.paymentModel
+      .exists({
+        $or: [
+          { autoGrantRenewalId: renewalId },
+          {
+            renewalId,
+            status: SubscriptionPaymentStatus.SUCCEEDED,
+          },
+        ],
+      })
+      .exec();
+    if (granted) return fresh;
+    return { renewalId, replacesPaymentId: last._id };
   }
 
   /** Étape 5 de `createPayment`, sur le paiement RÉSERVÉ `_id`. */
@@ -414,7 +629,10 @@ export class SubscriptionPaymentsService {
         _id,
         result.providerReference,
         [SubscriptionPaymentStatus.INITIATING],
-        { checkoutUrl: result.redirectUrl ?? null },
+        {
+          checkoutUrl: result.redirectUrl ?? null,
+          checkoutExpiresAt: result.checkoutExpiresAt ?? null,
+        },
       );
     }
     return { payment: await this.viewById(_id), replayed: false };
@@ -458,6 +676,73 @@ export class SubscriptionPaymentsService {
     };
   }
 
+  // ─── Reçu (1-21E) ──────────────────────────────────────────────────────────
+
+  /**
+   * 1-21E — Reçu d'un paiement ENCAISSÉ de l'organisation COURANTE (404
+   * uniforme sinon ; 409 s'il n'est pas encaissé). Lecture locale seule.
+   */
+  async receipt(
+    context: PaymentRequestContext,
+    paymentId: string,
+  ): Promise<PaymentReceiptView> {
+    const payment = await this.findScoped(context, paymentId);
+    if (!isCollected(payment)) throw paymentReceiptUnavailable();
+    const paidAt = payment.collectedAt ?? payment.confirmedAt;
+    if (!paidAt) throw paymentReceiptUnavailable();
+    const organization = await this.organizationModel
+      .findById(payment.organizationId)
+      .select({ name: 1 })
+      .lean<{ name?: string }>()
+      .exec();
+    let period: PaymentReceiptView['period'] = null;
+    if (
+      payment.status === SubscriptionPaymentStatus.SUCCEEDED &&
+      payment.periodId
+    ) {
+      const granted = await this.periodModel
+        .findOne({
+          _id: payment.periodId,
+          organizationId: payment.organizationId,
+        })
+        .select({ startsAt: 1, endsAt: 1 })
+        .lean<{ startsAt: Date; endsAt: Date }>()
+        .exec();
+      if (granted) {
+        period = {
+          startsAt: new Date(granted.startsAt).toISOString(),
+          endsAt: new Date(granted.endsAt).toISOString(),
+        };
+      }
+    }
+    return {
+      kind: 'payment-receipt',
+      receiptNumber: payment.merchantReference,
+      paymentId: payment._id.toHexString(),
+      issuer: { name: 'Stock Master' },
+      organization: { name: organization?.name ?? '' },
+      term: payment.term,
+      months: TERM_MONTHS[payment.term],
+      amountPaidMinor:
+        typeof payment.paidAmountMinor === 'number'
+          ? payment.paidAmountMinor
+          : payment.amount * 100,
+      currency: payment.currency,
+      paidAt: new Date(paidAt).toISOString(),
+      provider: payment.provider,
+      providerTransactionId: payment.providerTransactionId ?? null,
+      application: payment.refundedAt
+        ? 'refunded'
+        : period
+          ? 'applied'
+          : 'in-resolution',
+      refundedAt: payment.refundedAt
+        ? new Date(payment.refundedAt).toISOString()
+        : null,
+      period,
+    };
+  }
+
   // ─── Confirmation ──────────────────────────────────────────────────────────
 
   /** Refresh propriétaire : paiement de l'organisation COURANTE seulement. */
@@ -481,8 +766,10 @@ export class SubscriptionPaymentsService {
    * - refus confirmé → `failed` (jamais après un succès) ;
    * - succès concordant → attribution + `succeeded`, atomiquement.
    */
-  confirmPayment(paymentId: Types.ObjectId): Promise<SubscriptionPaymentView> {
-    return this.confirmOnce(paymentId);
+  async confirmPayment(
+    paymentId: Types.ObjectId,
+  ): Promise<SubscriptionPaymentView> {
+    return (await this.checkOnce(paymentId)).view;
   }
 
   /**
@@ -492,29 +779,50 @@ export class SubscriptionPaymentsService {
    * n'appellent le prestataire qu'une fois. La garantie d'attribution
    * unique reste celle de la transaction (plusieurs processus).
    */
-  confirmPaymentShared(
+  async confirmPaymentShared(
     paymentId: Types.ObjectId,
   ): Promise<SubscriptionPaymentView> {
+    return (await this.checkShared(paymentId)).view;
+  }
+
+  /** Vérification regroupée (voir `confirmPaymentShared`), statut compris. */
+  private checkShared(paymentId: Types.ObjectId): Promise<ConfirmationCheck> {
     const key = paymentId.toHexString();
     const running = this.confirmations.get(key);
     if (running) return running;
-    const started = this.confirmOnce(paymentId).finally(() => {
+    const started = this.checkOnce(paymentId).finally(() => {
       this.confirmations.delete(key);
     });
     this.confirmations.set(key, started);
     return started;
   }
 
-  private async confirmOnce(
+  /**
+   * 1-21E — Vérification démarrée APRÈS cet appel : jamais le résultat d'une
+   * vérification commencée avant (ex. avant la fermeture d'une page).
+   */
+  private async checkFresh(
     paymentId: Types.ObjectId,
-  ): Promise<SubscriptionPaymentView> {
+  ): Promise<ConfirmationCheck> {
+    const running = this.confirmations.get(paymentId.toHexString());
+    if (running) await running.catch(() => undefined);
+    return this.checkShared(paymentId);
+  }
+
+  private async checkOnce(
+    paymentId: Types.ObjectId,
+  ): Promise<ConfirmationCheck> {
+    const local = (
+      view: SubscriptionPaymentView,
+      observed: ProviderPaymentStatus | null = null,
+    ): ConfirmationCheck => ({ view, observed });
     const payment = await this.findById(paymentId);
     if (!payment) throw paymentNotFound();
     if (payment.status === SubscriptionPaymentStatus.SUCCEEDED) {
-      return this.toView(payment);
+      return local(this.toView(payment));
     }
     if (payment.status === SubscriptionPaymentStatus.REVIEW) {
-      return this.toView(payment);
+      return local(this.toView(payment));
     }
     // 1-21B : chaque paiement est confirmé par SON prestataire, jamais par
     // un autre ; disponible même si les nouvelles tentatives sont coupées.
@@ -528,7 +836,7 @@ export class SubscriptionPaymentsService {
     const lookup = this.lookupFor(payment, provider);
     // Initiation incertaine sans recherche par référence marchand : rien ne
     // permet de conclure ; état conservé (jamais une nouvelle collecte).
-    if (!lookup) return this.toView(payment);
+    if (!lookup) return local(this.toView(payment));
 
     let status: ProviderPaymentStatus | null;
     try {
@@ -544,7 +852,7 @@ export class SubscriptionPaymentsService {
         ) {
           this.signalPayments(payment.organizationId);
         }
-        return this.viewById(payment._id);
+        return local(await this.viewById(payment._id));
       }
       throw paymentStatusUnavailable();
     }
@@ -555,7 +863,7 @@ export class SubscriptionPaymentsService {
         { $set: { lastCheckedAt: this.clock() } },
       )
       .exec();
-    if (!status) return this.viewById(payment._id);
+    if (!status) return local(await this.viewById(payment._id));
 
     // 1-15F : `changed` n'est vrai qu'après une écriture validée qui a
     // modifié l'état visible ; le signal part ensuite, même si la relecture
@@ -564,7 +872,7 @@ export class SubscriptionPaymentsService {
     try {
       if (!this.concordant(payment, status)) {
         changed = await this.markReview(payment._id);
-        return await this.viewById(payment._id);
+        return local(await this.viewById(payment._id), status);
       }
 
       switch (status.state) {
@@ -580,11 +888,22 @@ export class SubscriptionPaymentsService {
             {
               checkoutUrl: status.checkoutUrl,
               providerTransactionId: status.providerTransactionId,
+              checkoutExpiresAt: status.checkoutExpiresAt,
             },
           );
           break;
         case 'unresolved':
-          changed = await this.recordUnresolved(payment._id, status);
+          // 1-21E : page close et absence de transaction AFFIRMÉE par SasPay
+          // (champs présents et nuls), aucune rattachée ici → clos. Sinon
+          // (champ manquant, tentative échouée `FAILED` rejouable) : en
+          // résolution, jamais libéré.
+          changed =
+            status.checkoutClosed === true &&
+            status.transactionAbsenceConfirmed === true &&
+            status.providerTransactionId === null &&
+            payment.providerTransactionId === null
+              ? await this.recordClosed(payment._id, status)
+              : await this.recordUnresolved(payment._id, status);
           break;
         case 'failed':
           changed = await this.recordFailure(
@@ -605,10 +924,100 @@ export class SubscriptionPaymentsService {
           break;
         }
       }
-      return await this.viewById(payment._id);
+      return local(await this.viewById(payment._id), status);
     } finally {
       if (changed) this.signalPayments(payment.organizationId);
     }
+  }
+
+  // ─── Changement de forfait (1-21E) ─────────────────────────────────────────
+
+  /**
+   * 1-21E — « Changer de forfait » : libère une nouvelle tentative SEULEMENT
+   * si la page actuelle ne peut plus être payée et qu'aucune transaction n'y
+   * a été engagée, vérifié chez le prestataire.
+   *
+   * 1. Vérification complète d'abord : un succès est attribué (jamais
+   *    abandonné) ; une transaction en cours ou une tentative échouée bloque.
+   * 2. Page ouverte SANS transaction → fermeture OFFICIELLE chez le
+   *    prestataire (`cancelCheckout`), puis vérification démarrée après
+   *    elle : seule une page relue close, toujours sans transaction, clôt le
+   *    paiement (`failed` + `checkout_closed`).
+   * Jamais : suppression, changement de montant, `pending`/`uncertain`
+   * converti en échec sans cette preuve, nouvelle session créée ici.
+   */
+  async abandonPayment(
+    context: PaymentRequestContext,
+    paymentId: string,
+  ): Promise<{
+    outcome: PaymentAbandonOutcome;
+    payment: SubscriptionPaymentView;
+  }> {
+    const payment = await this.findScoped(context, paymentId);
+    if (payment.status === SubscriptionPaymentStatus.SUCCEEDED) {
+      return { outcome: 'succeeded', payment: this.toView(payment) };
+    }
+    if (payment.status === SubscriptionPaymentStatus.FAILED) {
+      return { outcome: 'released', payment: this.toView(payment) };
+    }
+    if (payment.status === SubscriptionPaymentStatus.REVIEW) {
+      return { outcome: 'awaiting-resolution', payment: this.toView(payment) };
+    }
+    const provider = confirmationProviderFor(
+      payment.provider,
+      this.provider,
+      this.confirmers,
+    );
+    if (!provider) throw paymentServiceUnavailable();
+    // Collecte poussée sur le téléphone (aucune page à fermer) : inchangé.
+    if (!provider.cancelCheckout) throw paymentChangeUnavailable();
+
+    const first = await this.checkFresh(payment._id);
+    const settled = this.abandonOutcome(first);
+    if (settled) return { outcome: settled, payment: first.view };
+
+    try {
+      await provider.cancelCheckout(first.observed!.providerReference);
+    } catch (error) {
+      // Demande certainement non transmise : rien n'a changé.
+      if (error instanceof PaymentProviderUnavailableError) {
+        throw paymentServiceUnavailable();
+      }
+      // Issue inconnue : la relecture tranche.
+    }
+    const second = await this.checkFresh(payment._id);
+    return {
+      outcome: this.abandonOutcome(second) ?? 'cancel-unconfirmed',
+      payment: second.view,
+    };
+  }
+
+  /** `null` : page ouverte sans transaction → fermeture à demander. */
+  private abandonOutcome(
+    check: ConfirmationCheck,
+  ): PaymentAbandonOutcome | null {
+    const { view, observed } = check;
+    if (view.status === SubscriptionPaymentStatus.SUCCEEDED) return 'succeeded';
+    if (view.status === SubscriptionPaymentStatus.FAILED) return 'released';
+    if (view.status === SubscriptionPaymentStatus.REVIEW) {
+      return 'awaiting-resolution';
+    }
+    if (!observed) return 'not-found-at-provider';
+    if (observed.transactionState === 'pending') return 'in-progress';
+    if (observed.checkoutClosed || observed.state !== 'pending') {
+      return 'awaiting-resolution';
+    }
+    if (
+      typeof observed.providerTransactionId === 'string' ||
+      observed.transactionState
+    ) {
+      return 'attempt-recorded';
+    }
+    // Champ manquant ou réponse incomplète : jamais une preuve d'absence.
+    if (observed.transactionAbsenceConfirmed !== true) {
+      return 'provider-incomplete';
+    }
+    return null;
   }
 
   /**
@@ -699,7 +1108,13 @@ export class SubscriptionPaymentsService {
     paymentId: Types.ObjectId,
     verified: ProviderPaymentStatus,
   ): Promise<'granted' | 'review' | 'unchanged'> {
-    let outcome: 'granted' | 'replayed' | 'not-finalizable' | 'mismatch';
+    let outcome:
+      | 'granted'
+      | 'replayed'
+      | 'not-finalizable'
+      | 'mismatch'
+      | 'replaced'
+      | 'renewal-granted';
     try {
       outcome = await this.subscriptions.runInGrantTransaction(
         async (session) => {
@@ -718,6 +1133,23 @@ export class SubscriptionPaymentsService {
           if (!this.concordant(current, verified)) {
             return 'mismatch' as const;
           }
+          // 1-21E : tentative REMPLACÉE (changement de forfait) → jamais
+          // d'attribution silencieuse de l'ancien forfait.
+          const replaced = await this.paymentModel
+            .exists({ replacesPaymentId: current._id })
+            .session(session)
+            .exec();
+          if (replaced) return 'replaced' as const;
+          // 1-21E : renouvellement déjà attribué par une autre tentative.
+          const renewalId = current.renewalId ?? current._id;
+          const other = await this.paymentModel
+            .exists({
+              autoGrantRenewalId: renewalId,
+              _id: { $ne: current._id },
+            })
+            .session(session)
+            .exec();
+          if (other) return 'renewal-granted' as const;
           await this.grantAndMarkSucceededInSession(session, current, verified);
           // 1-16A — « paiement confirmé » enregistré dans CETTE transaction,
           // après attribution et passage à `succeeded` : annulé par un
@@ -749,9 +1181,25 @@ export class SubscriptionPaymentsService {
       ) {
         return (await this.markReview(paymentId)) ? 'review' : 'unchanged';
       }
-      throw error;
+      // 1-21E : attribution automatique du renouvellement validée en même
+      // temps par une autre tentative (index unique, autre processus).
+      if (duplicate !== 'autoGrantRenewalId_1') throw error;
+      outcome = 'renewal-granted';
     }
     if (outcome === 'granted') return 'granted';
+    if (outcome === 'replaced' || outcome === 'renewal-granted') {
+      const incident =
+        outcome === 'replaced'
+          ? SubscriptionPaymentIncident.REPLACED_PAYMENT_COLLECTED
+          : SubscriptionPaymentIncident.RENEWAL_ALREADY_GRANTED;
+      const recorded = await this.recordCollectedConflict(
+        paymentId,
+        verified,
+        incident,
+      );
+      if (outcome === 'replaced') await this.suspendReplacements(paymentId);
+      return recorded ? 'review' : 'unchanged';
+    }
     if (outcome === 'mismatch') {
       return (await this.markReview(paymentId)) ? 'review' : 'unchanged';
     }
@@ -770,6 +1218,14 @@ export class SubscriptionPaymentsService {
     session: MongooseSession,
     current: PaymentRecord,
     verified: ProviderPaymentStatus,
+    options: {
+      /**
+       * 1-21E — `false` : attribution MANUELLE explicite de l'opérateur
+       * (encaissement en conflit, accord du client) ; ne revendique pas
+       * l'attribution automatique du renouvellement.
+       */
+      claimRenewal?: boolean;
+    } = {},
   ): Promise<Types.ObjectId> {
     const granted = await this.subscriptions.grantSubscriptionInSession(
       {
@@ -784,7 +1240,13 @@ export class SubscriptionPaymentsService {
     const periodId = new Types.ObjectId(granted.periodId);
     const marked = await this.paymentModel
       .updateOne(
-        { _id: current._id, status: current.status, periodId: null },
+        {
+          _id: current._id,
+          status: current.status,
+          periodId: null,
+          // 1-21E : jamais d'attribution d'un paiement remboursé.
+          refundedAt: null,
+        },
         {
           $set: {
             status: SubscriptionPaymentStatus.SUCCEEDED,
@@ -796,6 +1258,16 @@ export class SubscriptionPaymentsService {
               : {}),
             providerCheckoutUrl: null,
             confirmedAt: this.clock(),
+            // 1-21E : statut financier et montant débité (reçu).
+            collectedAt: current.collectedAt ?? this.clock(),
+            ...(typeof verified.paidAmountMinor === 'number'
+              ? { paidAmountMinor: verified.paidAmountMinor }
+              : {}),
+            // 1-21E : index unique → une attribution automatique par
+            // renouvellement, garantie par la base (entre processus).
+            ...(options.claimRenewal === false
+              ? {}
+              : { autoGrantRenewalId: current.renewalId ?? current._id }),
           },
         },
         { session },
@@ -818,6 +1290,8 @@ export class SubscriptionPaymentsService {
     attached: {
       checkoutUrl?: string | null;
       providerTransactionId?: string | null;
+      /** 1-21E : fin de validité lue ou demandée ; absente = inchangée. */
+      checkoutExpiresAt?: Date | null;
     } = {},
   ): Promise<boolean> {
     const before = await this.findById(paymentId);
@@ -848,6 +1322,9 @@ export class SubscriptionPaymentsService {
                 : {}),
               ...(attached.checkoutUrl !== undefined
                 ? { providerCheckoutUrl: attached.checkoutUrl }
+                : {}),
+              ...(attached.checkoutExpiresAt
+                ? { providerCheckoutExpiresAt: attached.checkoutExpiresAt }
                 : {}),
             },
           },
@@ -953,6 +1430,266 @@ export class SubscriptionPaymentsService {
   }
 
   /**
+   * 1-21E — Rapprochement PÉRIODIQUE borné (webhook jamais reçu, client
+   * absent) : au plus `limit` paiements par passe, chacun revérifié par le
+   * moteur UNIQUE (`confirmPaymentShared`) :
+   * - paiements OUVERTS (`pending`, `uncertain`) ;
+   * - tentatives CLOSES sans encaissement (`checkout_closed`) depuis moins
+   *   de `lateWindowMs` : un succès tardif y est retrouvé et traité ;
+   * non vérifiés depuis `staleMs`. Chaque paiement est RÉSERVÉ par une
+   * écriture conditionnelle de `lastCheckedAt` (plusieurs processus : un
+   * seul le vérifie par période). Prestataires sans adaptateur disponible
+   * ignorés. Aucune création, aucune relance de débit.
+   */
+  async sweepOnce(options: {
+    limit: number;
+    staleMs: number;
+    lateWindowMs: number;
+  }): Promise<{ examined: number; failed: number }> {
+    const providers = [this.provider, ...(this.confirmers ?? [])]
+      .filter((p) => p.available)
+      .map((p) => p.name);
+    const report = { examined: 0, failed: 0 };
+    if (providers.length === 0) return report;
+    for (let i = 0; i < options.limit; i += 1) {
+      const now = this.clock();
+      const claimed = await this.paymentModel
+        .findOneAndUpdate(
+          {
+            provider: { $in: providers },
+            $and: [
+              {
+                $or: [
+                  {
+                    open: true,
+                    status: {
+                      $in: [
+                        SubscriptionPaymentStatus.PENDING,
+                        SubscriptionPaymentStatus.UNCERTAIN,
+                      ],
+                    },
+                  },
+                  {
+                    status: SubscriptionPaymentStatus.FAILED,
+                    incidentCode: SubscriptionPaymentIncident.CHECKOUT_CLOSED,
+                    failedAt: {
+                      $gte: new Date(now.getTime() - options.lateWindowMs),
+                    },
+                  },
+                ],
+              },
+              {
+                $or: [
+                  { lastCheckedAt: null },
+                  {
+                    lastCheckedAt: {
+                      $lt: new Date(now.getTime() - options.staleMs),
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          { $set: { lastCheckedAt: now } },
+          { sort: { lastCheckedAt: 1, _id: 1 }, projection: { _id: 1 } },
+        )
+        .lean<{ _id: Types.ObjectId }>()
+        .exec();
+      if (!claimed) break;
+      report.examined += 1;
+      try {
+        await this.confirmPaymentShared(claimed._id);
+      } catch {
+        report.failed += 1;
+      }
+    }
+    return report;
+  }
+
+  /**
+   * 1-21E — Encaissement en CONFLIT de renouvellement : tentative
+   * remplacée, ou renouvellement déjà attribué par une autre tentative.
+   * Lecture seule (rapprochement opérateur).
+   */
+  /**
+   * 1-21E — Renouvellement du paiement déjà RÉGLÉ par une autre tentative
+   * (attribution automatique ou manuelle « forfait initial retenu »).
+   */
+  async renewalSettledByOther(
+    payment: Pick<PaymentRecord, '_id' | 'renewalId'>,
+  ): Promise<boolean> {
+    const found = await this.paymentModel
+      .exists({
+        autoGrantRenewalId: payment.renewalId ?? payment._id,
+        _id: { $ne: payment._id },
+      })
+      .exec();
+    return found !== null;
+  }
+
+  async renewalConflictOf(
+    payment: Pick<
+      PaymentRecord,
+      '_id' | 'renewalId' | 'incidentCode' | 'collectedAt'
+    >,
+  ): Promise<boolean> {
+    if (
+      payment.incidentCode &&
+      COLLECTED_CONFLICT_INCIDENTS.includes(payment.incidentCode)
+    ) {
+      return true;
+    }
+    const renewalId = payment.renewalId ?? payment._id;
+    const found = await this.paymentModel
+      .exists({
+        $or: [
+          { replacesPaymentId: payment._id },
+          { autoGrantRenewalId: renewalId, _id: { $ne: payment._id } },
+        ],
+      })
+      .exec();
+    return found !== null;
+  }
+
+  /**
+   * 1-21E — Encaissement CONFIRMÉ sans attribution automatique possible
+   * (tentative remplacée, renouvellement déjà attribué) : statut financier
+   * enregistré (`collectedAt`, transaction, montant débité), paiement en
+   * `review` avec l'incident, fermé (`open: false`). Jamais `failed`, jamais
+   * supprimé, aucune période. Signalé à l'opérateur (journal + incident,
+   * CLI `inspect`). Vrai si l'état a changé.
+   */
+  private async recordCollectedConflict(
+    paymentId: Types.ObjectId,
+    verified: ProviderPaymentStatus,
+    incident: SubscriptionPaymentIncident,
+  ): Promise<boolean> {
+    const transactionId =
+      typeof verified.providerTransactionId === 'string'
+        ? verified.providerTransactionId
+        : null;
+    let changed: boolean;
+    try {
+      changed = await this.transition(paymentId, FINALIZABLE_STATUSES, {
+        status: SubscriptionPaymentStatus.REVIEW,
+        open: false,
+        incidentCode: incident,
+        collectedAt: this.clock(),
+        providerReference: verified.providerReference,
+        providerCheckoutUrl: null,
+        ...(transactionId ? { providerTransactionId: transactionId } : {}),
+        ...(typeof verified.paidAmountMinor === 'number'
+          ? { paidAmountMinor: verified.paidAmountMinor }
+          : {}),
+      });
+    } catch (error) {
+      const duplicate = subscriptionPaymentDuplicateKeyIndex(error);
+      if (
+        duplicate !== 'provider_1_providerReference_1' &&
+        duplicate !== 'provider_1_providerTransactionId_1'
+      ) {
+        throw error;
+      }
+      changed = await this.markReview(paymentId);
+    }
+    if (changed) {
+      // Identifiants internes seulement (aucune donnée personnelle).
+      this.logger.warn(
+        `Encaissement à résoudre (${incident}) : paiement ${paymentId.toHexString()}.`,
+      );
+    }
+    return changed;
+  }
+
+  /**
+   * 1-21E — Tentative remplacée ENCAISSÉE : la poursuite des tentatives
+   * OUVERTES du même renouvellement est suspendue (lien retiré aussitôt),
+   * puis leur page est fermée chez le prestataire si c'est sûr (même règle
+   * que « Changer de forfait »). Une tentative déjà engagée (transaction)
+   * reste vérifiable : son succès éventuel est attribué normalement.
+   * Au mieux : une erreur n'interrompt jamais la confirmation en cours.
+   */
+  async suspendReplacements(paymentId: Types.ObjectId): Promise<void> {
+    const paid = await this.findById(paymentId);
+    if (!paid) return;
+    const renewalId = paid.renewalId ?? paid._id;
+    const open = await this.paymentModel
+      .find({ renewalId, open: true, _id: { $ne: paid._id } })
+      .select({ _id: 1, provider: 1, organizationId: 1 })
+      .lean<Pick<PaymentRecord, '_id' | 'provider' | 'organizationId'>[]>()
+      .exec();
+    for (const other of open) {
+      await this.paymentModel
+        .updateOne(
+          { _id: other._id, renewalConflictAt: null },
+          { $set: { renewalConflictAt: this.clock() } },
+        )
+        .exec();
+      this.signalPayments(other.organizationId);
+      try {
+        const provider = confirmationProviderFor(
+          other.provider,
+          this.provider,
+          this.confirmers,
+        );
+        if (!provider?.cancelCheckout) continue;
+        const check = await this.checkFresh(other._id);
+        if (this.abandonOutcome(check) !== null) continue;
+        await provider
+          .cancelCheckout(check.observed!.providerReference)
+          .catch(() => undefined);
+        await this.checkFresh(other._id);
+      } catch {
+        // Suspension conservée ; la vérification suivante tranchera.
+      }
+    }
+  }
+
+  /**
+   * 1-21E — Page close SANS aucune transaction, revérifiée chez le
+   * prestataire : aucun débit possible → paiement clos (`failed`, incident
+   * `checkout_closed`), nouvelle tentative libérée. Écriture conditionnelle
+   * (ouvert, même session, aucune transaction rattachée) : jamais après un
+   * succès ni une autre issue. Un succès vérifié ultérieur reste attribué
+   * (`failed` est finalisable ; candidat du webhook, `unattachedCandidates`).
+   * Vrai si le paiement a été clos.
+   */
+  private async recordClosed(
+    paymentId: Types.ObjectId,
+    status: ProviderPaymentStatus,
+  ): Promise<boolean> {
+    try {
+      return await this.transition(
+        paymentId,
+        [
+          SubscriptionPaymentStatus.PENDING,
+          SubscriptionPaymentStatus.UNCERTAIN,
+        ],
+        {
+          status: SubscriptionPaymentStatus.FAILED,
+          open: false,
+          failedAt: this.clock(),
+          incidentCode: SubscriptionPaymentIncident.CHECKOUT_CLOSED,
+          providerReference: status.providerReference,
+          providerCheckoutUrl: null,
+        },
+        {
+          providerReference: { $in: [null, status.providerReference] },
+          providerTransactionId: null,
+        },
+      );
+    } catch (error) {
+      if (
+        subscriptionPaymentDuplicateKeyIndex(error) !==
+        'provider_1_providerReference_1'
+      ) {
+        throw error;
+      }
+      return this.markReview(paymentId);
+    }
+  }
+
+  /**
    * 1-21B — Paiement auquel une transaction du prestataire est RATTACHÉE
    * (notification) ; `null` sinon. Lecture seule.
    */
@@ -973,6 +1710,9 @@ export class SubscriptionPaymentsService {
    * avant d'être connue : paiements ouverts de ce prestataire, session
    * connue, aucune transaction rattachée, initiés depuis `since` ; les plus
    * récents d'abord, au plus `limit`. Jamais tous les paiements ouverts.
+   * 1-21E : aussi les paiements clos `checkout_closed` (page close sans
+   * transaction) : une transaction tardive y serait rattachée par SA session
+   * et un succès vérifié attribué, jamais ignoré.
    */
   async unattachedCandidates(
     providerName: string,
@@ -982,13 +1722,21 @@ export class SubscriptionPaymentsService {
     const rows = await this.paymentModel
       .find({
         provider: providerName,
-        open: true,
-        status: {
-          $in: [
-            SubscriptionPaymentStatus.PENDING,
-            SubscriptionPaymentStatus.UNCERTAIN,
-          ],
-        },
+        $or: [
+          {
+            open: true,
+            status: {
+              $in: [
+                SubscriptionPaymentStatus.PENDING,
+                SubscriptionPaymentStatus.UNCERTAIN,
+              ],
+            },
+          },
+          {
+            status: SubscriptionPaymentStatus.FAILED,
+            incidentCode: SubscriptionPaymentIncident.CHECKOUT_CLOSED,
+          },
+        ],
         providerReference: { $type: 'string' },
         providerTransactionId: null,
         initiatedAt: { $gte: since },
@@ -1064,9 +1812,13 @@ export class SubscriptionPaymentsService {
     paymentId: Types.ObjectId,
     from: readonly SubscriptionPaymentStatus[],
     set: Partial<SubscriptionPayment>,
+    where: Record<string, unknown> = {},
   ): Promise<boolean> {
     const updated = await this.paymentModel
-      .updateOne({ _id: paymentId, status: { $in: from } }, { $set: set })
+      .updateOne(
+        { ...where, _id: paymentId, status: { $in: from } },
+        { $set: set },
+      )
       .exec();
     return updated.matchedCount === 1;
   }
@@ -1129,7 +1881,78 @@ export class SubscriptionPaymentsService {
     return this.toView(payment);
   }
 
+  /**
+   * 1-21E — Fin de validité de la page : enregistrée, sinon (paiement
+   * antérieur) création + durée demandée par SON prestataire (la création
+   * précède la demande : jamais plus tard que l'échéance réelle).
+   */
+  private checkoutExpiry(payment: PaymentRecord): Date | null {
+    if (payment.providerCheckoutExpiresAt) {
+      return new Date(payment.providerCheckoutExpiresAt);
+    }
+    const ttl = confirmationProviderFor(
+      payment.provider,
+      this.provider,
+      this.confirmers,
+    )?.checkoutTtlMs;
+    if (!payment.providerCheckoutUrl || !ttl || !payment.createdAt) {
+      return null;
+    }
+    return new Date(new Date(payment.createdAt).getTime() + ttl);
+  }
+
+  /** 1-21E — voir `PaymentSituation` ; `null` hors page hébergée. */
+  private situation(
+    payment: PaymentRecord,
+    linkValid: boolean,
+    expiry: Date | null,
+  ): PaymentSituation | null {
+    // Page hébergée : aucun numéro demandé (Mobile Money : toujours masqué).
+    if (payment.payerPhoneMasked) return null;
+    const incident = payment.incidentCode ?? null;
+    if (payment.refundedAt) return 'refunded';
+    if (
+      payment.status === SubscriptionPaymentStatus.REVIEW &&
+      payment.collectedAt &&
+      incident !== null &&
+      COLLECTED_CONFLICT_INCIDENTS.includes(incident)
+    ) {
+      return 'collected-in-resolution';
+    }
+    if (payment.open && payment.renewalConflictAt) return 'renewal-suspended';
+    switch (payment.status) {
+      case SubscriptionPaymentStatus.FAILED:
+        return incident === SubscriptionPaymentIncident.CHECKOUT_CLOSED
+          ? 'checkout-closed'
+          : null;
+      case SubscriptionPaymentStatus.UNCERTAIN:
+        if (incident === SubscriptionPaymentIncident.CHECKOUT_UNRESOLVED) {
+          return payment.providerTransactionId
+            ? 'attempt-unresolved'
+            : 'closure-unconfirmed';
+        }
+        return expiry ? 'checkout-expired' : 'checkout-link-missing';
+      case SubscriptionPaymentStatus.PENDING:
+        if (linkValid) return 'checkout-open';
+        return expiry ? 'checkout-expired' : 'checkout-link-missing';
+      case SubscriptionPaymentStatus.INITIATING:
+        return 'checkout-link-missing';
+      default:
+        return null;
+    }
+  }
+
   private toView(payment: PaymentRecord): SubscriptionPaymentView {
+    const expiry = this.checkoutExpiry(payment);
+    const remaining = expiry ? expiry.getTime() - this.clock().getTime() : 0;
+    // Page proposée : paiement ouvert en attente, page connue, encore valide.
+    const linkValid =
+      payment.open &&
+      payment.status === SubscriptionPaymentStatus.PENDING &&
+      !!payment.providerCheckoutUrl &&
+      // 1-21E : poursuite suspendue (tentative remplacée encaissée).
+      !payment.renewalConflictAt &&
+      (expiry === null || remaining > 0);
     return {
       paymentId: payment._id.toHexString(),
       reference: payment.merchantReference,
@@ -1138,7 +1961,11 @@ export class SubscriptionPaymentsService {
       amount: payment.amount,
       currency: payment.currency,
       payerPhoneMasked: payment.payerPhoneMasked ?? null,
-      checkoutUrl: payment.open ? (payment.providerCheckoutUrl ?? null) : null,
+      checkoutUrl: linkValid ? (payment.providerCheckoutUrl ?? null) : null,
+      checkoutExpiresAt: iso(expiry),
+      checkoutExpiresInMs: linkValid && expiry ? remaining : null,
+      situation: this.situation(payment, linkValid, expiry),
+      collected: isCollected(payment),
       createdAt: iso(payment.createdAt),
       initiatedAt: iso(payment.initiatedAt),
       confirmedAt: iso(payment.confirmedAt),

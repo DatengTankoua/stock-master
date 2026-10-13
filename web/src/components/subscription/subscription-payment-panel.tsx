@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ExternalLinkIcon, RefreshCwIcon, SmartphoneIcon } from "lucide-react";
+import {
+  ExternalLinkIcon,
+  PrinterIcon,
+  ReceiptTextIcon,
+  RefreshCwIcon,
+  SmartphoneIcon,
+} from "lucide-react";
 import { useT } from "next-i18next/client";
 import { useFormat } from "@/i18n/use-format";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -15,15 +21,18 @@ import {
 import {
   BLOCKING_PAYMENT_STATUSES,
   PAYMENT_HISTORY_PAGE_SIZE,
+  abandonSubscriptionPayment,
   classifyPaymentError,
   createSubscriptionPayment,
   fetchPaymentCapabilities,
+  fetchPaymentReceipt,
   fetchSubscriptionPayment,
   isDefinitiveCreationRefusal,
   listSubscriptionPayments,
   newClientOperationId,
   refreshSubscriptionPayment,
   safeCheckoutUrl,
+  type ApiPaymentReceipt,
   type ApiSubscriptionPayment,
   type PaymentErrorKind,
   type SubscriptionPaymentStatus,
@@ -37,8 +46,16 @@ import {
 } from "@/lib/payment-intent";
 import { createResponseOrder } from "@/lib/refresh-coordinator";
 import {
+  abandonReleases,
+  canRequestAbandon,
   chargedAmountChange,
+  checkoutPhase,
+  minorToMajor,
+  nextPhaseChangeAt,
   paymentAvailability,
+  receiptAvailable,
+  type CheckoutPhase,
+  type PaymentAbandonOutcome,
   type PaymentAvailability,
 } from "@/lib/payment-guards";
 import { useLiveRefresh, useSocketSignals } from "@/hooks/use-live-refresh";
@@ -86,8 +103,32 @@ import { rich } from "@/i18n/rich";
 //   est retiré de l'adresse. Ni le paramètre, ni la redirection, ni la
 //   fermeture de la page ne prouvent un paiement : seul le statut renvoyé
 //   par le serveur fait foi.
+//
+// 1-21E — reprise, expiration et changement de forfait (page hébergée) :
+// - la situation vient du SERVEUR (`situation`) : page ouverte, expirée,
+//   lien non récupéré, tentative à confirmer, page close sans paiement ;
+//   jamais « résultat à vérifier » pour une simple page non payée ;
+// - échéance du lien = réception + validité restante donnée par le serveur
+//   (indépendante de l'horloge de l'appareil, jamais repoussée par un
+//   rechargement) ; un minuteur UNIQUE retire le lien à l'échéance (moins
+//   une marge), puis UNE vérification serveur établit le résultat ;
+// - « Changer de forfait » et « Annuler cette tentative » demandent au
+//   serveur de vérifier puis, seulement si c'est sûr, de FERMER la page chez
+//   SasPay ; l'issue affichée est celle établie par le serveur (jamais une
+//   annulation locale, jamais une seconde session).
 
 const PAYMENT_SIGNALS = ["payments:changed"] as const;
+
+/** 1-21E : message après vérification, selon la situation OBSERVÉE. */
+const SITUATION_MESSAGES: Partial<
+  Record<NonNullable<ApiSubscriptionPayment["situation"]>, MessageKey>
+> = {
+  "checkout-closed": "payment.messages.checkoutClosed",
+  "checkout-expired": "payment.messages.expiredAwaitingClosure",
+  "closure-unconfirmed": "payment.messages.closureUnconfirmed",
+  "renewal-suspended": "payment.messages.renewalSuspended",
+  "collected-in-resolution": "payment.messages.collectedInResolution",
+};
 const NO_SIGNALS: readonly string[] = [];
 
 /** Horodatage d'une intention, lu au moment de l'envoi (jamais au rendu). */
@@ -133,10 +174,21 @@ type MessageKey =
       | "sent"
       | "checkoutReady"
       | "confirmed"
+      | "checkoutClosed"
+      | "expiredAwaitingClosure"
+      | "closureUnconfirmed"
+      | "renewalSuspended"
+      | "collectedInResolution"
       | "offlineVerify"}`;
 
+/** 1-21E : issue ÉTABLIE par le serveur pour un changement de forfait. */
+type AbandonMessageKey = `payment.abandon.outcome.${
+  | Exclude<PaymentAbandonOutcome, "released" | "succeeded">
+  | "releasedChange"
+  | "releasedCancel"}`;
+
 type Message =
-  | { tone: "info" | "error" | "success"; key: MessageKey }
+  | { tone: "info" | "error" | "success"; key: MessageKey | AbandonMessageKey }
   | {
       tone: "info";
       key: "payment.messages.statusChecked" | "payment.messages.statusNow";
@@ -192,8 +244,22 @@ export function SubscriptionPaymentPanel({
     "historyUnavailable" | "historyMore" | null
   >(null);
   const [busy, setBusy] = useState<
-    "create" | "refresh" | "read" | "history" | null
+    "create" | "refresh" | "read" | "history" | "abandon" | "receipt" | null
   >(null);
+  // 1-21E : reçu affiché (lecture locale), imprimable.
+  const [receipt, setReceipt] = useState<ApiPaymentReceipt | null>(null);
+  // 1-21E : instant de rendu des phases (mis à jour par un minuteur unique
+  // à l'échéance du lien, jamais par un intervalle).
+  const [now, setNow] = useState(() => Date.now());
+  // 1-21E : confirmation explicite avant de demander la fermeture.
+  const [confirmAbandon, setConfirmAbandon] = useState<
+    "change" | "cancel" | null
+  >(null);
+  // 1-21E : choix des formules consultable pendant qu'un paiement bloque.
+  const [browsing, setBrowsing] = useState(false);
+  const [previewTerm, setPreviewTerm] = useState<SubscriptionTerm | null>(null);
+  // 1-21E : une seule vérification automatique par paiement expiré.
+  const autoVerified = useRef(new Set<string>());
   const [message, setMessage] = useState<Message | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [term, setTerm] = useState<SubscriptionTerm | null>(null);
@@ -541,6 +607,13 @@ export function SubscriptionPaymentPanel({
             ? "payment.messages.checkoutReady"
             : "payment.messages.sent",
       });
+      // 1-21E : session créée au DERNIER moment, sur le clic « Continuer
+      // vers le paiement » : le payeur y est conduit aussitôt (même onglet).
+      // Prix changé : confirmation d'abord ; lien absent : « Vérifier ».
+      const destination = safeCheckoutUrl(created.checkoutUrl);
+      if (hosted && destination && !change) {
+        window.location.assign(destination);
+      }
     } catch (error) {
       if (!mounted.current) return;
       const kind = classifyPaymentError(error);
@@ -596,6 +669,12 @@ export function SubscriptionPaymentPanel({
       if (updated.status === "succeeded") {
         setMessage({ tone: "success", key: "payment.messages.confirmed" });
         onAccessRestore();
+      } else if (updated.situation && SITUATION_MESSAGES[updated.situation]) {
+        // 1-21E : message fidèle au statut RÉELLEMENT observé.
+        setMessage({
+          tone: "info",
+          key: SITUATION_MESSAGES[updated.situation]!,
+        });
       } else {
         setMessage({
           tone: "info",
@@ -630,6 +709,103 @@ export function SubscriptionPaymentPanel({
     returnedPayment.current = null;
     void verifyRef.current();
   }, [loading, current]);
+
+  // 1-21E : lien retiré à l'échéance (minuteur UNIQUE, aucun intervalle).
+  useEffect(() => {
+    const at = current ? nextPhaseChangeAt(current) : null;
+    if (at === null) return;
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.max(0, at - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [current]);
+
+  // 1-21E : page expirée → UNE vérification serveur par paiement (résultat
+  // de la tentative établi avant toute nouvelle création ; jamais de boucle).
+  useEffect(() => {
+    if (loading || !current || !online || busy !== null) return;
+    if (current.status !== "pending" && current.status !== "uncertain") return;
+    if (checkoutPhase(current, now) !== "expired") return;
+    if (autoVerified.current.has(current.paymentId)) return;
+    autoVerified.current.add(current.paymentId);
+    void verifyRef.current();
+  }, [loading, current, now, online, busy]);
+
+  /**
+   * 1-21E — « Changer de forfait » / « Annuler cette tentative » : le serveur
+   * vérifie chez SasPay et ne ferme la page que si c'est sûr ; l'issue
+   * affichée est la sienne. Aucune nouvelle session, aucune relance.
+   */
+  const requestAbandon = async (mode: "change" | "cancel") => {
+    if (!current || inFlight.current || rateLimited) return;
+    if (!online) {
+      setMessage({ tone: "error", key: "payment.messages.offlineVerify" });
+      return;
+    }
+    inFlight.current = true;
+    setBusy("abandon");
+    setMessage(null);
+    try {
+      const { outcome, payment } = await abandonSubscriptionPayment(
+        current.paymentId,
+        token,
+      );
+      if (!mounted.current) return;
+      setConfirmAbandon(null);
+      if (outcome === "succeeded" || payment.status === "succeeded") {
+        // Paiement abouti : jamais présenté comme annulé.
+        track(payment, null);
+        setMessage({ tone: "success", key: "payment.messages.confirmed" });
+        onAccessRestore();
+        return;
+      }
+      if (abandonReleases(outcome)) {
+        // Fermeture ÉTABLIE (page relue close, aucune transaction) : le
+        // paiement reste dans l'historique ; un nouveau choix est libre.
+        actionEpoch.current += 1;
+        upsertHistory(payment);
+        clearPaymentIntent(identity);
+        setIntent(null);
+        setCurrent(null);
+        setPriceChange(null);
+        setBrowsing(false);
+        setPhone("");
+        setTerm(null);
+        setFormOpen(mode === "change");
+        setMessage(
+          mode === "change"
+            ? { tone: "info", key: "payment.abandon.outcome.releasedChange" }
+            : {
+                tone: "success",
+                key: "payment.abandon.outcome.releasedCancel",
+              },
+        );
+        return;
+      }
+      // Rien n'est fermé ni libéré : explication de l'état établi.
+      track(payment, intent?.clientOperationId ?? null);
+      setMessage({ tone: "info", key: `payment.abandon.outcome.${outcome}` });
+      if (mode === "change") {
+        setPreviewTerm(null);
+        setBrowsing(true);
+      }
+    } catch (error) {
+      if (!mounted.current) return;
+      setConfirmAbandon(null);
+      const kind = classifyPaymentError(error);
+      if (kind.kind === "not-found") {
+        actionEpoch.current += 1;
+        clearPaymentIntent(identity);
+        setIntent(null);
+        setCurrent(null);
+      }
+      applyError(kind);
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) setBusy(null);
+    }
+  };
 
   /** Nouvel essai après `failed` : action explicite + relecture serveur. */
   const startNewAttempt = async () => {
@@ -706,20 +882,78 @@ export function SubscriptionPaymentPanel({
     priceChange !== null && current?.paymentId === priceChange.paymentId
       ? priceChange
       : null;
-  // Page de paiement proposée seulement après confirmation d'un prix changé.
+  // 1-21E : phase à cet instant (`null` : API antérieure ou Mobile Money).
+  const phase: CheckoutPhase | null = current
+    ? checkoutPhase(current, now)
+    : null;
+  // Page de paiement proposée seulement si elle est encore valide, et après
+  // confirmation d'un prix changé.
   const checkoutUrl =
-    current && !pendingPriceChange
+    current && !pendingPriceChange && (phase === null || phase === "open")
       ? safeCheckoutUrl(current.checkoutUrl)
       : null;
+  const situationCopy: Partial<Record<CheckoutPhase, string>> = {
+    expired: "payment.situation.expired",
+    "link-missing": "payment.situation.linkMissing",
+    "attempt-unresolved": "payment.situation.attemptUnresolved",
+    "closure-unconfirmed": "payment.situation.closureUnconfirmed",
+    closed: "payment.situation.closed",
+    "renewal-suspended": "payment.situation.renewalSuspended",
+    "collected-in-resolution": "payment.situation.collectedInResolution",
+    refunded: "payment.situation.refunded",
+  };
+  const situationKey = phase ? situationCopy[phase] : undefined;
   const copy = current
-    ? {
-        label: t(`payment.status.${current.status}.label`),
-        detail:
-          current.status === "pending" && checkoutUrl
-            ? t("payment.checkout.pendingDetail")
-            : t(`payment.status.${current.status}.detail`),
-      }
+    ? situationKey
+      ? {
+          label: t(`${situationKey}.label` as "payment.situation.closed.label"),
+          detail: t(
+            `${situationKey}.detail` as "payment.situation.closed.detail",
+          ),
+        }
+      : {
+          label: t(`payment.status.${current.status}.label`),
+          detail:
+            current.status === "pending" && checkoutUrl
+              ? t("payment.checkout.pendingDetail")
+              : t(`payment.status.${current.status}.detail`),
+        }
     : null;
+  const historyLabel = (payment: ApiSubscriptionPayment) => {
+    const phaseOf = checkoutPhase(payment, now);
+    const key = phaseOf ? situationCopy[phaseOf] : undefined;
+    // Lien expiré : l'historique garde le libellé du statut.
+    return key && phaseOf !== "expired"
+      ? t(`${key}.label` as "payment.situation.closed.label")
+      : t(`payment.status.${payment.status}.label`);
+  };
+  /** 1-21E : montant du reçu (centimes conservés, jamais recalculé). */
+  const receiptAmount = (minor: number) => {
+    const { major, cents } = minorToMajor(minor);
+    return cents === 0
+      ? format.fcfa(major)
+      : `${format.number(minor / 100, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} FCFA`;
+  };
+  const openReceipt = async (paymentId: string) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy("receipt");
+    setMessage(null);
+    try {
+      const data = await fetchPaymentReceipt(paymentId, token);
+      if (mounted.current) setReceipt(data);
+    } catch (error) {
+      if (mounted.current) applyError(classifyPaymentError(error));
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) setBusy(null);
+    }
+  };
+  const abandonable =
+    current !== null && canRequestAbandon(current, now) && busy !== "create";
   const messageText = (m: Message) =>
     "status" in m
       ? t(m.key, { status: t(`payment.status.${m.status}.lower`) })
@@ -734,6 +968,18 @@ export function SubscriptionPaymentPanel({
           data-testid="payment-offline"
         >
           {t("payment.offline")}
+        </p>
+      )}
+
+      {/* 1-21E : encaissement reçu en résolution → visible avant tout
+          nouveau choix (évite un second paiement par méconnaissance). */}
+      {history.some((p) => p.situation === "collected-in-resolution") && (
+        <p
+          role="status"
+          className="rounded-lg border border-(--brand-orange) p-3 text-sm"
+          data-testid="payment-collected-in-resolution"
+        >
+          {t("payment.messages.collectedInResolution")}
         </p>
       )}
 
@@ -794,7 +1040,18 @@ export function SubscriptionPaymentPanel({
               </div>
             )}
           </dl>
-          {current.status === "pending" && !checkoutUrl && (
+          {phase === "open" &&
+            formatDate(current.checkoutExpiresAt ?? null) && (
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="payment-valid-until"
+              >
+                {t("payment.checkout.validUntil", {
+                  time: formatDate(current.checkoutExpiresAt ?? null) ?? "",
+                })}
+              </p>
+            )}
+          {current.status === "pending" && !checkoutUrl && phase === null && (
             <p className="flex items-start gap-2 text-xs text-muted-foreground">
               <SmartphoneIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {t("payment.pinNotice")}
@@ -879,10 +1136,90 @@ export function SubscriptionPaymentPanel({
               >
                 {busy === "read"
                   ? t("payment.checking")
-                  : t("payment.newAttempt")}
+                  : phase === "closed"
+                    ? t("payment.chooseOffer")
+                    : t("payment.newAttempt")}
               </Button>
             )}
           </div>
+          {abandonable && confirmAbandon === null && (
+            <div
+              className="flex flex-col gap-2 sm:flex-row"
+              data-testid="payment-abandon-actions"
+            >
+              {!paymentsDisabled && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 px-5"
+                  disabled={busy !== null || rateLimited || !online}
+                  data-testid="payment-change-plan"
+                  onClick={() => {
+                    setMessage(null);
+                    setConfirmAbandon("change");
+                  }}
+                >
+                  {t("payment.abandon.change")}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 px-5"
+                disabled={busy !== null || rateLimited || !online}
+                data-testid="payment-cancel-attempt"
+                onClick={() => {
+                  setMessage(null);
+                  setConfirmAbandon("cancel");
+                }}
+              >
+                {t("payment.abandon.cancel")}
+              </Button>
+            </div>
+          )}
+          {abandonable && confirmAbandon !== null && (
+            <div
+              role="group"
+              aria-labelledby="payment-abandon-title"
+              className="space-y-3 rounded-lg border p-3 text-sm"
+              data-testid="payment-abandon-confirm"
+              data-mode={confirmAbandon}
+            >
+              <p id="payment-abandon-title" className="font-semibold">
+                {confirmAbandon === "change"
+                  ? t("payment.abandon.changeTitle")
+                  : t("payment.abandon.cancelTitle")}
+              </p>
+              <p className="text-muted-foreground">
+                {t("payment.abandon.explain")}
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  className="h-11 px-5"
+                  disabled={busy !== null || rateLimited || !online}
+                  data-testid="payment-abandon-submit"
+                  onClick={() => void requestAbandon(confirmAbandon)}
+                >
+                  {busy === "abandon"
+                    ? t("payment.abandon.working")
+                    : confirmAbandon === "change"
+                      ? t("payment.abandon.confirmChange")
+                      : t("payment.abandon.confirmCancel")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-11 px-5"
+                  disabled={busy === "abandon"}
+                  data-testid="payment-abandon-keep"
+                  onClick={() => setConfirmAbandon(null)}
+                >
+                  {t("payment.abandon.keep")}
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -895,6 +1232,50 @@ export function SubscriptionPaymentPanel({
         >
           {messageText(message)}
         </p>
+      )}
+
+      {/* 1-21E : formules consultables pendant qu'un paiement bloque ; la
+          validation reste impossible (raison affichée), rien n'est envoyé. */}
+      {browsing && blocking && !paymentsDisabled && (
+        <section
+          aria-labelledby="payment-preview-title"
+          className="space-y-4 rounded-xl border p-4"
+          data-testid="payment-change-preview"
+        >
+          <h3 id="payment-preview-title" className="font-semibold">
+            {t("payment.abandon.previewTitle")}
+          </h3>
+          <OfferSelector selected={previewTerm} onSelect={setPreviewTerm} />
+          <p
+            role="note"
+            className="rounded-lg bg-muted p-3 text-sm"
+            data-testid="payment-preview-blocked"
+          >
+            {t("payment.abandon.previewBlocked")}
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" className="h-11 px-5" disabled>
+              {(() => {
+                const chosen = SUBSCRIPTION_OFFERS.find(
+                  (o) => o.term === previewTerm,
+                );
+                return chosen
+                  ? t("payment.payAmount", {
+                      amount: format.fcfa(chosen.totalXaf),
+                    })
+                  : t("payment.pay");
+              })()}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-11 px-4"
+              onClick={() => setBrowsing(false)}
+            >
+              {t("payment.abandon.close")}
+            </Button>
+          </div>
+        </section>
       )}
 
       {paymentsDisabled && (
@@ -1015,9 +1396,12 @@ export function SubscriptionPaymentPanel({
               {busy === "create"
                 ? t("payment.sending")
                 : offer
-                  ? t("payment.payAmount", {
-                      amount: format.fcfa(offer.totalXaf),
-                    })
+                  ? t(
+                      hosted
+                        ? "payment.checkout.continueAmount"
+                        : "payment.payAmount",
+                      { amount: format.fcfa(offer.totalXaf) },
+                    )
                   : t("payment.pay")}
             </Button>
             {!lockedTerm && (
@@ -1086,17 +1470,146 @@ export function SubscriptionPaymentPanel({
                     {payment.reference}
                   </span>
                 </span>
-                <span className="text-xs sm:text-right">
+                <span className="flex flex-col gap-1 text-xs sm:items-end sm:text-right">
                   <span className="block font-medium">
-                    {t(`payment.status.${payment.status}.label`)}
+                    {historyLabel(payment)}
                   </span>
                   <span className="text-muted-foreground">
                     {formatDate(payment.confirmedAt ?? payment.createdAt)}
                   </span>
+                  {receiptAvailable(payment) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      disabled={busy !== null}
+                      data-testid="payment-receipt-open"
+                      onClick={() => void openReceipt(payment.paymentId)}
+                    >
+                      <ReceiptTextIcon className="h-4 w-4" aria-hidden />
+                      {t("payment.receipt.open")}
+                    </Button>
+                  )}
                 </span>
               </li>
             ))}
           </ul>
+        )}
+        {receipt && (
+          <article
+            aria-labelledby="payment-receipt-title"
+            className="space-y-4 rounded-xl border bg-background p-4 text-sm"
+            data-testid="payment-receipt"
+            data-print-receipt="active"
+          >
+            <header className="space-y-1">
+              <p className="text-xs text-muted-foreground">
+                {receipt.issuer.name}
+              </p>
+              <h4
+                id="payment-receipt-title"
+                className="text-base font-semibold"
+              >
+                {t("payment.receipt.title")}
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {t("payment.receipt.notInvoice")}
+              </p>
+            </header>
+            <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+              <div>
+                <dt className="text-muted-foreground">
+                  {t("payment.receipt.number")}
+                </dt>
+                <dd className="break-all font-mono text-xs leading-5">
+                  {receipt.receiptNumber}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">
+                  {t("payment.receipt.paidAt")}
+                </dt>
+                <dd>{formatDate(receipt.paidAt)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">
+                  {t("payment.receipt.organization")}
+                </dt>
+                <dd className="break-words">{receipt.organization.name}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">
+                  {t("payment.receipt.plan")}
+                </dt>
+                <dd>{termText(receipt.term)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">
+                  {t("payment.receipt.amountPaid")}
+                </dt>
+                <dd
+                  className="font-semibold"
+                  data-testid="payment-receipt-amount"
+                >
+                  {receiptAmount(receipt.amountPaidMinor)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">
+                  {t("payment.receipt.method")}
+                </dt>
+                <dd>
+                  {receipt.provider === "saspay" ? "SasPay" : receipt.provider}
+                </dd>
+              </div>
+              {receipt.providerTransactionId && (
+                <div className="sm:col-span-2">
+                  <dt className="text-muted-foreground">
+                    {t("payment.receipt.transaction")}
+                  </dt>
+                  <dd className="break-all font-mono text-xs leading-5">
+                    {receipt.providerTransactionId}
+                  </dd>
+                </div>
+              )}
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground">
+                  {t("payment.receipt.period")}
+                </dt>
+                <dd data-testid="payment-receipt-period">
+                  {receipt.application === "refunded"
+                    ? t("payment.receipt.refunded", {
+                        date: formatDate(receipt.refundedAt ?? null) ?? "",
+                      })
+                    : receipt.period
+                      ? t("payment.receipt.periodRange", {
+                          from: formatDate(receipt.period.startsAt) ?? "",
+                          to: formatDate(receipt.period.endsAt) ?? "",
+                        })
+                      : t("payment.receipt.inResolution")}
+                </dd>
+              </div>
+            </dl>
+            <div className="flex flex-col gap-2 sm:flex-row print:hidden">
+              <Button
+                type="button"
+                className="h-11 px-5"
+                data-testid="payment-receipt-print"
+                onClick={() => window.print()}
+              >
+                <PrinterIcon className="h-4 w-4" aria-hidden />
+                {t("payment.receipt.print")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 px-4"
+                onClick={() => setReceipt(null)}
+              >
+                {t("payment.receipt.close")}
+              </Button>
+            </div>
+          </article>
         )}
         {nextCursor && (
           <Button

@@ -68,6 +68,22 @@ class SasPaySimulation {
     }
     this.calls.push({ method, path });
     let m;
+    // 1-21E : fermeture documentée (PENDING → CANCELLED, sinon 409).
+    if (
+      method === 'POST' &&
+      (m = /^\/checkout-sessions\/([^/]+)\/cancel\/$/.exec(path))
+    ) {
+      const s = this.sessions.get(m[1]);
+      if (!s) return this.reply(404, null);
+      if (s.status !== 'PENDING') {
+        return {
+          status: 409,
+          body: { message: `Session déjà '${s.status}'.`, code: 'not_pending' },
+        };
+      }
+      s.status = 'CANCELLED';
+      return this.reply(200, this.view(s));
+    }
     if (method === 'POST' && path === '/checkout-sessions/') {
       const id = randomUUID();
       const slug = randomUUID().replace(/-/g, '').slice(0, 20);
@@ -126,10 +142,15 @@ class SasPaySimulation {
     return [...this.sessions.values()].find((s) => s.slug === slug) || null;
   }
 
-  /** Le payeur valide (`SUCCESS`) ou échoue (`FAILED`) sur la page simulée. */
+  /**
+   * Le payeur valide (`SUCCESS`) ou échoue (`FAILED`) sur la page simulée.
+   * 1-21E : session close (expirée, annulée, payée) → `unavailable` (page
+   * « Paiement indisponible » observée en production), rien n'est créé.
+   */
   pay(slug, outcome) {
     const s = this.bySlug(slug);
     if (!s) return null;
+    if (s.status !== 'PENDING') return { unavailable: true, session: s };
     const id = randomUUID();
     this.transactions.set(id, {
       id,
@@ -144,6 +165,41 @@ class SasPaySimulation {
     s.transaction = id;
     if (outcome === 'SUCCESS') s.status = 'PAID';
     return { session: s, transactionId: id };
+  }
+
+  /**
+   * 1-21E — Cas PATHOLOGIQUE (non documenté, jamais exclu) : transaction
+   * réussie rattachée à une session déjà close (succès tardif).
+   */
+  late(slug) {
+    const s = this.bySlug(slug);
+    if (!s) return null;
+    const id = randomUUID();
+    this.transactions.set(id, {
+      id,
+      status: 'SUCCESS',
+      requested_amount: s.amount,
+      debited_amount: s.amount,
+      net_amount: s.amount,
+      currency: s.currency,
+      flow_direction: 'INBOUND',
+      transaction_type: 'PAIEMENT',
+    });
+    s.transaction = id;
+    s.status = 'PAID';
+    return { session: s, transactionId: id };
+  }
+
+  /**
+   * 1-21E — Échéance atteinte : `expires_at` passé ; `close` ferme aussi la
+   * session (`EXPIRED`), sinon elle reste `PENDING` un instant.
+   */
+  expire(slug, close) {
+    const s = this.bySlug(slug);
+    if (!s) return null;
+    s.expires_at = new Date(Date.now() - 1000).toISOString();
+    if (close && s.status === 'PENDING') s.status = 'EXPIRED';
+    return s;
   }
 
   /** Notification signée comme SasPay (contrat officiel). */

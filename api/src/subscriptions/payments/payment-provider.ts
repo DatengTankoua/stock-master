@@ -86,6 +86,12 @@ export type PaymentInitiationResult =
        * hôte autorisé) ; absente pour une collecte poussée sur le téléphone.
        */
       redirectUrl?: string;
+      /**
+       * 1-21E — Fin de validité de la page hébergée : celle RENVOYÉE par le
+       * prestataire si lisible, sinon celle DEMANDÉE à la création (contrat
+       * vérifié). Jamais recalculée ensuite (rechargement, reprise).
+       */
+      checkoutExpiresAt?: Date;
     }
   /** Refus DÉFINITIF avant toute collecte (numéro refusé, opérateur…). */
   | { outcome: 'rejected' };
@@ -119,7 +125,41 @@ export interface ProviderPaymentStatus {
   providerTransactionId?: string | null;
   /** 1-21B — Page de paiement encore utilisable (validée), sinon `null`. */
   checkoutUrl?: string | null;
+  /** 1-21E — Fin de validité de la page lue chez le prestataire, si fournie. */
+  checkoutExpiresAt?: Date | null;
+  /**
+   * 1-21E — Page CLOSE selon le prestataire (expirée ou annulée, statut
+   * revérifié) : plus aucun paiement possible sur elle. Avec
+   * `providerTransactionId === null`, aucune transaction n'a jamais été
+   * engagée : aucun débit possible (clôture sûre, § 1-21E).
+   */
+  checkoutClosed?: boolean;
+  /**
+   * 1-21E — Statut BRUT de la transaction rattachée (`null` : aucune) ; une
+   * transaction `pending` interdit toute annulation de la page.
+   */
+  transactionState?: 'pending' | 'succeeded' | 'failed' | null;
+  /**
+   * 1-21E — AUCUNE transaction, affirmé EXPLICITEMENT par le prestataire
+   * (champ présent et nul sur chaque route lue). Un champ absent, une
+   * réponse incomplète ou une transaction désignée (même `FAILED`,
+   * rejouable) → `false`. Seule cette preuve permet de clore une page.
+   */
+  transactionAbsenceConfirmed?: boolean;
+  /**
+   * 1-21E — Montant DÉBITÉ au payeur (centimes), lu sur la transaction
+   * réussie ; absent si le prestataire ne le fournit pas.
+   */
+  paidAmountMinor?: number | null;
 }
+
+/**
+ * 1-21E — Issue d'une demande de FERMETURE de la page hébergée :
+ * - `cancelled` : le prestataire a accepté la fermeture ;
+ * - `not-open` : la page n'était déjà plus ouverte (payée, expirée, annulée).
+ * Dans les deux cas, seul le statut RELU ensuite fait foi.
+ */
+export type CheckoutCancellationResult = 'cancelled' | 'not-open';
 
 export interface PaymentProvider {
   /** Identifiant stable stocké dans `subscription_payments.provider`. */
@@ -141,6 +181,20 @@ export interface PaymentProvider {
   fetchStatus(
     lookup: PaymentStatusLookup,
   ): Promise<ProviderPaymentStatus | null>;
+  /**
+   * 1-21E — Fermeture de la page hébergée (route OFFICIELLE du prestataire),
+   * absente si le prestataire n'en offre pas. Lève
+   * `PaymentProviderUnavailableError` si la demande n'a certainement pas été
+   * transmise, `PaymentProviderUncertainError` si son issue est inconnue.
+   */
+  cancelCheckout?(
+    providerReference: string,
+  ): Promise<CheckoutCancellationResult>;
+  /**
+   * 1-21E — Durée de validité demandée pour une page hébergée (ms) : fin de
+   * validité des paiements enregistrés AVANT 1-21E (création + durée).
+   */
+  readonly checkoutTtlMs?: number;
 }
 
 /** La requête n'a CERTAINEMENT pas atteint le prestataire. */

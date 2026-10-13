@@ -17,6 +17,7 @@ import { resolveWebPushConfig } from './push/push-config';
 import { startNotifications } from './push/push-bootstrap';
 import { configureProcessTimeZone } from './analytics/month-range';
 import { startStorageRecovery } from './storage-quota/storage-recovery';
+import { startPaymentReconciliationSweep } from './subscriptions/payments/payment-reconciliation-sweep';
 import { resolveTurnstileConfig } from './anti-bot/turnstile-config';
 import { resolveAntiAbuseConfig } from './common/rate-limit/anti-abuse-config';
 
@@ -102,6 +103,8 @@ async function bootstrap() {
   // 1-17B : reprise des envois et suppressions de fichiers interrompus
   // (processus HTTP uniquement).
   startStorageRecovery(app);
+  // 1-21E : rapprochement périodique borné des paiements (webhook manqué).
+  startPaymentReconciliationSweep(app);
 
   await app.listen(process.env.PORT ?? 4000);
 }

@@ -15,6 +15,8 @@ export const PAYMENT_ERROR_CODES = Object.freeze({
   NOT_FOUND: 'PAYMENT_NOT_FOUND',
   INVALID_PAYER_PHONE: 'INVALID_PAYER_PHONE',
   UNEXPECTED_BODY: 'UNEXPECTED_BODY',
+  CHANGE_UNAVAILABLE: 'PAYMENT_CHANGE_UNAVAILABLE',
+  RECEIPT_UNAVAILABLE: 'PAYMENT_RECEIPT_UNAVAILABLE',
 } as const);
 
 export const paymentServiceUnavailable = () =>
@@ -68,6 +70,26 @@ export const invalidPayerPhone = () =>
   new BadRequestException({
     code: PAYMENT_ERROR_CODES.INVALID_PAYER_PHONE,
     message: 'Numéro Mobile Money camerounais invalide.',
+  });
+
+/**
+ * 1-21E — « Changer de forfait » sans page hébergée à fermer (collecte
+ * poussée sur le téléphone) : rien n'est modifié.
+ */
+export const paymentChangeUnavailable = () =>
+  new ConflictException({
+    code: PAYMENT_ERROR_CODES.CHANGE_UNAVAILABLE,
+    message: 'Ce paiement ne peut pas être remplacé pour le moment.',
+  });
+
+/**
+ * 1-21E — Reçu demandé pour un paiement dont l'encaissement n'est PAS
+ * confirmé côté serveur (en attente, échoué, clos sans paiement).
+ */
+export const paymentReceiptUnavailable = () =>
+  new ConflictException({
+    code: PAYMENT_ERROR_CODES.RECEIPT_UNAVAILABLE,
+    message: "Aucun reçu : ce paiement n'a pas été encaissé.",
   });
 
 export const unexpectedBody = () =>

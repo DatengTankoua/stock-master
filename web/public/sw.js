@@ -3,7 +3,9 @@
 // shell générique (/app/catalog) et les assets statiques versionnés
 // bénéficient d'une stratégie de cache. Voir
 // docs/architecture/phase-1-11b-offline-catalog.md pour le détail exact.
-const CACHE_VERSION = "v3";
+// 1-21D : v4 — icônes PWA sur fond blanc (précachées : nouvelle version
+// pour qu'un appareil déjà installé les récupère).
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `stockmaster-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline";
 // Document statique générique (aucune donnée personnalisée : page

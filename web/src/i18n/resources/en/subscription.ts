@@ -175,6 +175,9 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
         "This payment cannot be checked at the moment. Try again later.",
       "confirmation-pending":
         "Payment being confirmed. Check again in a moment.",
+      "change-unavailable":
+        "This payment cannot be replaced: wait for its result, then check it.",
+      "receipt-unavailable": "No receipt: this payment was not collected.",
     },
     messages: {
       checkoutReady:
@@ -185,6 +188,16 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
       replayed: "Request found: no new payment was requested.",
       sent: "Request sent. The subscription will be active once the payment is confirmed.",
       confirmed: "Payment confirmed. Restoring access…",
+      checkoutClosed:
+        "SasPay confirms the payment page is closed, with no transaction. You can choose a plan.",
+      expiredAwaitingClosure:
+        "The link has expired. We are waiting for the provider to confirm the closure before allowing a new attempt.",
+      closureUnconfirmed:
+        "The payment page is closed, but SasPay did not confirm that no transaction exists: the attempt remains under resolution.",
+      renewalSuspended:
+        "An earlier attempt of this renewal was paid: this payment is suspended pending resolution.",
+      collectedInResolution:
+        "Payment received: it needs to be checked by our team before it is applied. It is neither lost nor refused.",
       offlineVerify: "Offline: checking needs the Internet.",
       statusChecked: "Status checked: {{status}}.",
       statusNow: "This payment is now: {{status}}.",
@@ -207,6 +220,84 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
         "Finish the payment on the SasPay page, then come back here and press “Check payment”.",
       lockedIntent:
         "An earlier request got no answer. Submit again to find it: no second payment will be requested. Length: <b>{{term}}</b>.",
+      validUntil: "Payment link valid until {{time}}.",
+    },
+    situation: {
+      expired: {
+        label: "Payment page expired",
+        detail:
+          "The link has expired. We are waiting for the provider to confirm the closure before allowing a new attempt.",
+      },
+      closureUnconfirmed: {
+        label: "Closure to be confirmed by SasPay",
+        detail:
+          "The payment page is closed, but SasPay did not state that no transaction was started on it. No new payment is possible until it confirms; you can browse the plans meanwhile.",
+      },
+      renewalSuspended: {
+        label: "Payment suspended",
+        detail:
+          "An earlier attempt of this renewal was paid. To avoid a second charge, this payment is no longer offered until our team resolves it.",
+      },
+      refunded: {
+        label: "Payment refunded",
+        detail:
+          "This payment was refunded by our team. It did not extend any subscription period.",
+      },
+      collectedInResolution: {
+        label: "Payment received, under resolution",
+        detail:
+          "SasPay confirmed this payment, but it belongs to a replaced attempt or an already settled renewal. It is recorded and will be handled by our team (applied or refunded, with your agreement). The subscription has not been extended by this payment yet.",
+      },
+      linkMissing: {
+        label: "Payment link not retrieved",
+        detail:
+          "The payment page may have been created at SasPay, but its link was not received. “Check payment” retrieves it without creating a new one.",
+      },
+      attemptUnresolved: {
+        label: "Attempt to be confirmed by SasPay",
+        detail:
+          "The payment page closed after an attempt that did not go through. SasPay does not guarantee that a failed attempt can no longer be validated: no new payment is possible until it is confirmed. If you were not charged, contact support with the reference below.",
+      },
+      closed: {
+        label: "Payment page closed without payment",
+        lower: "closed without payment",
+        detail:
+          "SasPay confirms this page is closed and no transaction was started on it. You can choose a plan.",
+      },
+    },
+    abandon: {
+      change: "Change plan",
+      cancel: "Cancel this attempt",
+      changeTitle: "Change plan?",
+      cancelTitle: "Cancel this attempt?",
+      explain:
+        "Stock Master first checks this payment with SasPay. If no payment was started, the current payment page is closed at SasPay. If the payment already went through, it is confirmed and nothing is cancelled.",
+      confirmChange: "Close the SasPay page and change plan",
+      confirmCancel: "Close the SasPay page and cancel",
+      keep: "Keep this payment",
+      working: "Checking with SasPay…",
+      outcome: {
+        releasedChange:
+          "SasPay confirms the previous page is closed, with no transaction. Choose your plan.",
+        releasedCancel:
+          "Attempt cancelled: SasPay confirms the payment page is closed, with no transaction.",
+        "in-progress":
+          "A payment is being validated at SasPay: it cannot be cancelled. Wait for its result, then press “Check payment”.",
+        "attempt-recorded":
+          "A payment attempt was already recorded on this page. SasPay does not guarantee that a failed attempt can no longer be validated: the page was not closed. You can still pay on the same page; otherwise, changing plan will be possible once this attempt is resolved.",
+        "awaiting-resolution":
+          "This payment cannot be cancelled safely: it needs to be resolved (support). No new payment is possible in the meantime.",
+        "not-found-at-provider":
+          "SasPay has not found this payment page yet. It is not cancelled: try “Check payment” again in a moment.",
+        "provider-incomplete":
+          "SasPay's answer does not confirm that no transaction exists on this page: it was not closed. Try again in a moment; you can browse the plans meanwhile.",
+        "cancel-unconfirmed":
+          "SasPay did not confirm the page was closed: the attempt remains open. Try again in a moment.",
+      },
+      previewTitle: "Choose another plan",
+      previewBlocked:
+        "You can compare plans, but a new payment can only be validated once the current payment is resolved.",
+      close: "Close",
     },
     priceChanged: {
       text: "The price has changed since this page was opened: this payment is {{charged}}, not {{displayed}}. Check this amount before continuing.",
@@ -220,6 +311,28 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
     verify: "Check payment",
     openShop: "Go to my shop",
     newAttempt: "Try again",
+    receipt: {
+      open: "Receipt",
+      title: "Payment receipt",
+      notInvoice:
+        "This receipt confirms a collected payment. It is not an invoice.",
+      number: "Receipt no.",
+      paidAt: "Paid on",
+      organization: "Shop",
+      plan: "Plan",
+      amountPaid: "Amount paid",
+      method: "Payment method",
+      transaction: "Transaction reference",
+      period: "Subscription period",
+      periodRange: "from {{from}} to {{to}}",
+      inResolution:
+        "Payment received, being checked before it is applied: no period granted yet.",
+      refunded:
+        "Payment refunded on {{date}}: no period granted by this payment.",
+      print: "Print",
+      close: "Close",
+    },
+    chooseOffer: "Choose a plan",
     renew: "Renew",
     formTitle: "Pay with Mobile Money",
     lockedIntent:

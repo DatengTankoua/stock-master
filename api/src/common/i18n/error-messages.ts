@@ -354,6 +354,13 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     en: 'This operation has already been used for another request.',
   },
   'Paiement introuvable.': { en: 'Payment not found.' },
+  // 1-21E : changement de forfait sans page hébergée ; reçu non encaissé.
+  'Ce paiement ne peut pas être remplacé pour le moment.': {
+    en: 'This payment cannot be replaced at the moment.',
+  },
+  "Aucun reçu : ce paiement n'a pas été encaissé.": {
+    en: 'No receipt: this payment was not collected.',
+  },
   'Numéro Mobile Money camerounais invalide.': {
     en: 'Invalid Cameroonian Mobile Money number.',
   },
