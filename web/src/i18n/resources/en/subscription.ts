@@ -64,7 +64,7 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
     historyTitle: "Period history",
     historyEmpty: "No periods.",
     historyNote:
-      "History of access periods, without amounts: payments are listed in the payment history; invoices will be available later.",
+      "History of access periods, without amounts: payments and their receipts are listed in the payment history.",
   },
   manager: {
     checkUnavailable: "Check temporarily unavailable.",

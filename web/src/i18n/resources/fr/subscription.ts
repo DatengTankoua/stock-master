@@ -68,7 +68,7 @@ const subscriptionFr = {
     historyTitle: "Historique des périodes",
     historyEmpty: "Aucune période.",
     historyNote:
-      "Historique des périodes d'accès, sans montant : les paiements figurent dans l'historique des paiements ; les factures seront disponibles ultérieurement.",
+      "Historique des périodes d'accès, sans montant : les paiements et leurs reçus figurent dans l'historique des paiements.",
   },
   manager: {
     checkUnavailable: "Vérification momentanément indisponible.",

@@ -347,6 +347,10 @@ attribuée.
   (règle `@media print`, vérifiée en PDF, en session normale et limitée).
 - **E-mail :** non ajouté. Le reçu est disponible **dans l'application**
   seulement.
+- **Texte corrigé** sous « Historique des périodes » : « les factures seront
+  disponibles ultérieurement » devient « les paiements et leurs reçus
+  figurent dans l'historique des paiements » (FR/EN). Aucune facture n'est
+  annoncée.
 
 | Exigence | Réalisation |
 |---|---|
