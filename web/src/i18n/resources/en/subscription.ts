@@ -168,11 +168,12 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
         "Invalid Cameroonian Mobile Money number (e.g. 6XX XX XX XX).",
       "invalid-request": "Invalid request. Check the details you entered.",
       "not-found": "Payment not found for this shop.",
-      "rate-limited": "Too many requests. Wait before trying again.",
+      "rate-limited":
+        "Too many requests for this shop. Nothing is lost: wait a moment, then try again without creating a new payment.",
       "service-unavailable":
         "Online payment is unavailable at the moment. Try again later.",
       "status-unavailable":
-        "This payment cannot be checked at the moment. Try again later.",
+        "This payment cannot be checked at the moment. It is kept: try again later.",
       "confirmation-pending":
         "Payment being confirmed. Check again in a moment.",
       "change-unavailable":

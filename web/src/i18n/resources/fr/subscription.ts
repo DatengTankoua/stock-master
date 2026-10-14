@@ -175,11 +175,12 @@ const subscriptionFr = {
         "Numéro Mobile Money camerounais invalide (ex. 6XX XX XX XX).",
       "invalid-request": "Demande invalide. Vérifiez les informations saisies.",
       "not-found": "Paiement introuvable pour ce commerce.",
-      "rate-limited": "Trop de demandes. Patientez avant de réessayer.",
+      "rate-limited":
+        "Trop de demandes pour ce commerce. Rien n'est perdu : patientez un instant, puis réessayez sans créer de nouveau paiement.",
       "service-unavailable":
         "Le paiement en ligne est indisponible pour le moment. Réessayez plus tard.",
       "status-unavailable":
-        "Impossible de vérifier ce paiement pour le moment. Réessayez plus tard.",
+        "Impossible de vérifier ce paiement pour le moment. Il est conservé : réessayez plus tard.",
       "confirmation-pending":
         "Paiement en cours de confirmation. Vérifiez de nouveau dans un instant.",
       "change-unavailable":

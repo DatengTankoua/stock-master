@@ -256,8 +256,9 @@ export type PaymentErrorKind =
   | { kind: "invalid-request" }
   | { kind: "not-found" }
   | { kind: "rate-limited"; retryAfterMs: number | undefined }
-  | { kind: "service-unavailable" }
-  | { kind: "status-unavailable" }
+  /** 1-22D : délai indiqué par le serveur (`Retry-After`), s'il existe. */
+  | { kind: "service-unavailable"; retryAfterMs?: number }
+  | { kind: "status-unavailable"; retryAfterMs?: number }
   | { kind: "confirmation-pending" }
   /** 1-21E : aucune page hébergée à fermer (collecte Mobile Money). */
   | { kind: "change-unavailable" }
@@ -276,6 +277,14 @@ export function classifyPaymentError(
   const { status, data, headers } = error.response;
   const body = (data ?? {}) as { code?: unknown; paymentId?: unknown };
   const code = typeof body.code === "string" ? body.code : undefined;
+  const retryHeader = (headers as Record<string, unknown> | undefined)?.[
+    "retry-after"
+  ];
+  const retryAfterMs = parseRetryAfterMs(
+    typeof retryHeader === "string" ? retryHeader : undefined,
+    now,
+  );
+  const retry = retryAfterMs !== undefined ? { retryAfterMs } : {};
   switch (code) {
     case "PAYMENT_ALREADY_PENDING":
       return {
@@ -304,9 +313,9 @@ export function classifyPaymentError(
       };
     }
     case "PAYMENT_SERVICE_UNAVAILABLE":
-      return { kind: "service-unavailable" };
+      return { kind: "service-unavailable", ...retry };
     case "PAYMENT_STATUS_UNAVAILABLE":
-      return { kind: "status-unavailable" };
+      return { kind: "status-unavailable", ...retry };
     case "PAYMENT_CONFIRMATION_PENDING":
       return { kind: "confirmation-pending" };
     case "PAYMENT_CHANGE_UNAVAILABLE":

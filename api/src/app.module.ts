@@ -20,21 +20,23 @@ import { SupportModule } from './support/support.module';
 import { ReportsModule } from './reports/reports.module';
 import { LegalModule } from './legal/legal.module';
 import { StorageQuotaModule } from './storage-quota/storage-quota.module';
-import { validateEnvironment } from './common/config/jwt-secret-policy';
+import {
+  APP_CONFIG_OPTIONS,
+  appMongooseOptions,
+} from './common/config/app-config';
 
 @Module({
   imports: [
     // 1-22C : politique du secret applicatif vérifiée au chargement de la
     // configuration (API, Socket.IO et CLI) — refus fatal en production.
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
+    // 1-22D.1 : options substituées par le dispositif e2e (voir le module).
+    ConfigModule.forRoot(APP_CONFIG_OPTIONS),
     // 1-12D : politique Sharp du processus appliquée au bootstrap.
     ImageSecurityModule,
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
-      }),
+      useFactory: appMongooseOptions,
     }),
     S3Module,
     EventsModule,

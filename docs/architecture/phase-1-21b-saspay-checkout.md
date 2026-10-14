@@ -54,7 +54,8 @@ acceptées (incohérence documentaire relevée en 1-21A).
   | Réponse | État de la tentative |
   |---|---|
   | 400 / 422 | refus (`failed`, aucune session) |
-  | 401 / 403 / 404 / 429, requête non transmise | indisponible (`failed`, 503, aucune session) |
+  | 401 / 403 / 404, requête non transmise | indisponible (`failed`, 503, aucune session) |
+  | 429 | *Corrigé en 1-22D.2 :* **incertaine**. Aucune source n'établit qu'un `429` exclut la création d'une session (l'ancien classement « indisponible, aucune session » était une déduction). |
   | 409, 5xx, réponse perdue, page refusée | **incertaine**, sans seconde session automatique |
 
 - **Aucun secret côté navigateur.** La clé reste dans l'en-tête serveur.

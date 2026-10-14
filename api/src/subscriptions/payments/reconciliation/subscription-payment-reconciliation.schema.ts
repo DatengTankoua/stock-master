@@ -27,6 +27,12 @@ export enum ReconciliationReason {
    * prestataire), confirmé à l'opérateur ; référence du ticket exigée.
    */
   REFUNDED_OUTSIDE = 'refunded-outside',
+  /**
+   * 1-22D.3 — Le prestataire confirme par écrit (ticket ou référence de
+   * confirmation, exigée) qu'aucune session payable ni aucun encaissement
+   * n'existe pour cette opération.
+   */
+  PROVIDER_NO_SESSION = 'provider-no-session',
 }
 
 /** Action appliquée : déduite du statut VÉRIFIÉ, jamais saisie. */
@@ -36,6 +42,16 @@ export enum ReconciliationAction {
   FAIL = 'fail',
   /** 1-21E — remboursement externe consigné (aucune période, définitif). */
   RECORD_REFUND = 'record-refund',
+  /**
+   * 1-22D.3 — clôture EXCEPTIONNELLE d'une création incertaine sans session
+   * retrouvée (preuve externe) : aucune référence prestataire consultée.
+   */
+  CLOSE_WITHOUT_SESSION = 'close-without-session',
+}
+
+/** 1-22D.3 — Champs de session consultée : absents d'une clôture sans session. */
+function sessionConsulted(this: { action?: ReconciliationAction }): boolean {
+  return this.action !== ReconciliationAction.CLOSE_WITHOUT_SESSION;
 }
 
 /**
@@ -104,9 +120,17 @@ export class SubscriptionPaymentReconciliation {
   })
   action: ReconciliationAction;
 
-  /** Référence CamPay consultée (normalisée en minuscules). */
-  @Prop({ type: String, required: true, immutable: true })
-  consultedReference: string;
+  /**
+   * Référence prestataire consultée (normalisée en minuscules) ; `null`
+   * seulement pour une clôture sans session (1-22D.3).
+   */
+  @Prop({
+    type: String,
+    required: sessionConsulted,
+    default: null,
+    immutable: true,
+  })
+  consultedReference: string | null;
 
   /** `true` : la référence a été RATTACHÉE par cette opération. */
   @Prop({ type: Boolean, required: true, immutable: true })
@@ -131,8 +155,13 @@ export class SubscriptionPaymentReconciliation {
   })
   afterStatus: SubscriptionPaymentStatus;
 
-  @Prop({ type: String, required: true, immutable: true })
-  afterProviderReference: string;
+  @Prop({
+    type: String,
+    required: sessionConsulted,
+    default: null,
+    immutable: true,
+  })
+  afterProviderReference: string | null;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null, immutable: true })
   afterPeriodId: Types.ObjectId | null;
@@ -141,8 +170,13 @@ export class SubscriptionPaymentReconciliation {
   @Prop({ type: String, required: true, immutable: true })
   verifiedState: string;
 
-  @Prop({ type: String, required: true, immutable: true })
-  verifiedProviderReference: string;
+  @Prop({
+    type: String,
+    required: sessionConsulted,
+    default: null,
+    immutable: true,
+  })
+  verifiedProviderReference: string | null;
 
   @Prop({ type: String, required: true, immutable: true })
   verifiedMerchantReference: string;
