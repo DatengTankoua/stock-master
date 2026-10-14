@@ -163,6 +163,20 @@ Sans Playwright ou Chromium disponibles, la commande répond « AUCUNE
 campagne exécutée » (code 3). Les scénarios redémarrent l'API et changent
 de fournisseur eux-mêmes ; lancer la campagne sur une stack dédiée.
 
+### En-têtes de sécurité et CSP (1-22F)
+
+```bash
+RECIPE_TURNSTILE_SITE_KEY=1x00000000000000000000AA node api/test/recipe/recipe.js start
+RECIPE_PLAYWRIGHT_DIR=<dir> node api/test/recipe/csp-scenarios.js [PUB TURNSTILE APP PAY NAV BLOCK PWA]
+```
+
+Violations CSP relevées dans chaque page, fonctionnalités vérifiées (pages
+FR/EN, Turnstile servi localement sous son origine officielle, photos
+signées, temps réel, export, départ SasPay simulé et reçu, script injecté
+bloqué, mise à jour v5 → v6 du service worker et hors ligne). Aucun appel
+à Cloudflare ni à SasPay : ces hôtes sont servis ou refusés par le
+navigateur de test.
+
 ### Notifications push (1-16A)
 
 L'API de recette active les notifications avec une paire VAPID **fictive**

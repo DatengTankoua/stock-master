@@ -195,6 +195,16 @@ function webEnv(extra = {}) {
     NEXT_PUBLIC_REGISTRATION_ENABLED: 'true',
     // 1-18C : case anti-robot locale (même simulation que l'API).
     ...(simulatedAntiBot() ? { NEXT_PUBLIC_TURNSTILE_SIMULATED: 'true' } : {}),
+    // 1-22F : clé de site PUBLIQUE fictive, pour éprouver la CSP du widget
+    // Turnstile avec un script et une iframe servis localement par le
+    // navigateur de test (aucun appel à Cloudflare).
+    ...(process.env.RECIPE_TURNSTILE_SITE_KEY && !simulatedAntiBot()
+      ? {
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.RECIPE_TURNSTILE_SITE_KEY,
+        }
+      : {}),
+    // 1-22F : origine des images signées (stockage simulé) pour la CSP.
+    CSP_IMAGE_ORIGINS: process.env.RECIPE_S3_SIGNING_ENDPOINT || STORAGE_URL,
     NEXT_TELEMETRY_DISABLED: '1',
     __NEXT_PROCESSED_ENV: 'true',
     ...extra,
