@@ -22,6 +22,7 @@ import {
 import {
   assertReportMonth,
   MonthlyHistoryService,
+  ReportTooLargeError,
 } from './monthly-history.service';
 import { renderMonthlyHistoryXlsx } from './monthly-history-xlsx';
 import { renderMonthlyHistoryPdf } from './monthly-history-pdf';
@@ -30,8 +31,13 @@ import { PdfUnsupportedTextError } from './pdf/pdf-fonts';
 import type { Request, Response } from 'express';
 import { localeFromRequest, type AppLocale } from '../common/i18n/locale';
 import {
+  REPORT_GENERATION_BUSY,
   REPORT_RATE_LIMITED,
+  REPORT_REQUESTS_LIMITED,
+  REPORT_TOO_LARGE,
   ReportGenerationLimiter,
+  reportCost,
+  type ReportGenerationLimits,
 } from './report-generation-limiter';
 
 export const REPORT_FORMATS = {
@@ -62,6 +68,68 @@ export function pdfUnsupportedException(
     message,
     characters: error.characters.slice(0, CITED_CHARACTERS),
   });
+}
+
+/**
+ * 1-22E — 422 : le mois dépasse le volume d'un export dans ce format.
+ * Aucun fichier, même partiel. Action proposée : l'Excel quand seul le PDF
+ * est trop volumineux ; sinon, demander de l'aide à l'assistance, sans
+ * promesse d'export (aucun outil ne produit un export au-delà du plafond ;
+ * l'interface ne permet pas de période plus courte qu'un mois).
+ */
+export function reportTooLargeException(
+  format: ReportFormat,
+  rows: number,
+  limits: Pick<ReportGenerationLimits, 'maxRows'>,
+  locale: AppLocale = 'fr',
+): UnprocessableEntityException {
+  const maxRows = limits.maxRows[format];
+  const alternative =
+    format === 'pdf' && rows <= limits.maxRows.xlsx ? 'xlsx' : 'support';
+  const n = (value: number) =>
+    value.toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR');
+  const label = format === 'pdf' ? 'PDF' : 'Excel';
+  const message =
+    locale === 'en'
+      ? `This month has ${n(rows)} lines (sales, corrections and cancellations), above the ${n(maxRows)}-line limit for a ${label} export. No file was created. ${alternative === 'xlsx' ? `Download the Excel version, which accepts up to ${n(limits.maxRows.xlsx)} lines.` : 'You can contact support if you need help.'}`
+      : `Ce mois compte ${n(rows)} lignes (ventes, corrections et annulations), au-delà de la limite de ${n(maxRows)} lignes d'un export ${label}. Aucun fichier n'a été créé. ${alternative === 'xlsx' ? `Téléchargez la version Excel, qui accepte jusqu'à ${n(limits.maxRows.xlsx)} lignes.` : "Vous pouvez contacter l'assistance si vous avez besoin d'aide."}`;
+  return new UnprocessableEntityException({
+    code: REPORT_TOO_LARGE,
+    message,
+    format,
+    rows,
+    maxRows,
+    alternative,
+  });
+}
+
+/** 429 (quotas) ou 503 (capacité), avec `Retry-After`. */
+function limitException(
+  res: Response,
+  refusal: { code: string; retryAfterSeconds: number },
+  locale: AppLocale,
+): HttpException {
+  res.setHeader('Retry-After', String(refusal.retryAfterSeconds));
+  res.setHeader('Cache-Control', 'no-store');
+  const quota =
+    refusal.code === REPORT_RATE_LIMITED ||
+    refusal.code === REPORT_REQUESTS_LIMITED;
+  const minutes = Math.ceil(refusal.retryAfterSeconds / 60);
+  const en = locale === 'en';
+  return new HttpException(
+    {
+      code: refusal.code,
+      message: quota
+        ? en
+          ? `Too many history downloads in a short time. Try again in ${minutes} min.`
+          : `Trop de téléchargements d'historique en peu de temps. Réessayez dans ${minutes} min.`
+        : en
+          ? 'Other reports are being prepared. Try again in a few seconds.'
+          : "D'autres rapports sont en cours de préparation. Réessayez dans quelques secondes.",
+      retryAfterSeconds: refusal.retryAfterSeconds,
+    },
+    quota ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.SERVICE_UNAVAILABLE,
+  );
 }
 
 /** Seuls ces rôles d'ORGANISATION téléchargent l'historique (1-16D). */
@@ -139,6 +207,8 @@ export class MonthlyHistoryController {
         result.organizationSlug,
         localeFromRequest(request),
       ),
+      // 1-22E : l'interface prévient avant de lancer un export refusé.
+      maxRows: this.limiter.limits.maxRows,
     };
   }
 
@@ -164,37 +234,74 @@ export class MonthlyHistoryController {
     }
     const now = new Date();
     assertReportMonth(month, now);
+    const { limits } = this.limiter;
 
-    // Quota et simultanéité APRÈS les contrôles d'accès et de saisie : une
+    // 1-22E : admission de la DEMANDE avant toute requête coûteuse (le
+    // comptage lit toutes les ventes du commerce) : quota de demandes et
+    // comptages simultanés bornés. Accès et saisie déjà vérifiés : une
     // requête refusée ou invalide ne consomme rien.
-    const slot = this.limiter.acquire(context.userId, context.organizationId);
-    if (!slot.admitted) {
-      res.setHeader('Retry-After', String(slot.retryAfterSeconds));
-      res.setHeader('Cache-Control', 'no-store');
-      const rateLimited = slot.code === REPORT_RATE_LIMITED;
-      throw new HttpException(
-        {
-          code: slot.code,
-          message: rateLimited
-            ? `Trop de téléchargements d'historique en peu de temps. Réessayez dans ${Math.ceil(slot.retryAfterSeconds / 60)} min.`
-            : "D'autres rapports sont en cours de préparation. Réessayez dans quelques secondes.",
-          retryAfterSeconds: slot.retryAfterSeconds,
-        },
-        rateLimited
-          ? HttpStatus.TOO_MANY_REQUESTS
-          : HttpStatus.SERVICE_UNAVAILABLE,
-      );
+    const admission = this.limiter.admitRequest(
+      context.userId,
+      context.organizationId,
+    );
+    if (!admission.admitted) {
+      throw limitException(res, admission, locale);
     }
+    let slot: ReturnType<ReportGenerationLimiter['acquire']>;
     try {
-      const history = await this.history.build(context, month, now);
+      // Volume compté AVANT toute lecture des ventes : un mois trop
+      // volumineux est refusé sans rien charger ni consommer le quota de
+      // génération.
+      const rows = await this.history.countRows(context.organizationId, month);
+      if (rows > limits.maxRows[format]) {
+        throw reportTooLargeException(format, rows, limits, locale);
+      }
+      // Quota et simultanéité des générations ; capacité globale en coût
+      // (lignes comptées × coût du format), ajustée après la lecture.
+      slot = this.limiter.acquire(
+        context.userId,
+        context.organizationId,
+        reportCost(limits, format, rows),
+      );
+    } finally {
+      admission.release();
+    }
+    if (!slot.admitted) {
+      throw limitException(res, slot, locale);
+    }
+    const generation = slot;
+    try {
       const labels = REPORT_LABELS[locale];
       let file: Buffer;
+      let slug: string;
       try {
+        // Lecture plafonnée à `maxRows` ; le coût réservé au comptage est
+        // remplacé, avant le rendu, par celui des lignes réellement
+        // chargées (ventes ou mouvements ajoutés depuis).
+        const history = await this.history.build(context, month, now, {
+          maxRows: limits.maxRows[format],
+          admitRows: (rows) => {
+            if (!generation.resize(reportCost(limits, format, rows))) {
+              throw limitException(
+                res,
+                {
+                  code: REPORT_GENERATION_BUSY,
+                  retryAfterSeconds: limits.busyRetryAfterSeconds,
+                },
+                locale,
+              );
+            }
+          },
+        });
+        slug = history.organization.slug;
         file =
           format === 'xlsx'
             ? renderMonthlyHistoryXlsx(history, labels)
             : renderMonthlyHistoryPdf(history, labels);
       } catch (error) {
+        if (error instanceof ReportTooLargeError) {
+          throw reportTooLargeException(format, error.rows, limits, locale);
+        }
         if (error instanceof PdfUnsupportedTextError) {
           throw pdfUnsupportedException(error, locale);
         }
@@ -204,11 +311,11 @@ export class MonthlyHistoryController {
       // maintenant, l'envoi ne génère plus rien.
       return new StreamableFile(file, {
         type: REPORT_FORMATS[format],
-        disposition: `attachment; filename="${reportFilename(history.organization.slug, month, format, locale)}"`,
+        disposition: `attachment; filename="${reportFilename(slug, month, format, locale)}"`,
         length: file.length,
       });
     } finally {
-      slot.release();
+      generation.release();
     }
   }
 }

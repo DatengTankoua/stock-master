@@ -23,6 +23,7 @@ import type { OrganizationMembershipDocument } from './../src/organizations/sche
 import { monthBounds } from './../src/analytics/month-range';
 import { localMonthKey } from './../src/analytics/insights';
 import { MonthlyHistoryService } from './../src/reports/monthly-history.service';
+import { REPORT_GENERATION_LIMITS } from './../src/reports/report-generation-limiter';
 import {
   startEphemeralMongo,
   stopEphemeralMongoSafe,
@@ -558,6 +559,8 @@ describe('E2E 1-16E — aide à la décision (Analyse)', () => {
         permissions: [],
       },
       body.period.month,
+      new Date(),
+      { maxRows: REPORT_GENERATION_LIMITS.maxRows.xlsx },
     );
     expect(body.summary.revenue).toBe(history.summary.revenue);
     expect(body.summary.salesCount).toBe(history.summary.salesCount);

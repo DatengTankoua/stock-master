@@ -15,6 +15,22 @@ export interface MonthlyHistoryMonths {
   currentMonth: string;
   filenamePrefix: string;
   months: Array<{ month: string; salesCount: number }>;
+  /** 1-22E : lignes admises par export (absent d'une API antérieure). */
+  maxRows?: Record<MonthlyHistoryFormat, number>;
+}
+
+/**
+ * 1-22E — format refusé d'avance pour ce nombre de ventes. Indication
+ * seulement : le serveur compte aussi corrections et annulations, et
+ * reste seul juge (422 `REPORT_TOO_LARGE`).
+ */
+export function exceedsMonthlyHistoryLimit(
+  months: MonthlyHistoryMonths,
+  salesCount: number,
+  format: MonthlyHistoryFormat,
+): boolean {
+  const max = months.maxRows?.[format];
+  return max !== undefined && salesCount > max;
 }
 
 /** Même règle que le serveur : propriétaire ou administrateur, avec les droits. */
@@ -69,6 +85,24 @@ export type MonthlyHistoryMessage = string | ((t: AnalyticsT) => string);
 export async function describeMonthlyHistoryError(
   error: unknown,
 ): Promise<MonthlyHistoryMessage> {
+  return (await describeMonthlyHistoryFailure(error)).message;
+}
+
+/** Échec décrit, et s'il faut proposer l'assistance (1-22E). */
+export async function describeMonthlyHistoryFailure(
+  error: unknown,
+): Promise<{ message: MonthlyHistoryMessage; suggestSupport: boolean }> {
+  const message = await describeFailure(error);
+  return {
+    message: typeof message === "object" ? message.message : message,
+    suggestSupport: typeof message === "object",
+  };
+}
+
+/** Un objet `{ message }` signale qu'il faut proposer l'assistance. */
+async function describeFailure(
+  error: unknown,
+): Promise<MonthlyHistoryMessage | { message: MonthlyHistoryMessage }> {
   if (!axios.isAxiosError(error)) {
     return (t) => t("monthly.errors.generic");
   }
@@ -77,11 +111,12 @@ export async function describeMonthlyHistoryError(
   }
   let code: unknown;
   let serverMessage: unknown;
+  let parsed: Record<string, unknown> | null = null;
   const body = error.response.data as unknown;
   try {
-    const parsed = body instanceof Blob ? JSON.parse(await body.text()) : body;
-    code = (parsed as { code?: unknown } | null)?.code;
-    serverMessage = (parsed as { message?: unknown } | null)?.message;
+    parsed = body instanceof Blob ? JSON.parse(await body.text()) : body;
+    code = parsed?.code;
+    serverMessage = parsed?.message;
   } catch {
     code = undefined;
   }
@@ -102,10 +137,31 @@ export async function describeMonthlyHistoryError(
       ? serverMessage
       : (t) => t("monthly.errors.pdfCharacters");
   }
-  if (code === "REPORT_RATE_LIMITED") {
+  // 1-22E : quota des demandes (comptage compris) ou des générations.
+  if (code === "REPORT_RATE_LIMITED" || code === "REPORT_REQUESTS_LIMITED") {
     return typeof serverMessage === "string"
       ? serverMessage
       : (t) => t("monthly.errors.rateLimited");
+  }
+  // 1-22E : mois trop volumineux pour ce format ; aucun fichier créé.
+  // Action réelle : l'Excel si seul le PDF dépasse, sinon l'assistance.
+  if (code === "REPORT_TOO_LARGE") {
+    const rows = Number(parsed?.rows);
+    const max = Number(parsed?.maxRows);
+    const format = parsed?.format === "pdf" ? "PDF" : "Excel";
+    const n = (value: number) =>
+      new Intl.NumberFormat(currentLocale()).format(value);
+    if (!Number.isFinite(rows) || !Number.isFinite(max)) {
+      return { message: (t) => t("monthly.errors.tooLargeGeneric") };
+    }
+    if (parsed?.alternative === "xlsx") {
+      return (t) =>
+        t("monthly.errors.tooLargePdf", { rows: n(rows), max: n(max) });
+    }
+    return {
+      message: (t) =>
+        t("monthly.errors.tooLarge", { rows: n(rows), max: n(max), format }),
+    };
   }
   if (code === "REPORT_GENERATION_BUSY") {
     return (t) => t("monthly.errors.busy");

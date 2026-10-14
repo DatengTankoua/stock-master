@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useMessage } from "@/i18n/use-message";
 import { useAnalytics } from "./use-analytics";
 import { DownloadIcon, FileSpreadsheetIcon, FileTextIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useOfflineSales } from "@/contexts/offline-sales-context";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+import { useOrganizationShell } from "@/contexts/organization-shell-context";
 import {
   describeMonthlyHistoryError,
+  describeMonthlyHistoryFailure,
   downloadMonthlyHistory,
+  exceedsMonthlyHistoryLimit,
   fetchMonthlyHistoryMonths,
   type MonthlyHistoryFormat,
   type MonthlyHistoryMonths,
@@ -46,6 +50,11 @@ export function MonthlyHistoryDownload() {
     "success",
   );
   const lock = useRef(false);
+  // 1-22E : assistance proposée seulement si le compte peut l'écrire.
+  const { authContext } = useOrganizationShell();
+  const canContactSupport =
+    authContext?.effectivePermissions.includes("support.contact") ?? false;
+  const [suggestSupport, setSuggestSupport] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,12 +81,18 @@ export function MonthlyHistoryDownload() {
   }, [reloadKey, setLoadError]);
 
   const selected = months?.months.find((m) => m.month === month);
+  // 1-22E : format refusé d'avance (volume au-delà du plafond annoncé).
+  const overLimit = (format: MonthlyHistoryFormat) =>
+    !!months &&
+    !!selected &&
+    exceedsMonthlyHistoryLimit(months, selected.salesCount, format);
 
   const handleDownload = async (format: MonthlyHistoryFormat) => {
     if (!months || !month || lock.current) return;
     lock.current = true;
     setBusy(format);
     setMessageText(null);
+    setSuggestSupport(false);
     try {
       await downloadMonthlyHistory(month, format, months.filenamePrefix);
       setMessageKind("success");
@@ -89,8 +104,10 @@ export function MonthlyHistoryDownload() {
         }),
       );
     } catch (error) {
+      const failure = await describeMonthlyHistoryFailure(error);
       setMessageKind("error");
-      setMessageText(await describeMonthlyHistoryError(error));
+      setMessageText(failure.message);
+      setSuggestSupport(failure.suggestSupport);
     } finally {
       lock.current = false;
       setBusy(null);
@@ -145,6 +162,7 @@ export function MonthlyHistoryDownload() {
                     onChange={(e) => {
                       setMonth(e.target.value);
                       setMessageText(null);
+                      setSuggestSupport(false);
                     }}
                     disabled={busy !== null}
                     className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
@@ -169,7 +187,9 @@ export function MonthlyHistoryDownload() {
                       key={format}
                       type="button"
                       variant={format === "xlsx" ? "default" : "outline"}
-                      disabled={!online || !month || busy !== null}
+                      disabled={
+                        !online || !month || busy !== null || overLimit(format)
+                      }
                       aria-busy={busy === format}
                       onClick={() => void handleDownload(format)}
                     >
@@ -196,6 +216,21 @@ export function MonthlyHistoryDownload() {
                   {t("monthly.emptyMonth")}
                 </p>
               )}
+              {overLimit("xlsx") ? (
+                <p className="text-sm text-muted-foreground">
+                  {t("monthly.limitAll", {
+                    max: a.number(months.maxRows?.xlsx ?? 0),
+                  })}
+                </p>
+              ) : (
+                overLimit("pdf") && (
+                  <p className="text-sm text-muted-foreground">
+                    {t("monthly.limitPdf", {
+                      max: a.number(months.maxRows?.pdf ?? 0),
+                    })}
+                  </p>
+                )
+              )}
               {month === months.currentMonth && (
                 <p className="text-sm text-muted-foreground">
                   {t("monthly.currentMonth")}
@@ -220,6 +255,14 @@ export function MonthlyHistoryDownload() {
                   </p>
                 )}
               </div>
+              {canContactSupport && (overLimit("xlsx") || suggestSupport) && (
+                <Link
+                  href="/app/organization/support?depuis=/app/analytics"
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  {t("monthly.contactSupport")}
+                </Link>
+              )}
               <p className="text-xs text-muted-foreground">
                 {t("monthly.pendingNote")}
                 {unfinalizedCount > 0 &&
