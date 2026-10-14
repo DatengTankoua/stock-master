@@ -26,6 +26,7 @@ import {
   updateAccountLocale,
   getApiErrorCode,
   getApiErrorMessage,
+  isNetworkError,
   readSubscriptionInactive,
   SUBSCRIPTION_INACTIVE,
   type SelectableOrganization,
@@ -84,6 +85,9 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** 1-22C.1 : serveur injoignable (aucune réponse HTTP), jamais un refus. */
+export const LOGIN_NETWORK_UNAVAILABLE = "NETWORK_UNAVAILABLE";
 
 /** Échec de connexion : message affichable + code stable éventuel de l'API. */
 export class LoginError extends Error {
@@ -217,7 +221,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         // 1-13A : code conservé (ex. EMAIL_NOT_VERIFIED) — aucune session
         // créée, aucun token ni utilisateur stocké.
-        throw new LoginError(getApiErrorMessage(err), getApiErrorCode(err));
+        throw new LoginError(
+          getApiErrorMessage(err),
+          isNetworkError(err)
+            ? LOGIN_NETWORK_UNAVAILABLE
+            : getApiErrorCode(err),
+        );
       }
     },
     [markInstalled],

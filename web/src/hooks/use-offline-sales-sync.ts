@@ -16,9 +16,11 @@ const SYNC_INTERVAL_MS = 60_000;
 // 1-11C.2 — Déclencheurs du moteur de synchronisation des ventes, montés
 // dans le shell /app uniquement. Partition = contexte SERVEUR résolu
 // (`GET /auth/context`) ; `null` (hors ligne, refus, chargement) → inactif.
-// Déclencheurs : montage, `online`, retour visible, ajout dans l'outbox
+// Déclencheurs : montage, retour visible, ajout dans l'outbox
 // (BroadcastChannel + même onglet), demande locale, échéance de backoff et
-// intervalle 60 s tant que le shell est monté. Jamais de relance immédiate
+// intervalle 60 s tant que le shell est monté. 1-22C.1 : plus de passe
+// directe sur `online` — le shell retire le contexte jusqu'à sa relecture
+// serveur, puis le rend (nouveau montage → passe). Jamais de relance immédiate
 // (≥ 2 s). Un changement du token dans un autre onglet (`storage`) annule la
 // passe en cours. File vide → aucune requête réseau ni verrou.
 export function useOfflineSalesSync(
@@ -75,7 +77,6 @@ export function useOfflineSalesSync(
     };
 
     trigger();
-    window.addEventListener("online", trigger);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("storage", onStorage);
     const unsubscribeOutbox = onOutboxChanged((event) => {
@@ -86,7 +87,6 @@ export function useOfflineSalesSync(
 
     return () => {
       disposed = true;
-      window.removeEventListener("online", trigger);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("storage", onStorage);
       unsubscribeOutbox();

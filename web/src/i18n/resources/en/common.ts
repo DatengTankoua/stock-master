@@ -24,7 +24,22 @@ const commonEn: Translation<typeof commonFr> = {
   },
   offline: {
     title: "You are offline",
-    text: "Business data (catalogue, sales, analytics) and any change need an Internet connection. Reconnect, then try again.",
+    text: "This page needs an Internet connection. Try again once you are connected, or open the pages saved on this device.",
+    availableTitle: "Available offline",
+    links: {
+      home: "Home",
+      pricing: "Pricing",
+      guide: "User guide",
+      contact: "Contact",
+      terms: "Terms of use",
+      catalog:
+        "Offline catalogue and sales (account already signed in on this device)",
+    },
+  },
+  offlineCopy: {
+    savedAt: "Version saved on this device on {{date}}.",
+    text: "The prices and terms shown may have changed since. Signing up, logging in and payment need an Internet connection.",
+    refresh: "Refresh",
   },
   actions: {
     retry: "Try again",

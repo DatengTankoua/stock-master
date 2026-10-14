@@ -78,6 +78,17 @@ function isOnline(): boolean {
   return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
+// 1-22C.1 : copie enregistrée d'une page publique (servie par le service
+// worker, texte rendu côté serveur dans une seule langue) et sans aucun
+// champ de saisie : la recharger ne perd rien et sert la copie de l'autre
+// langue (ou la page à jour si le réseau est revenu).
+function isReloadableOfflineCopy(): boolean {
+  return (
+    document.documentElement.dataset.offlineCopy !== undefined &&
+    document.querySelector("form, input, textarea, select") === null
+  );
+}
+
 export function LocaleProvider({
   initialLocale,
   children,
@@ -114,6 +125,10 @@ export function LocaleProvider({
       window.dispatchEvent(
         new CustomEvent(LOCALE_CHANGE_EVENT, { detail: next }),
       );
+      if (isReloadableOfflineCopy()) {
+        void writeDeviceLocale(next).then(() => window.location.reload());
+        return;
+      }
       refreshServerText();
     },
     [apply, refreshServerText],
@@ -121,7 +136,7 @@ export function LocaleProvider({
 
   // Langue lue par le service worker pour son message de repli.
   useEffect(() => {
-    writeDeviceLocale(locale);
+    void writeDeviceLocale(locale);
   }, [locale]);
 
   useEffect(() => {

@@ -309,6 +309,9 @@ export default function AppShellLayout({
   // recharger toute la page (ex. après édition du branding, 1-9C).
   const [refreshTick, setRefreshTick] = useState(0);
   const refreshShell = () => setRefreshTick((v) => v + 1);
+  // 1-22C.1 : retour du réseau → synchronisation des ventes suspendue
+  // jusqu'à la relecture du contexte serveur (un refus est appliqué avant).
+  const [reconnectPending, setReconnectPending] = useState(false);
   const [converterOpen, setConverterOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   // 1-14C.2 — accès COMMERCIAL bloqué (abonnement inactif) pour la session
@@ -362,7 +365,10 @@ export default function AppShellLayout({
   const sessionKey = user ? `${user._id}:${sessionVersion}` : null;
   const contextIsCurrent = contextSessionKey === sessionKey;
   useOfflineSalesSync(
-    contextIsCurrent && !commercialBlock && hasApplicationAccess(authContext)
+    contextIsCurrent &&
+      !reconnectPending &&
+      !commercialBlock &&
+      hasApplicationAccess(authContext)
       ? authContext
       : null,
   );
@@ -387,13 +393,17 @@ export default function AppShellLayout({
 
   // 1-11C.3 : shell ouvert hors ligne (contexte serveur absent) → au retour
   // du réseau, le contexte est rechargé ; il réactive la synchronisation.
-  const needsContext = !authContext;
+  // 1-22C.1 : contexte déjà présent aussi (page restée ouverte pendant la
+  // coupure) : relu avant toute nouvelle synchronisation.
   useEffect(() => {
-    if (!user || !needsContext) return;
-    const onOnline = () => setRefreshTick((v) => v + 1);
+    if (!user) return;
+    const onOnline = () => {
+      setReconnectPending(true);
+      setRefreshTick((v) => v + 1);
+    };
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [user, needsContext]);
+  }, [user]);
 
   // Hors ligne : réseau coupé, ou shell ouvert sans contexte serveur
   // (même définition que `useOfflineSales().offline`).
@@ -480,6 +490,7 @@ export default function AppShellLayout({
       } catch (reason) {
         contextSettled = true;
         if (cancelled) return;
+        setReconnectPending(false);
         setAuthContext(null);
         setOrganization(null);
         // Distinction stricte : une vraie panne réseau peut retomber sur
@@ -520,6 +531,7 @@ export default function AppShellLayout({
       };
       const token = getToken();
       setAuthContext(ctx);
+      setReconnectPending(false);
       setOfflineIdentity(null);
       setAccessRefused(false);
       setContextSessionKey(currentSession);
