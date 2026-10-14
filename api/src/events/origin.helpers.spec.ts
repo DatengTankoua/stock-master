@@ -1,6 +1,10 @@
+import { createRequire } from 'module';
 import {
+  HTTP_CORS_ALLOWED_HEADERS,
+  HTTP_CORS_METHODS,
   LOCAL_DEV_ORIGINS,
   OriginConfigError,
+  buildHttpCorsOptions,
   buildOriginAllowlist,
   parseCORSOrigin,
 } from './origin.helpers';
@@ -251,4 +255,77 @@ describe('origin.helpers — buildOriginAllowlist', () => {
     });
     expect(captured).toBeUndefined();
   });
+});
+
+/**
+ * 1-22H.1 — `Retry-After` exposé aux origines autorisées. Le middleware
+ * `cors` réellement chargé par `@nestjs/platform-express` (celui de
+ * `app.enableCors`) est exécuté sur une réponse simple.
+ */
+describe('origin.helpers — buildHttpCorsOptions (en-têtes exposés)', () => {
+  type Headers = Record<string, string>;
+  type CorsMiddleware = (
+    req: { method: string; headers: Headers },
+    res: {
+      statusCode: number;
+      setHeader(name: string, value: string): void;
+      getHeader(name: string): string | undefined;
+      end(): void;
+    },
+    next: (err?: Error) => void,
+  ) => void;
+  const platformRequire = createRequire(
+    require.resolve('@nestjs/platform-express/package.json'),
+  );
+  const cors = platformRequire('cors') as (options: unknown) => CorsMiddleware;
+  const ALLOWED = 'https://app.example.com';
+  const options = buildHttpCorsOptions(buildOriginAllowlist([ALLOWED]));
+
+  /** En-têtes posés par le middleware sur une requête simple (GET/POST). */
+  function simpleResponse(origin?: string): Promise<Headers> {
+    const headers: Headers = {};
+    const res = {
+      statusCode: 200,
+      setHeader: (name: string, value: string) => {
+        headers[name.toLowerCase()] = value;
+      },
+      getHeader: (name: string) => headers[name.toLowerCase()],
+      end: () => undefined,
+    };
+    return new Promise((resolve, reject) =>
+      cors(options)(
+        { method: 'POST', headers: origin ? { origin } : {} },
+        res,
+        (err) => (err ? reject(err) : resolve(headers)),
+      ),
+    );
+  }
+
+  it('expose uniquement Retry-After ; méthodes, en-têtes de requête et absence de credentials inchangés', () => {
+    expect([...options.exposedHeaders]).toEqual(['Retry-After']);
+    expect(options.methods).toBe(HTTP_CORS_METHODS);
+    expect(options.allowedHeaders).toBe(HTTP_CORS_ALLOWED_HEADERS);
+    expect(options).not.toHaveProperty('credentials');
+  });
+
+  it('origine autorisée : Allow-Origin exact et Retry-After lisible', async () => {
+    const headers = await simpleResponse(ALLOWED);
+    expect(headers['access-control-allow-origin']).toBe(ALLOWED);
+    expect(headers['access-control-expose-headers']).toBe('Retry-After');
+    expect(headers['access-control-allow-credentials']).toBeUndefined();
+  });
+
+  it.each([
+    ['origine interdite', 'https://attacker.example.com'],
+    ['origine voisine (sous-domaine)', 'https://evil.app.example.com'],
+    ['sans Origin', undefined],
+  ])(
+    '%s : aucun en-tête CORS, donc aucun accès gagné',
+    async (_label, origin) => {
+      const headers = await simpleResponse(origin);
+      expect(headers['access-control-allow-origin']).toBeUndefined();
+      expect(headers['access-control-expose-headers']).toBeUndefined();
+      expect(headers['access-control-allow-credentials']).toBeUndefined();
+    },
+  );
 });

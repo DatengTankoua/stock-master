@@ -15,7 +15,16 @@ import * as path from 'path';
  *   (body-parser : `allowPrototypes: true` sans `comma` ; Express 5 : query
  *   parser `simple`). Les deux charges des avis sont donc testées de façon
  *   isolée sur la copie utilisée par body-parser et Express.
+ * - 1-22H, GHSA-jqcg-44mw-7w3h (proxy-addr < 2.0.8) : seul un sous-réseau
+ *   IPv6 court (ex. `::ffff:10.0.0.0/8`) est concerné ; `trust-proxy.ts`
+ *   n'accepte que des adresses exactes ou un nombre de sauts. Garde de
+ *   version, charge de l'avis et témoin « adresse exacte » sur la copie
+ *   utilisée par Express (`req.ip`).
  */
+
+type ProxyAddr = {
+  compile: (trust: string[]) => (address: string, hop: number) => boolean;
+};
 
 type Qs = {
   parse: (input: string, options?: Record<string, unknown>) => unknown;
@@ -85,6 +94,31 @@ describe('Dépendances runtime API — avis corrigés (1-12F)', () => {
     ['body-parser', bodyParserRequire],
   ])('qs chargé par %s ≥ 6.16.0', (_parent, req) => {
     expect(atLeast(versionOf(req, 'qs'), '6.16.0')).toBe(true);
+  });
+
+  describe('proxy-addr utilisé par express (1-22H)', () => {
+    const proxyAddr = expressRequire('proxy-addr') as ProxyAddr;
+
+    it('proxy-addr chargé par express ≥ 2.0.8 (GHSA-jqcg-44mw-7w3h)', () => {
+      expect(atLeast(versionOf(expressRequire, 'proxy-addr'), '2.0.8')).toBe(
+        true,
+      );
+    });
+
+    it.each([['::ffff:10.0.0.0/8'], ['::/1']])(
+      'sous-réseau %s : une adresse IPv4 quelconque n’est pas approuvée',
+      (subnet) => {
+        expect(proxyAddr.compile([subnet])('203.0.113.5', 0)).toBe(false);
+      },
+    );
+
+    it('adresse exacte (mode `addresses`) : seule elle est approuvée', () => {
+      for (const exact of ['10.0.0.5', '::ffff:10.0.0.5']) {
+        const trust = proxyAddr.compile([exact]);
+        expect(trust('10.0.0.5', 0)).toBe(true);
+        expect(trust('203.0.113.5', 0)).toBe(false);
+      }
+    });
   });
 
   describe('qs utilisé par body-parser', () => {
