@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/auth-context";
@@ -70,6 +71,8 @@ export default async function RootLayout({
   // 1-16G : langue de CETTE requête (proxy : cookie, sinon navigateur,
   // sinon français). `lang` est corrigé côté client lors d'un changement.
   const locale = await getRequestLocale();
+  // 1-22F : nonce de la CSP de cette requête (posé par le proxy).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang={locale}
@@ -80,7 +83,10 @@ export default async function RootLayout({
         {/* 1-16F : thème posé avant le premier rendu (aucun flash) ; la
             classe/le style ajoutés sur <html> sont couverts par
             suppressHydrationWarning. Script statique, sans donnée. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <LocaleProvider initialLocale={locale}>

@@ -118,6 +118,10 @@ services:
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
         S3_HOSTNAME: ${S3_HOSTNAME:-}
     container_name: stockmaster-web
+    # 1-22F : origine des images signées pour la CSP (lue à l'exécution par
+    # web/src/proxy.ts) : le vhost `s3.` en lecture seule (§ 10.2 de 1-17A).
+    environment:
+      CSP_IMAGE_ORIGINS: https://${S3_HOSTNAME:-}
     restart: always
     depends_on:
       - api

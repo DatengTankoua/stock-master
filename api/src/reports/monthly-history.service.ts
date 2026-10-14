@@ -48,6 +48,29 @@ export function localMonthOf(date: Date): string {
 }
 
 /**
+ * 1-22E — le mois dépasse le volume admis pour ce format. Levée AVANT de
+ * lire les ventes (comptage), ou pendant la lecture si des ventes ont été
+ * ajoutées entre-temps (lecture plafonnée à `maxRows + 1`) : jamais de
+ * fichier partiel.
+ */
+export class ReportTooLargeError extends Error {
+  constructor(
+    readonly rows: number,
+    readonly maxRows: number,
+  ) {
+    super('REPORT_TOO_LARGE');
+  }
+}
+
+export interface BuildLimits {
+  maxRows: number;
+  admitRows?: (rows: number) => void;
+}
+
+/** Corrections et annulations listées dans le rapport (journal d'audit). */
+const MOVEMENT_ACTIONS = [AuditAction.SALE_UPDATED, AuditAction.SALE_CANCELLED];
+
+/**
  * Mois demandé : format strict `AAAA-MM`, année ≥ 2000, jamais postérieur
  * au mois en cours (fuseau du processus API). Sinon 400.
  */
@@ -234,10 +257,40 @@ export class MonthlyHistoryService {
     };
   }
 
+  /**
+   * 1-22E — lignes du rapport (ventes + corrections et annulations), par
+   * comptage seul, sans rien charger. Majorant : une correction sans
+   * changement effectif est comptée mais pas listée.
+   */
+  async countRows(organizationId: string, month: string): Promise<number> {
+    const orgOid = new Types.ObjectId(organizationId);
+    const { start, end } = monthBounds(month);
+    const [sales, movements] = await Promise.all([
+      this.saleModel.countDocuments({
+        organizationId: orgOid,
+        ...saleMonthMatch(month),
+      }),
+      this.auditModel.countDocuments({
+        organizationId: orgOid,
+        action: { $in: MOVEMENT_ACTIONS },
+        createdAt: { $gte: start, $lt: end },
+      }),
+    ]);
+    return sales + movements;
+  }
+
+  /**
+   * 1-22E — `maxRows` : plafond de lignes chargées ; les lectures sont
+   * limitées à `maxRows + 1`, au-delà `ReportTooLargeError`. `admitRows`
+   * reçoit les lignes RÉELLEMENT chargées (ventes + corrections et
+   * annulations) avant toute autre lecture et avant le rendu ; elle peut
+   * refuser en levant une exception.
+   */
   async build(
     context: ResolvedOrganizationContext,
     month: string,
-    now = new Date(),
+    now: Date,
+    { maxRows, admitRows }: BuildLimits,
   ): Promise<MonthlyHistory> {
     const orgOid = new Types.ObjectId(context.organizationId);
     const { start, end } = monthBounds(month);
@@ -267,17 +320,20 @@ export class MonthlyHistoryService {
       context.organizationId,
       orgOid,
       month,
+      maxRows,
     );
     const { sales, overview, ranking, sellerRanking } = snapshot;
 
     const productIds = [...new Set(sales.map((s) => String(s.productId)))];
+    const movementBudget = maxRows - sales.length;
     const movementsRaw = await this.auditModel
       .find({
         organizationId: orgOid,
-        action: { $in: [AuditAction.SALE_UPDATED, AuditAction.SALE_CANCELLED] },
+        action: { $in: MOVEMENT_ACTIONS },
         createdAt: { $gte: start, $lt: end },
       })
       .sort({ createdAt: 1, _id: 1 })
+      .limit(movementBudget + 1)
       .lean<
         Array<{
           productId: Types.ObjectId;
@@ -288,6 +344,13 @@ export class MonthlyHistoryService {
         }>
       >()
       .exec();
+    if (movementsRaw.length > movementBudget) {
+      throw new ReportTooLargeError(
+        sales.length + movementsRaw.length,
+        maxRows,
+      );
+    }
+    admitRows?.(sales.length + movementsRaw.length);
     const movementProductIds = movementsRaw.map((m) => String(m.productId));
     const products = await this.productModel
       .find({
@@ -440,6 +503,7 @@ export class MonthlyHistoryService {
     organizationId: string,
     orgOid: Types.ObjectId,
     month: string,
+    maxRows: number,
   ) {
     for (let attempt = 0; attempt < CONSISTENCY_ATTEMPTS; attempt++) {
       const [sales, overview, ranking, sellerRanking] = await Promise.all([
@@ -457,6 +521,7 @@ export class MonthlyHistoryService {
             buyerName: 1,
             buyerContact: 1,
           })
+          .limit(maxRows + 1)
           .lean<LeanSale[]>()
           .exec(),
         this.analytics.getOverview(
@@ -470,6 +535,9 @@ export class MonthlyHistoryService {
           SellerRankingRow[]
         >,
       ]);
+      if (sales.length > maxRows) {
+        throw new ReportTooLargeError(overview.totalTransactions, maxRows);
+      }
       if (this.isConsistent(sales, overview, ranking, sellerRanking)) {
         sales.sort(
           (a, b) =>

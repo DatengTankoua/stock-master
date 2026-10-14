@@ -156,8 +156,8 @@ heyama-test/
 ├── docker-compose.yml          # Infra dev (MongoDB + MinIO)
 ├── docker-compose.prod.yml     # Stack complète de production
 ├── .github/workflows/
-│   ├── deploy.yml              # Déploiement automatique + rollback auto
-│   └── rollback.yml            # Rollback manuel (workflow_dispatch)
+│   ├── deploy.yml              # Contrôle de santé après déploiement (sans rollback auto)
+│   └── rollback.yml            # Rollback manuel à cible explicite (workflow_dispatch)
 └── pnpm-workspace.yaml
 ```
 
@@ -418,16 +418,29 @@ exactement `true` (variable du service API).
 
 ## CI/CD et rollback
 
-Le dossier `.github/workflows/` contient deux workflows GitHub Actions :
+Le dossier `.github/workflows/` contient trois workflows GitHub Actions
+(durcis en 1-22G : [rapport](docs/architecture/phase-1-22g-ci-cd-hardening.md)) :
 
 | Fichier | Déclencheur | Description |
 |---|---|---|
-| `deploy.yml` | Fin de déploiement Railway/Vercel (`deployment_status`) | Health check API + Web → **rollback automatique** si l'un échoue |
-| `rollback.yml` | Manuel (`workflow_dispatch`) | Rollback ciblé : `web`, `api`, ou `both` |
+| `ci.yml` | Push et pull requests vers `main` et `dev` | Lint, tests, build ; aucun secret |
+| `deploy.yml` | Fin de déploiement Railway/Vercel (`deployment_status`) | Health check API + Web ; un échec rend le run rouge. **Aucun rollback automatique** |
+| `rollback.yml` | Manuel (`workflow_dispatch`) | Rollback à **cible explicite** : déploiement Vercel nommé ; commit de `main` pour l'API, après la procédure des paiements SasPay (1-21B § 11, 1-21E § 10.1) |
+
+Le déploiement lui-même est fait par les intégrations Git de Railway et de
+Vercel, hors GitHub Actions.
 
 ### Secrets GitHub requis
 
-Configurer dans **Settings → Secrets and variables → Actions** :
+Les secrets de déploiement (`RAILWAY_TOKEN`, `VERCEL_*`) sont destinés à
+l'environnement GitHub **`production-operations`** (Settings → Environments),
+réservé à la branche `main`. **À configurer** : tant que l'environnement n'est
+pas créé avec cette règle et que ces secrets restent des secrets du dépôt, ils
+ne sont pas protégés. Si un propriétaire est seul relecteur, ne pas activer
+*Prevent self-review*, qui rendrait le retour arrière inaccessible. Détails,
+protection de `main` et attente de la CI (Railway, Vercel) : rapport 1-22G § 4.
+Les URL de santé restent des secrets du dépôt (**Settings → Secrets and
+variables → Actions**) :
 
 | Secret | Description |
 |---|---|

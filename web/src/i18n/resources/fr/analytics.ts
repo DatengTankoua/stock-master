@@ -228,6 +228,11 @@ const analyticsFr = {
       "Cet appareil en a {{n}} : synchronisez-les avant de télécharger.",
     timeZone:
       "Dates et limites du mois : fuseau {{timeZone}}, comme dans les analyses.",
+    limitPdf:
+      "Ce mois dépasse la limite de {{max}} lignes du PDF : téléchargez la version Excel.",
+    limitAll:
+      "Ce mois dépasse la limite de {{max}} lignes d'un export : aucun fichier ne peut être créé. Vous pouvez contacter l'assistance si vous avez besoin d'aide.",
+    contactSupport: "Contacter l'assistance",
     errors: {
       generic: "Le fichier n'a pas pu être préparé. Réessayez.",
       network:
@@ -241,6 +246,12 @@ const analyticsFr = {
         "Certains noms ne peuvent pas être reproduits fidèlement en PDF. Téléchargez la version Excel.",
       rateLimited:
         "Trop de téléchargements d'historique en peu de temps. Réessayez plus tard.",
+      tooLarge:
+        "Ce mois compte {{rows}} lignes (ventes, corrections et annulations), au-delà de la limite de {{max}} lignes d'un export {{format}}. Aucun fichier n'a été créé. Vous pouvez contacter l'assistance si vous avez besoin d'aide.",
+      tooLargePdf:
+        "Ce mois compte {{rows}} lignes (ventes, corrections et annulations), au-delà de la limite de {{max}} lignes d'un export PDF. Aucun fichier n'a été créé. Téléchargez la version Excel.",
+      tooLargeGeneric:
+        "Ce mois dépasse le volume d'un export. Aucun fichier n'a été créé. Vous pouvez contacter l'assistance si vous avez besoin d'aide.",
       busy: "D'autres rapports sont en cours de préparation. Réessayez dans quelques secondes.",
       dataChanged:
         "Des ventes ont changé pendant la préparation. Réessayez dans un instant.",

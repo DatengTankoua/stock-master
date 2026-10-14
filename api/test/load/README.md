@@ -47,6 +47,7 @@ Outils de mesure de charge **strictement locaux** de Stock Master. Rapports :
 | `products-page-explain.js` | 1-20F : plans MongoDB de la liste d'un rayon (`--synthetic=<n>` : rayon temporaire de n produits, supprimé ensuite)                           |
 | `compat-probe.js`          | 1-20F : requête paginée du nouveau web face à l'API en service (tableau complet sur une API antérieure)                                  |
 | `sales-history-explain.js` | 1-20E : plans MongoDB des requêtes de la page Ventes (documents et clés examinés, tri en mémoire)                                                                              |
+| `monthly-export-probe.ts`  | 1-22E : export mensuel (jest, MongoDB éphémère) : durée, retard de boucle, mémoire, requête légère d'un autre commerce ; `PROBE_SIZES`, `PROBE_CONCURRENT`, `PROBE_CONCURRENT_SIZE`, `PROBE_OUT` (commande en tête du fichier) |
 
 ## Prérequis
 

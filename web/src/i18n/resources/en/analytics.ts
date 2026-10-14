@@ -207,6 +207,11 @@ const analyticsEn: Translation<typeof analyticsFr> = {
       "This device has {{n}}: synchronise them before downloading.",
     timeZone:
       "Dates and month boundaries: {{timeZone}} time zone, as in the analytics.",
+    limitPdf:
+      "This month exceeds the {{max}}-line PDF limit: download the Excel version.",
+    limitAll:
+      "This month exceeds the {{max}}-line export limit: no file can be created. You can contact support if you need help.",
+    contactSupport: "Contact support",
     errors: {
       generic: "The file could not be prepared. Try again.",
       network:
@@ -220,6 +225,12 @@ const analyticsEn: Translation<typeof analyticsFr> = {
         "Some names cannot be reproduced faithfully in PDF. Download the Excel version.",
       rateLimited:
         "Too many history downloads in a short time. Try again later.",
+      tooLarge:
+        "This month has {{rows}} lines (sales, corrections and cancellations), above the {{max}}-line limit for a {{format}} export. No file was created. You can contact support if you need help.",
+      tooLargePdf:
+        "This month has {{rows}} lines (sales, corrections and cancellations), above the {{max}}-line limit for a PDF export. No file was created. Download the Excel version.",
+      tooLargeGeneric:
+        "This month exceeds the export volume. No file was created. You can contact support if you need help.",
       busy: "Other reports are being prepared. Try again in a few seconds.",
       dataChanged:
         "Some sales changed during the preparation. Try again in a moment.",
