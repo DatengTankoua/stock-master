@@ -9,7 +9,11 @@
 // pages publiques FR/EN préparées à l'installation avec leurs ressources,
 // écran de secours pour toute page non préparée. Voir
 // docs/architecture/phase-1-22c1-pwa-offline-entry.md.
-const CACHE_VERSION = "v5";
+// 1-22F : v6 — chaque document enregistré garde SA politique CSP (le nonce
+// de la politique est celui des scripts du même HTML) ; les copies v5,
+// enregistrées sans CSP, sont remplacées. Voir
+// docs/architecture/phase-1-22f-browser-security-headers.md.
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `stockmaster-${CACHE_VERSION}`;
 // 1-22C.1 : documents publics localisés, dans un cache distinct (aucune
 // autre réponse n'y est jamais écrite).
@@ -162,15 +166,19 @@ ${linkHeader || ""}`;
   });
 }
 
+// 1-22F : seule la CSP du document d'origine est conservée, telle quelle.
+const CSP_HEADER = "Content-Security-Policy";
+
 // Copie normalisée (sans les en-têtes Vary/no-store de Next.js) et datée.
-function storedDocument(html) {
-  return new Response(html, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      [CACHED_AT_HEADER]: new Date().toISOString(),
-    },
-  });
+// 1-22F : la CSP reçue avec le HTML l'accompagne ; sans elle, une copie
+// servie hors ligne s'exécuterait sans aucune politique.
+function storedDocument(html, csp) {
+  const headers = {
+    "Content-Type": "text/html; charset=utf-8",
+    [CACHED_AT_HEADER]: new Date().toISOString(),
+  };
+  if (csp) headers[CSP_HEADER] = csp;
+  return new Response(html, { status: 200, headers });
 }
 
 // Enregistre une réponse de page publique sous sa langue réelle. Ignore
@@ -184,7 +192,10 @@ async function storePublicPage(pathname, response) {
   if (!locale) return false;
   await cacheDocumentAssets(html, response.headers.get("Link"));
   const cache = await caches.open(PAGES_CACHE_NAME);
-  await cache.put(publicPageKey(pathname, locale), storedDocument(html));
+  await cache.put(
+    publicPageKey(pathname, locale),
+    storedDocument(html, response.headers.get(CSP_HEADER)),
+  );
   return true;
 }
 
@@ -220,7 +231,7 @@ async function precacheAppShell() {
   const html = await response.text();
   await cacheDocumentAssets(html, response.headers.get("Link"));
   const cache = await caches.open(CACHE_NAME);
-  await cache.put(APP_SHELL_URL, storedDocument(html));
+  await cache.put(APP_SHELL_URL, storedDocument(html, response.headers.get(CSP_HEADER)));
 }
 
 // Actualisation en ligne : chaque page n'est remplacée qu'en cas de succès
@@ -263,10 +274,10 @@ async function markedOfflineCopy(cached) {
     /<html(\s|>)/,
     `<html data-offline-copy="${cachedAt.replace(/[^0-9TZ:.-]/g, "")}"$1`,
   );
-  return new Response(html, {
-    status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
+  const headers = { "Content-Type": "text/html; charset=utf-8" };
+  const csp = cached.headers.get(CSP_HEADER);
+  if (csp) headers[CSP_HEADER] = csp;
+  return new Response(html, { status: 200, headers });
 }
 
 async function runPool(items, size, worker) {
