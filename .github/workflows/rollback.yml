@@ -1,56 +1,103 @@
 name: Manual Rollback
 
+# 1-22G — Retour arrière MANUEL et EXPLICITE (docs/architecture/phase-1-22g-ci-cd-hardening.md).
+# Aucune cible implicite : la version à restaurer est nommée par l'opérateur
+# puis validée (.github/scripts/rollback-target.sh). Le retour arrière de
+# l'API n'est pas sûr pour les données de paiement : procédure SasPay
+# préalable obligatoire (1-21B § 11, 1-21E § 10.1).
 on:
   workflow_dispatch:
     inputs:
       service:
-        description: "Service to rollback"
+        description: "Service à restaurer"
         required: true
         type: choice
         options:
           - web
           - api
           - both
-      target_sha:
-        description: "Commit SHA to rollback to (Railway only — leave empty for previous deploy)"
+      web_deployment:
+        description: "Web : déploiement Vercel à restaurer (identifiant dpl_… ou URL https). Obligatoire pour web/both."
         required: false
         type: string
+      target_sha:
+        description: "API : SHA complet (40 car.) d'un commit déjà présent sur main. Obligatoire pour api/both."
+        required: false
+        type: string
+      payments_checked:
+        description: "API : procédure des paiements SasPay appliquée (1-21B § 11, 1-21E § 10.1)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 concurrency:
   group: production-deploy
   cancel-in-progress: false
 
 jobs:
-  # ── Rollback Next.js on Vercel (instant — no rebuild needed) ─────────────────
-  rollback-web:
-    name: Rollback Web → Vercel
-    if: inputs.service == 'web' || inputs.service == 'both'
+  # ── Validation des cibles : aucun secret ─────────────────────────────────────
+  validate:
+    name: Validate rollback targets
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      web_deployment: ${{ steps.targets.outputs.web_deployment }}
+      target_sha: ${{ steps.targets.outputs.target_sha }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Rollback to previous Vercel deployment
-        run: npx --yes vercel rollback --yes --token ${{ secrets.VERCEL_TOKEN }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate inputs
+        id: targets
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          SERVICE: ${{ inputs.service }}
+          WEB_DEPLOYMENT: ${{ inputs.web_deployment }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+          PAYMENTS_CHECKED: ${{ inputs.payments_checked }}
+          PRODUCTION_REF: origin/main
+        run: bash .github/scripts/rollback-target.sh >> "$GITHUB_OUTPUT"
 
-  # ── Rollback NestJS API on Railway ───────────────────────────────────────────
-  rollback-api:
-    name: Rollback API → Railway
-    if: inputs.service == 'api' || inputs.service == 'both'
+  # ── Web : Vercel (déploiement nommé, sans reconstruction) ───────────────────
+  rollback-web:
+    name: Rollback Web → Vercel
+    needs: validate
+    if: inputs.service == 'web' || inputs.service == 'both'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: production-operations
     steps:
-      - uses: actions/checkout@v4
+      - name: Roll back to the named Vercel deployment
+        env:
+          # Lu par le CLI depuis l'environnement : jamais sur la ligne de commande.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          WEB_DEPLOYMENT: ${{ needs.validate.outputs.web_deployment }}
+        run: npx --yes vercel@61.1.0 rollback "$WEB_DEPLOYMENT" --yes --timeout 5m
+
+  # ── API : Railway (redéploiement d'un commit de main nommé) ─────────────────
+  rollback-api:
+    name: Rollback API → Railway
+    needs: validate
+    if: inputs.service == 'api' || inputs.service == 'both'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-operations
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # Checkout target SHA if provided, otherwise HEAD~1
-          ref: ${{ inputs.target_sha || '' }}
-          fetch-depth: 0
-      - name: Resolve and log target SHA
-        run: |
-          echo "Rolling back API to: $(git rev-parse HEAD)"
-      - name: Redeploy target SHA to Railway
-        run: npx --yes @railway/cli@latest up --service api --detach
+          ref: ${{ needs.validate.outputs.target_sha }}
+          persist-credentials: false
+      - name: Log target
+        env:
+          TARGET_SHA: ${{ needs.validate.outputs.target_sha }}
+        run: echo "Restauration de l'API au commit $TARGET_SHA ($(git rev-parse HEAD))"
+      - name: Redeploy target commit to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: npx --yes @railway/cli@5.63.1 up --service api --detach

@@ -1,8 +1,17 @@
-name: Post-Deploy Health Check & Rollback
+name: Post-Deploy Health Check
 
-# Fires when Railway or Vercel update their deployment status on GitHub
+# 1-22G — Contrôle de santé après un déploiement de production signalé par
+# Railway ou Vercel. AUCUN retour arrière automatique
+# (docs/architecture/phase-1-22g-ci-cd-hardening.md) :
+# - web : « vercel rollback » sans déploiement nommé n'effectue rien ;
+# - API : redéployer HEAD~1 visait un commit arbitraire et contournait la
+#   procédure des paiements SasPay (1-21B § 11, 1-21E § 10.1).
+# Un échec rend le run rouge et renvoie au retour arrière manuel
+# (rollback.yml). Aucun secret de déploiement, aucun code du dépôt exécuté.
 on:
   deployment_status:
+
+permissions: {}
 
 concurrency:
   group: health-check-${{ github.event.deployment.environment }}
@@ -10,28 +19,28 @@ concurrency:
 
 jobs:
   health-check:
-    # Only react to successful production deployments on main
-    if: |
+    # Déploiements réussis de main uniquement, jamais ceux créés par les
+    # jobs de ce dépôt (environnement production-operations).
+    if: >-
       github.event.deployment_status.state == 'success' &&
-      github.event.deployment.ref == 'main'
-    name: Health Check & Auto Rollback
+      github.event.deployment.ref == 'main' &&
+      github.event.deployment.environment != 'production-operations'
+    name: Health Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
       - name: Wait for app to stabilize
         run: sleep 30
 
       - name: Health check API
         id: api
         continue-on-error: true
+        env:
+          HEALTH_URL: ${{ secrets.API_HEALTH_URL }}
         run: |
           for i in 1 2 3; do
             echo "API check $i/3..."
-            if curl -fsS --max-time 10 "${{ secrets.API_HEALTH_URL }}" > /dev/null; then
+            if curl -fsS --max-time 10 "$HEALTH_URL" > /dev/null; then
               echo "API OK"; exit 0
             fi
             sleep 10
@@ -41,31 +50,36 @@ jobs:
       - name: Health check Web
         id: web
         continue-on-error: true
+        env:
+          HEALTH_URL: ${{ secrets.WEB_HEALTH_URL }}
         run: |
           for i in 1 2 3; do
             echo "Web check $i/3..."
-            if curl -fsS --max-time 10 "${{ secrets.WEB_HEALTH_URL }}" > /dev/null; then
+            if curl -fsS --max-time 10 "$HEALTH_URL" > /dev/null; then
               echo "Web OK"; exit 0
             fi
             sleep 10
           done
           echo "Web health check failed"; exit 1
 
-      - name: Rollback API → Railway (redeploy previous commit)
-        if: steps.api.outcome == 'failure'
-        run: |
-          git checkout HEAD~1
-          npx --yes @railway/cli@latest up --service api --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-      - name: Rollback Web → Vercel
-        if: steps.web.outcome == 'failure'
-        run: npx --yes vercel rollback --yes --token ${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Fail the run if a rollback was triggered
+      - name: Report failure and manual procedure
         if: steps.api.outcome == 'failure' || steps.web.outcome == 'failure'
-        run: exit 1
+        env:
+          API_OUTCOME: ${{ steps.api.outcome }}
+          WEB_OUTCOME: ${{ steps.web.outcome }}
+          DEPLOYED_SHA: ${{ github.event.deployment.sha }}
+          DEPLOYMENT_ENVIRONMENT: ${{ github.event.deployment.environment }}
+        run: |
+          {
+            echo "## Contrôle de santé en échec"
+            echo ""
+            echo "- Déploiement : \`$DEPLOYMENT_ENVIRONMENT\`, commit \`$DEPLOYED_SHA\`"
+            echo "- API : $API_OUTCOME ; Web : $WEB_OUTCOME"
+            echo ""
+            echo "Aucun retour arrière automatique. Préférer une correction en avant."
+            echo "Sinon : workflow **Manual Rollback** avec une cible explicite"
+            echo "(déploiement Vercel nommé ; commit de main pour l'API, après la"
+            echo "procédure SasPay de 1-21B § 11 et 1-21E § 10.1)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Contrôle de santé en échec (API : $API_OUTCOME, Web : $WEB_OUTCOME)."
+          exit 1

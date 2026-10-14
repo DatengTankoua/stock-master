@@ -167,8 +167,12 @@ nettement.
   Le lien vers l'assistance n'apparaît que pour un compte qui a `support.contact`. Le serveur
   reste seul juge, car il compte aussi corrections et annulations.
 - **Quotas.** `REPORT_REQUESTS_LIMITED` est affiché comme le quota de génération (« Trop de
-  téléchargements… »), avec le délai. Les messages 429 et 503, autrefois toujours en français,
-  suivent maintenant la langue de la requête.
+  téléchargements… »), avec le délai. Les messages 429 et 503 sont lancés en français et
+  traduits par le filtre global selon la langue de la requête (catalogue
+  `ERROR_MESSAGE_TRANSLATIONS`, entrées déjà présentes). *Correction : une première version de
+  ce lot les composait en anglais dans le contrôleur, ce qui était inutile et faisait échouer
+  `common/i18n/i18n.spec.ts` (message lancé absent du catalogue). Elle est revenue au message
+  français ; l'ancienne remarque « autrefois toujours en français » était inexacte.*
 - **Exports normaux inchangés** : mêmes requêtes, mêmes contrôles de cohérence avec l'Analyse,
   même rendu. Les permissions et les règles historiques (1-15D) ne changent pas.
 - **Isolation.** Les **données** sont isolées : comptage et lectures sont filtrés par

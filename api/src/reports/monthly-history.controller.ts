@@ -103,11 +103,14 @@ export function reportTooLargeException(
   });
 }
 
-/** 429 (quotas) ou 503 (capacité), avec `Retry-After`. */
+/**
+ * 429 (quotas) ou 503 (capacité), avec `Retry-After`. Message en français :
+ * le filtre global le traduit selon la langue de la requête (catalogue
+ * `ERROR_MESSAGE_TRANSLATIONS`).
+ */
 function limitException(
   res: Response,
   refusal: { code: string; retryAfterSeconds: number },
-  locale: AppLocale,
 ): HttpException {
   res.setHeader('Retry-After', String(refusal.retryAfterSeconds));
   res.setHeader('Cache-Control', 'no-store');
@@ -115,17 +118,12 @@ function limitException(
     refusal.code === REPORT_RATE_LIMITED ||
     refusal.code === REPORT_REQUESTS_LIMITED;
   const minutes = Math.ceil(refusal.retryAfterSeconds / 60);
-  const en = locale === 'en';
   return new HttpException(
     {
       code: refusal.code,
       message: quota
-        ? en
-          ? `Too many history downloads in a short time. Try again in ${minutes} min.`
-          : `Trop de téléchargements d'historique en peu de temps. Réessayez dans ${minutes} min.`
-        : en
-          ? 'Other reports are being prepared. Try again in a few seconds.'
-          : "D'autres rapports sont en cours de préparation. Réessayez dans quelques secondes.",
+        ? `Trop de téléchargements d'historique en peu de temps. Réessayez dans ${minutes} min.`
+        : "D'autres rapports sont en cours de préparation. Réessayez dans quelques secondes.",
       retryAfterSeconds: refusal.retryAfterSeconds,
     },
     quota ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.SERVICE_UNAVAILABLE,
@@ -245,7 +243,7 @@ export class MonthlyHistoryController {
       context.organizationId,
     );
     if (!admission.admitted) {
-      throw limitException(res, admission, locale);
+      throw limitException(res, admission);
     }
     let slot: ReturnType<ReportGenerationLimiter['acquire']>;
     try {
@@ -267,7 +265,7 @@ export class MonthlyHistoryController {
       admission.release();
     }
     if (!slot.admitted) {
-      throw limitException(res, slot, locale);
+      throw limitException(res, slot);
     }
     const generation = slot;
     try {
@@ -282,14 +280,10 @@ export class MonthlyHistoryController {
           maxRows: limits.maxRows[format],
           admitRows: (rows) => {
             if (!generation.resize(reportCost(limits, format, rows))) {
-              throw limitException(
-                res,
-                {
-                  code: REPORT_GENERATION_BUSY,
-                  retryAfterSeconds: limits.busyRetryAfterSeconds,
-                },
-                locale,
-              );
+              throw limitException(res, {
+                code: REPORT_GENERATION_BUSY,
+                retryAfterSeconds: limits.busyRetryAfterSeconds,
+              });
             }
           },
         });
