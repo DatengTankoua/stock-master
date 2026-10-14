@@ -36,11 +36,23 @@ export const SASPAY_WEBHOOK_RETRY_AFTER_SECONDS = 60;
 /**
  * Rattachement d'une transaction notifiée AVANT d'être connue : au plus
  * 3 paiements candidats (ouverts, session connue, sans transaction, initiés
- * depuis 24 h), dans un budget de 10 s (SasPay coupe à 15 s).
+ * depuis 24 h), dans un budget de 10 s (SasPay coupe à 15 s). 1-22D.3 :
+ * jamais une création incertaine SANS référence (aucun champ authentifié
+ * ne la désigne) ; le rapprochement périodique la retrouve.
  */
 export const SASPAY_WEBHOOK_MAX_CANDIDATES = 3;
 export const SASPAY_WEBHOOK_CANDIDATE_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const SASPAY_WEBHOOK_BUDGET_MS = 10_000;
+/**
+ * 1-22D — Notification IDENTIQUE (même événement, même transaction) :
+ * vérifiée au plus une fois par 20 s après un accusé ; une répétition reçoit
+ * cet accusé sans appel. Un 503 n'est pas mémorisé (reprise immédiate
+ * possible) ; ses répétitions restent bornées par la limite de la route et
+ * la voie des confirmations. Au plus 500 entrées (les plus anciennes sont
+ * oubliées).
+ */
+export const SASPAY_WEBHOOK_REPEAT_WINDOW_MS = 20_000;
+export const SASPAY_WEBHOOK_REPEAT_MAX_ENTRIES = 500;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TRANSACTION_EVENTS = new Set([
@@ -126,9 +138,22 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  *    bouton « Vérifier », le retour du payeur et le CLI restent disponibles.
  * Aucun balayage de tous les paiements ouverts ; aucune journalisation du
  * contenu ; réponses génériques.
+ *
+ * 1-22D — Chaque vérification démarre APRÈS la réception (jamais le
+ * résultat d'une lecture antérieure au changement notifié) ; les
+ * notifications identiques simultanées partagent un seul traitement, et une
+ * répétition rapprochée reprend sa réponse (voir
+ * `SASPAY_WEBHOOK_REPEAT_WINDOW_MS`).
  */
 @Injectable()
 export class SasPayWebhookService {
+  /** 1-22D — Traitements en cours et accusés récents, par événement. */
+  private readonly inflight = new Map<string, Promise<SasPayWebhookResponse>>();
+  private readonly recent = new Map<
+    string,
+    { at: number; response: SasPayWebhookResponse }
+  >();
+
   constructor(
     @Inject(SASPAY_WEBHOOK_CONFIG) private readonly config: SasPayWebhookConfig,
     private readonly payments: SubscriptionPaymentsService,
@@ -184,6 +209,46 @@ export class SasPayWebhookService {
     if (data.type !== undefined && data.type !== 'PAIEMENT') return ACK;
     const transactionId = data.id.toLowerCase();
 
+    const key = `${body.event}:${transactionId}`;
+    const previous = this.recent.get(key);
+    if (previous && now - previous.at < SASPAY_WEBHOOK_REPEAT_WINDOW_MS) {
+      return previous.response;
+    }
+    const running = this.inflight.get(key);
+    if (running) return running;
+    const started = this.confirmTransaction(transactionId, now).then(
+      (response) => {
+        // Accusé seulement : un 503 doit pouvoir être repris aussitôt.
+        if (response.status === 200) this.remember(key, now, response);
+        return response;
+      },
+    );
+    this.inflight.set(key, started);
+    try {
+      return await started;
+    } finally {
+      this.inflight.delete(key);
+    }
+  }
+
+  private remember(
+    key: string,
+    at: number,
+    response: SasPayWebhookResponse,
+  ): void {
+    this.recent.delete(key);
+    this.recent.set(key, { at, response });
+    for (const oldest of this.recent.keys()) {
+      if (this.recent.size <= SASPAY_WEBHOOK_REPEAT_MAX_ENTRIES) break;
+      this.recent.delete(oldest);
+    }
+  }
+
+  /** Étapes 3 à 5 pour une transaction de paiement notifiée. */
+  private async confirmTransaction(
+    transactionId: string,
+    now: number,
+  ): Promise<SasPayWebhookResponse> {
     const deadline = Date.now() + SASPAY_WEBHOOK_BUDGET_MS;
     try {
       const attached = await this.payments.findByProviderTransaction(
@@ -192,7 +257,7 @@ export class SasPayWebhookService {
       );
       if (attached) {
         await this.withinBudget(
-          this.payments.confirmPaymentShared(attached),
+          this.payments.confirmPaymentFresh(attached),
           deadline,
         );
         return ACK;
@@ -205,7 +270,7 @@ export class SasPayWebhookService {
       if (candidates.length === 0) return ACK;
       for (const candidate of candidates) {
         await this.withinBudget(
-          this.payments.confirmPaymentShared(candidate),
+          this.payments.confirmPaymentFresh(candidate),
           deadline,
         ).catch(() => undefined);
         const found = await this.payments.findByProviderTransaction(

@@ -221,6 +221,8 @@ seulement un `refresh` serveur.
    - `metadata` absente ou étrangère → discordance ;
    - `debited_amount` différent du prix → `review` ;
    - 401, 404, 409, 410, 422, 429, 5xx et délai dépassé → `Unavailable`
+     (*1-22D.2 : un `429` à la création est classé incertain, voir
+     `phase-1-22d2-saspay-ambiguous-create.md`*)
      ou `Uncertain`.
 2. **Création** :
    - succès → URL de redirection ;

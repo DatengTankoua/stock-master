@@ -60,7 +60,11 @@ export type CreateBehavior =
   /** Session créée, réponse 500. */
   | 'error-500-after-create'
   /** Réponse 201 avec une page hors de l'hôte autorisé. */
-  | 'foreign-checkout-url';
+  | 'foreign-checkout-url'
+  /** 1-22D.2 — `429`, rien créé. */
+  | 'rate-limited'
+  /** 1-22D.2 — session créée, réponse `429` (cas non exclu). */
+  | 'rate-limited-after-create';
 
 const text = (value: unknown): string =>
   typeof value === 'string' ? value : '';
@@ -88,6 +92,10 @@ export class FakeSasPay {
    * (`transaction`) ou de la route de statut (`transaction_id`).
    */
   omitTransactionField: 'detail' | 'status' | null = null;
+  /** 1-22D.2 — sessions absentes de la liste paginée (visibles plus tard). */
+  readonly unlisted = new Set<string>();
+  /** 1-22D — quota du compte atteint : `429` sur toute route (documenté). */
+  rateLimited = false;
   /** 1-21E — exécuté à la réception d'une fermeture (course avec un paiement). */
   beforeCancel: ((session: FakeSession) => void) | null = null;
 
@@ -125,6 +133,7 @@ export class FakeSasPay {
     const url = new URL(request.url);
     const path = url.pathname.slice('/api/v1'.length);
     this.calls.push({ method: request.method, path });
+    if (this.rateLimited) return this.reply(429, null);
 
     if (request.method === 'POST' && path === '/checkout-sessions/') {
       return this.create(
@@ -143,7 +152,9 @@ export class FakeSasPay {
     if (request.method === 'GET' && path === '/checkout-sessions/') {
       const page = Number(url.searchParams.get('page') ?? 1);
       const size = Number(url.searchParams.get('page_size') ?? 20);
-      const all = [...this.sessions.values()].reverse();
+      const all = [...this.sessions.values()]
+        .filter((s) => !this.unlisted.has(s.id))
+        .reverse();
       const results = all
         .slice((page - 1) * size, page * size)
         .map((s) => this.view(s));
@@ -204,6 +215,7 @@ export class FakeSasPay {
     this.nextCreate = 'normal';
     if (behavior === 'not-sent') throw new SasPayTransportError('not-sent');
     if (behavior === 'reject-422') return this.reply(422, null);
+    if (behavior === 'rate-limited') return this.reply(429, null);
     const id = randomUUID();
     const slug = randomUUID().replace(/-/g, '').slice(0, 20);
     const session: FakeSession = {
@@ -224,6 +236,7 @@ export class FakeSasPay {
     if (behavior === 'lost-after-create')
       throw new SasPayTransportError('unknown');
     if (behavior === 'error-500-after-create') return this.reply(500, null);
+    if (behavior === 'rate-limited-after-create') return this.reply(429, null);
     const view = this.view(session);
     if (behavior === 'foreign-checkout-url') {
       return this.reply(201, {

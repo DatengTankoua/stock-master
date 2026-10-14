@@ -10,7 +10,8 @@ import { ReconciliationReason } from './subscription-payment-reconciliation.sche
  *
  *   inspect   --payment-id=<24 hex>
  *   reconcile --payment-id=<24 hex> [--reference=<UUID CamPay>]
- *             (SIMULATION par défaut : consultation en lecture, aucune écriture)
+ *             (SIMULATION par défaut : consultation en lecture, aucune écriture ;
+ *             1-22D.3 : sans référence, recherche bornée par référence marchand)
  *   reconcile --payment-id=<24 hex> [--reference=<UUID>] --apply
  *             --plan=<jeton de la simulation> --operation-id=<UUID v4>
  *             --operator=<identifiant> --reason=<motif> [--ticket=<référence>]
@@ -42,6 +43,11 @@ export const RECONCILIATION_USAGE = [
   '                                  renouvellement), additional = achat en plus',
   '            [--record-refund]     remboursement effectué hors de Stock Master',
   '                                  (--reason=refunded-outside et --ticket requis)',
+  '            [--close-without-session --ticket=<source>:<identifiant>]',
+  '                                  création incertaine sans session retrouvée :',
+  '                                  preuve écrite du prestataire exigée (aucune',
+  '                                  session payable, aucun encaissement) ;',
+  '                                  --reason=provider-no-session à l’application',
   '  reconcile --payment-id=<id> [--reference=<uuid>] --apply --plan=<jeton>',
   '            --operation-id=<uuid v4> --operator=<identifiant>',
   `            --reason=${Object.values(ReconciliationReason).join('|')} [--ticket=<référence>]`,
@@ -57,6 +63,7 @@ export type ReconciliationCommand =
       closeUnresolved?: boolean;
       grantRenewalConflict?: GrantRenewalConflictMode;
       recordRefund?: boolean;
+      closeWithoutSessionProof?: string;
     }
   | {
       command: 'reconcile';
@@ -71,6 +78,7 @@ export type ReconciliationCommand =
       closeUnresolved?: boolean;
       grantRenewalConflict?: GrantRenewalConflictMode;
       recordRefund?: boolean;
+      closeWithoutSessionProof?: string;
     };
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
@@ -82,6 +90,14 @@ const PLAN_TOKEN = /^[0-9a-f]{32}$/;
 const REFUND_REASON: string = ReconciliationReason.REFUNDED_OUTSIDE;
 const OPERATOR = /^[A-Za-z0-9._@-]{2,64}$/;
 const TICKET = /^[A-Za-z0-9._:#/-]{1,64}$/;
+/**
+ * 1-22D.3 — Preuve EXTERNE référencée : `<source>:<identifiant>`, identifiant
+ * comportant au moins un chiffre (ticket, numéro de confirmation) ; jamais un
+ * simple mot de décision.
+ */
+const PROOF =
+  /^[a-z][a-z0-9-]{1,31}:(?=[A-Za-z0-9._#/-]*\d)[A-Za-z0-9._#/-]{1,48}$/;
+const NO_SESSION_REASON: string = ReconciliationReason.PROVIDER_NO_SESSION;
 
 const FLAGS: Readonly<Record<string, string>> = Object.freeze({
   '--payment-id': 'paymentId',
@@ -114,6 +130,7 @@ export function parseReconciliationArguments(
   let closeUnresolved = false;
   let grantRenewalConflict: GrantRenewalConflictMode | null = null;
   let recordRefund = false;
+  let closeWithoutSession = false;
   for (const arg of rest) {
     if (arg === '--apply') {
       if (apply) return { error: '--apply dupliqué' };
@@ -146,6 +163,14 @@ export function parseReconciliationArguments(
       recordRefund = true;
       continue;
     }
+    // 1-22D.3 : clôture exceptionnelle sans session (preuve externe).
+    if (arg === '--close-without-session') {
+      if (closeWithoutSession) {
+        return { error: '--close-without-session dupliqué' };
+      }
+      closeWithoutSession = true;
+      continue;
+    }
     const separator = arg.indexOf('=');
     const flag = separator < 0 ? arg : arg.slice(0, separator);
     const field = Object.prototype.hasOwnProperty.call(FLAGS, flag)
@@ -169,6 +194,7 @@ export function parseReconciliationArguments(
       closeUnresolved ||
       grantRenewalConflict ||
       recordRefund ||
+      closeWithoutSession ||
       Object.keys(values).length !== 1
     ) {
       return { error: 'inspect accepte seulement --payment-id' };
@@ -179,8 +205,31 @@ export function parseReconciliationArguments(
     return { error: '--reference doit être un UUID' };
   }
   const reference = values.reference?.toLowerCase() ?? null;
+  // 1-22D.3 : la preuve fait partie du plan (simulation ET application).
+  let closeWithoutSessionProof: string | undefined;
+  if (closeWithoutSession) {
+    if (reference !== null) {
+      return {
+        error: '--close-without-session est incompatible avec --reference',
+      };
+    }
+    if (values.reasonTicket === undefined || !PROOF.test(values.reasonTicket)) {
+      return {
+        error:
+          '--close-without-session exige --ticket=<source>:<identifiant> (preuve écrite du prestataire)',
+      };
+    }
+    closeWithoutSessionProof = values.reasonTicket;
+  }
+  const proof = closeWithoutSessionProof ? { closeWithoutSessionProof } : {};
   if (!apply) {
-    if (APPLY_ONLY.some((field) => values[field] !== undefined)) {
+    if (
+      APPLY_ONLY.some(
+        (field) =>
+          values[field] !== undefined &&
+          !(closeWithoutSession && field === 'reasonTicket'),
+      )
+    ) {
       return { error: 'options d’application sans --apply' };
     }
     return {
@@ -191,6 +240,7 @@ export function parseReconciliationArguments(
       ...(closeUnresolved ? { closeUnresolved } : {}),
       ...(grantRenewalConflict ? { grantRenewalConflict } : {}),
       ...(recordRefund ? { recordRefund } : {}),
+      ...proof,
     };
   }
   if (!values.planToken || !PLAN_TOKEN.test(values.planToken)) {
@@ -225,6 +275,13 @@ export function parseReconciliationArguments(
   if (!recordRefund && values.reasonCode === REFUND_REASON) {
     return { error: '--reason=refunded-outside exige --record-refund' };
   }
+  // 1-22D.3 : motif réservé à la clôture sans session, et réciproquement.
+  if (closeWithoutSession !== (values.reasonCode === NO_SESSION_REASON)) {
+    return {
+      error:
+        '--close-without-session et --reason=provider-no-session vont ensemble',
+    };
+  }
   return {
     command,
     paymentId,
@@ -238,6 +295,7 @@ export function parseReconciliationArguments(
     ...(closeUnresolved ? { closeUnresolved } : {}),
     ...(grantRenewalConflict ? { grantRenewalConflict } : {}),
     ...(recordRefund ? { recordRefund } : {}),
+    ...proof,
   };
 }
 
@@ -253,6 +311,7 @@ const EXIT_BY_ERROR: Readonly<Record<ReconciliationError['code'], number>> =
     PLAN_STALE: RECONCILIATION_EXIT.PLAN_STALE,
     OPERATION_CONFLICT: RECONCILIATION_EXIT.OPERATION_CONFLICT,
     CONFIRMATION_PENDING: RECONCILIATION_EXIT.RETRY,
+    PROOF_REQUIRED: RECONCILIATION_EXIT.USAGE,
   });
 
 /**
@@ -279,6 +338,7 @@ export async function runReconciliationCommand(
         closeUnresolved: command.closeUnresolved === true,
         grantRenewalConflict: command.grantRenewalConflict,
         recordRefund: command.recordRefund === true,
+        closeWithoutSessionProof: command.closeWithoutSessionProof,
       });
       output.out({ command: 'reconcile', mode: 'simulation', plan });
       return plan.decision === 'ready'
@@ -299,6 +359,7 @@ export async function runReconciliationCommand(
         closeUnresolved: command.closeUnresolved === true,
         grantRenewalConflict: command.grantRenewalConflict,
         recordRefund: command.recordRefund === true,
+        closeWithoutSessionProof: command.closeWithoutSessionProof,
       },
     );
     if ('decision' in result) {

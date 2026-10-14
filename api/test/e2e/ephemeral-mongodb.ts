@@ -63,11 +63,29 @@ function options(): MongoMemoryReplSetOpts {
  * renvoie l'instance déjà démarrée (un seul mongod par process).
  */
 export async function startEphemeralMongo(): Promise<MongoMemoryReplSet> {
+  assertE2eAppConfig();
   if (singleton) return singleton;
   const replSet = new MongoMemoryReplSet(options());
   await replSet.start();
   singleton = replSet;
   return replSet;
+}
+
+/**
+ * 1-22D.1 — Échec FERMÉ si la configuration d'`AppModule` n'est pas celle
+ * du dispositif e2e (suite lancée hors de `test/jest-e2e.json`) : sans elle,
+ * `.env` serait lu et l'URI installée par la suite pourrait être ignorée.
+ */
+function assertE2eAppConfig(): void {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const config = require('../../src/common/config/app-config') as {
+    E2E_APP_CONFIG?: boolean;
+  };
+  if (config.E2E_APP_CONFIG !== true) {
+    throw new Error(
+      'E2E refused: AppModule configuration is not the e2e one (run with test/jest-e2e.json).',
+    );
+  }
 }
 
 /**

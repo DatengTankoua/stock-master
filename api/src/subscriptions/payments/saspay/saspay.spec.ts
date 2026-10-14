@@ -448,13 +448,13 @@ describe('Adaptateur SasPay — création (1-21B)', () => {
     );
   });
 
-  it('classement des réponses : 400/422 refus, 401/403/404/429 et non transmis indisponible, 409/5xx/perdu incertain', async () => {
+  it('classement des réponses : 400/422 refus, 401/403/404 et non transmis indisponible, 409/429/5xx/perdu incertain', async () => {
     for (const status of [400, 422]) {
       await expect(
         providerWith(reply(status)).initiate(request),
       ).resolves.toEqual({ outcome: 'rejected' });
     }
-    for (const status of [401, 403, 404, 429]) {
+    for (const status of [401, 403, 404]) {
       await expect(
         providerWith(reply(status)).initiate(request),
       ).rejects.toBeInstanceOf(PaymentProviderUnavailableError);
@@ -464,7 +464,8 @@ describe('Adaptateur SasPay — création (1-21B)', () => {
         Promise.reject(new SasPayTransportError('not-sent')),
       ).initiate(request),
     ).rejects.toBeInstanceOf(PaymentProviderUnavailableError);
-    for (const status of [409, 500, 502]) {
+    // 1-22D.2 : 429 après envoi = création possible, jamais une absence.
+    for (const status of [409, 429, 500, 502]) {
       await expect(
         providerWith(reply(status)).initiate(request),
       ).rejects.toBeInstanceOf(PaymentProviderUncertainError);
