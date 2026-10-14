@@ -6,9 +6,22 @@ import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { Wordmark } from "@/components/brand/wordmark";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 
+// 1-22C.1 : pages préparées hors ligne par le service worker. Liens HTML
+// simples (jamais `Link`) : le document est servi par le cache, sans
+// requête de données Next.js.
+const OFFLINE_LINKS = [
+  { href: "/", key: "home" },
+  { href: "/#tarifs", key: "pricing" },
+  { href: "/guide", key: "guide" },
+  { href: "/contact", key: "contact" },
+  { href: "/conditions-utilisation", key: "terms" },
+  { href: "/app/catalog", key: "catalog" },
+] as const;
+
 // Page de repli hors connexion (1-11A) : servie par le service worker
-// (public/sw.js) quand une navigation publique échoue sans réseau. Aucune
-// donnée métier, aucune mutation ni appel réseau déclenché ici.
+// (public/sw.js) quand une navigation échoue sans réseau (1-22C.1 : toute
+// page non préparée, y compris sous /app). Aucune donnée métier, aucune
+// mutation ni appel réseau déclenché ici.
 export default function OfflinePage() {
   const { t } = useT("common");
   return (
@@ -33,6 +46,20 @@ export default function OfflinePage() {
       >
         {t("actions.retry")}
       </button>
+      <nav aria-labelledby="offline-available" className="mt-2 max-w-sm">
+        <h2 id="offline-available" className="text-sm font-semibold">
+          {t("offline.availableTitle")}
+        </h2>
+        <ul className="mt-2 flex flex-col gap-1 text-sm">
+          {OFFLINE_LINKS.map(({ href, key }) => (
+            <li key={key}>
+              <a href={href} className="underline underline-offset-4">
+                {t(`offline.links.${key}`)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </div>
   );
 }

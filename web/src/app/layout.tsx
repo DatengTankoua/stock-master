@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/auth-context";
 import { PwaRegister } from "@/components/layout/pwa-register";
+import { OfflineCopyNotice } from "@/components/layout/offline-copy-notice";
 import { PushNavigationBridge } from "@/components/layout/push-navigation-bridge";
 import { ThemeSync } from "@/components/theme/use-theme";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
@@ -84,6 +85,8 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <LocaleProvider initialLocale={locale}>
           <AuthProvider>
+            {/* 1-22C.1 : copie enregistrée servie hors connexion. */}
+            <OfflineCopyNotice />
             <main className="flex-1 flex flex-col">{children}</main>
             <Toaster />
           </AuthProvider>

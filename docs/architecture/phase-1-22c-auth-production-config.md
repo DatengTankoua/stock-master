@@ -177,6 +177,9 @@ garde anti-`.env` préchargée. Aucun service réel.
 | E2E concernés (13 fichiers) : connexion, anti-abus, réinitialisation, vérification d'e-mail, invitations par identifiants, inscription, contexte, socket, proxy, CLI de rapprochement en production, empreintes de paiement | 225 / 225 |
 | Démarrages réels compilés, `NODE_ENV=production` : API et CLI avec un secret d'exemple ou trop court | Refus, code de sortie 1, message explicite sans la valeur. Le journal de l'API affiche le mode proxy et l'avertissement. |
 | CLI `check-jwt-secret` : même verdict que le démarrage pour chaque cas (unitaires) ; script compilé lancé avec un environnement vide | 32 / 32 ; refus (code 1) pour un secret absent, d'exemple, de développement ou peu varié, « conforme » (code 0) pour un secret aléatoire, valeur jamais affichée |
+| `predeploy-migrations` (unitaires, `spawnSync` simulé) : refus → aucune migration lancée ; conforme → ordre existant ; hors production → aucun contrôle | 5 / 5 |
+| `predeploy-migrations.js` compilé, processus réel, chemin 1 : `NODE_ENV=production`, secret d'exemple, `MONGODB_URI` pointant vers un faux serveur local qui compte les connexions | Code 1, **0 connexion**, 0 migration lancée, message sans la valeur |
+| Même programme, chemin 2 : secret aléatoire, base MongoDB éphémère (127.0.0.1) | Code 0, les 11 migrations dans l'ordre de `PREDEPLOY_MIGRATIONS`, « toutes les migrations sont appliquées » |
 | Typage, ESLint, Prettier | propres |
 
 Note d'exécution : `payment-reconciliation-cli-process` crée ses propres

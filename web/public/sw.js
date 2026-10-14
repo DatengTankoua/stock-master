@@ -5,25 +5,30 @@
 // docs/architecture/phase-1-11b-offline-catalog.md pour le détail exact.
 // 1-21D : v4 — icônes PWA sur fond blanc (précachées : nouvelle version
 // pour qu'un appareil déjà installé les récupère).
-const CACHE_VERSION = "v4";
+// 1-22C.1 : v5 — lancement hors ligne depuis l'icône (start_url /app),
+// pages publiques FR/EN préparées à l'installation avec leurs ressources,
+// écran de secours pour toute page non préparée. Voir
+// docs/architecture/phase-1-22c1-pwa-offline-entry.md.
+const CACHE_VERSION = "v5";
 const CACHE_NAME = `stockmaster-${CACHE_VERSION}`;
+// 1-22C.1 : documents publics localisés, dans un cache distinct (aucune
+// autre réponse n'y est jamais écrite).
+const PAGES_CACHE_NAME = `stockmaster-pages-${CACHE_VERSION}`;
+const CURRENT_CACHES = [CACHE_NAME, PAGES_CACHE_NAME];
 const OFFLINE_URL = "/offline";
 // Document statique générique (aucune donnée personnalisée : page
 // entièrement "use client", zéro fetch serveur) — seul point d'entrée
-// hors ligne pour le catalogue après une visite en ligne. Les chunks
-// /_next/static/* qu'il référence doivent déjà avoir été mis en cache par
-// cette visite (cache-first ci-dessous) : un premier accès JAMAIS visité
-// en ligne reste impossible (aucun SW installé, aucun chunk en cache).
+// hors ligne pour le catalogue. 1-22C.1 : les chunks /_next/static/* qu'il
+// référence sont précachés avec lui (avant : uniquement après une visite en
+// ligne du catalogue, sinon « This page couldn't load » hors ligne).
 const APP_SHELL_URL = "/app/catalog";
+// 1-22C.1 : `start_url` du manifeste. Hors ligne, redirigé vers le shell
+// ci-dessus, qui applique ses propres règles de session.
+const APP_ENTRY_URL = "/app";
 
-// Chemins stables (sans hash de build) uniquement : les chunks
-// /_next/static/* sont mis en cache à la volée (cache-first) lors de leur
-// premier fetch, jamais précachés ici (nom hashé inconnu avant build, et
-// aucun outil de build-time caching n'est ajouté dans cette phase).
+// Chemins stables (sans hash de build) ; les chunks référencés par les
+// documents précachés sont extraits de leur HTML (voir cacheDocumentAssets).
 const PRECACHE_URLS = [
-  "/",
-  OFFLINE_URL,
-  APP_SHELL_URL,
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
@@ -33,11 +38,39 @@ const PRECACHE_URLS = [
   "/brand/stock-master-icon.png",
 ];
 
-// Seules ces navigations publiques ont un fallback offline / sont mises en
-// cache. Toute autre page (dont /app/*, /auth/invitations/accept et
-// /auth/verify-email et /auth/reset-password, exclues explicitement plus bas) n'est jamais interceptée : la requête part au
-// réseau natif, sans lecture ni écriture de cache.
-const PUBLIC_NAVIGATIONS = new Set(["/", OFFLINE_URL, "/auth/login", "/auth/register"]);
+// 1-22C.1 — Pages publiques disponibles hors ligne, en français et en
+// anglais (même URL, langue choisie par le serveur). Jamais : /app/*,
+// /access, liens à jeton (invitation, vérification, réinitialisation).
+const LOCALES = ["fr", "en"];
+const PUBLIC_PAGES = [
+  "/",
+  OFFLINE_URL,
+  "/guide",
+  "/contact",
+  "/conditions-utilisation",
+  "/conditions-abonnement",
+  "/confidentialite",
+  "/cookies",
+  "/mentions-legales",
+  "/traitement-donnees",
+  "/auth/login",
+  "/auth/register",
+  "/auth/forgot-password",
+];
+const PUBLIC_NAVIGATIONS = new Set(PUBLIC_PAGES);
+
+// Actualisation des pages publiques en ligne (tarifs, textes juridiques) :
+// à chaque visite (réseau d'abord) et, pour les pages non visitées, au plus
+// une fois toutes les 12 h sur demande d'une page ouverte en ligne.
+const REFRESH_PUBLIC_MESSAGE = "stockmaster:refresh-public-pages";
+const PUBLIC_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const PUBLIC_REFRESH_MARKER = "/__stockmaster-sw/public-pages-refreshed";
+const CACHED_AT_HEADER = "X-Stockmaster-Cached-At";
+// Ressources indispensables d'un document (JS, CSS, polices). Borne de
+// sécurité : un document qui en référencerait davantage n'est pas préparé.
+const STATIC_ASSET_PATTERN =
+  /\/_next\/static\/[A-Za-z0-9_\-./~]+\.(?:js|css|woff2)(?:\?[A-Za-z0-9_=-]+)?/g;
+const MAX_ASSETS_PER_DOCUMENT = 120;
 
 // Correction sécurité : le lien d'acceptation d'invitation porte le token
 // en query string (?token=...) — jamais de cache/precache/fallback pour ce
@@ -79,6 +112,12 @@ function isVersionedAsset(pathname) {
   );
 }
 
+// 1-22C.1 : requête de données de navigation Next.js (RSC) — jamais lue ni
+// écrite en cache, jamais remplacée par un document HTML (et inversement).
+function isRscRequest(request, url) {
+  return request.headers.get("RSC") === "1" || url.searchParams.has("_rsc");
+}
+
 // Filet de sécurité supplémentaire (défense en profondeur) : même hors de
 // /auth/invitations/accept, jamais de cache.put pour une URL dont le
 // chemin ou la query contient un identifiant sensible d'invitation/session.
@@ -87,12 +126,171 @@ function isSensitiveUrl(url) {
   return SENSITIVE_URL_PATTERN.test(url.pathname) || SENSITIVE_URL_PATTERN.test(url.search);
 }
 
+// ─── Documents publics localisés (1-22C.1) ──────────────────────────────────
+// Clé interne par langue : la même URL est rendue en FR ou en EN selon le
+// cookie, que le service worker ne lit pas. La langue d'un document est
+// celle de son `<html lang>`.
+function publicPageKey(pathname, locale) {
+  return new Request(`${self.location.origin}${pathname}?__sw_locale=${locale}`);
+}
+
+function documentLocale(html) {
+  const match = /<html[^>]*\slang="(fr|en)"/.exec(html.slice(0, 2000));
+  return match ? match[1] : null;
+}
+
+function isHtmlResponse(response) {
+  return (response.headers.get("Content-Type") || "").includes("text/html");
+}
+
+// Ressources /_next/static référencées par un document (HTML et en-tête
+// Link, qui porte les polices préchargées), mises en cache AVANT le
+// document : une copie enregistrée n'est jamais incomplète. Échec réseau ou
+// HTTP → exception, le document n'est alors pas remplacé.
+async function cacheDocumentAssets(html, linkHeader) {
+  const source = `${html}
+${linkHeader || ""}`;
+  const paths = [...new Set(source.match(STATIC_ASSET_PATTERN) || [])];
+  if (paths.length > MAX_ASSETS_PER_DOCUMENT) throw new Error("too-many-assets");
+  const cache = await caches.open(CACHE_NAME);
+  await runPool(paths, 6, async (path) => {
+    const request = new Request(`${self.location.origin}${path}`);
+    if (await cache.match(request)) return;
+    const response = await fetch(request);
+    if (!response.ok) throw new Error("asset-unavailable");
+    await cache.put(request, response);
+  });
+}
+
+// Copie normalisée (sans les en-têtes Vary/no-store de Next.js) et datée.
+function storedDocument(html) {
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      [CACHED_AT_HEADER]: new Date().toISOString(),
+    },
+  });
+}
+
+// Enregistre une réponse de page publique sous sa langue réelle. Ignore
+// silencieusement toute réponse non exploitable (erreur HTTP, redirection,
+// autre type) : la copie précédente reste en place.
+async function storePublicPage(pathname, response) {
+  if (!response.ok || response.redirected || !isHtmlResponse(response)) return false;
+  if (new URL(response.url).pathname !== pathname) return false;
+  const html = await response.text();
+  const locale = documentLocale(html);
+  if (!locale) return false;
+  await cacheDocumentAssets(html, response.headers.get("Link"));
+  const cache = await caches.open(PAGES_CACHE_NAME);
+  await cache.put(publicPageKey(pathname, locale), storedDocument(html));
+  return true;
+}
+
+// Téléchargement explicite d'une page dans une langue : sans cookie (jamais
+// de réponse liée à une session), langue imposée par Accept-Language.
+function fetchPublicPage(pathname, locale) {
+  return fetch(pathname, {
+    credentials: "omit",
+    cache: "no-store",
+    headers: { "Accept-Language": locale },
+  });
+}
+
+// Préparation complète (installation) : un échec réseau ou serveur (5xx)
+// fait échouer l'installation, l'ancienne version reste alors active avec
+// ses caches. Une page absente (4xx, redirection) est seulement ignorée.
+async function precachePublicPages() {
+  const jobs = PUBLIC_PAGES.flatMap((pathname) =>
+    LOCALES.map((locale) => ({ pathname, locale })),
+  );
+  await runPool(jobs, 4, async ({ pathname, locale }) => {
+    const response = await fetchPublicPage(pathname, locale);
+    if (response.status >= 500) throw new Error("page-unavailable");
+    await storePublicPage(pathname, response);
+  });
+}
+
+async function precacheAppShell() {
+  const response = await fetch(APP_SHELL_URL, { credentials: "omit", cache: "no-store" });
+  if (!response.ok || response.redirected || !isHtmlResponse(response)) {
+    throw new Error("app-shell-unavailable");
+  }
+  const html = await response.text();
+  await cacheDocumentAssets(html, response.headers.get("Link"));
+  const cache = await caches.open(CACHE_NAME);
+  await cache.put(APP_SHELL_URL, storedDocument(html));
+}
+
+// Actualisation en ligne : chaque page n'est remplacée qu'en cas de succès
+// complet (document + ressources) ; un échec garde la copie précédente.
+async function refreshPublicPagesIfStale() {
+  const cache = await caches.open(PAGES_CACHE_NAME);
+  const marker = await cache.match(PUBLIC_REFRESH_MARKER);
+  const last = marker ? Date.parse(marker.headers.get(CACHED_AT_HEADER) || "") : NaN;
+  if (Number.isFinite(last) && Date.now() - last < PUBLIC_REFRESH_INTERVAL_MS) return;
+  await cache.put(PUBLIC_REFRESH_MARKER, storedDocument(""));
+  const jobs = PUBLIC_PAGES.flatMap((pathname) =>
+    LOCALES.map((locale) => ({ pathname, locale })),
+  );
+  await runPool(jobs, 2, async ({ pathname, locale }) => {
+    try {
+      await storePublicPage(pathname, await fetchPublicPage(pathname, locale));
+    } catch {
+      // copie précédente conservée
+    }
+  });
+}
+
+// Langue de l'appareil d'abord (écrite par la page), puis l'autre langue.
+async function cachedPublicPage(pathname) {
+  const preferred = await readDeviceLocale();
+  const cache = await caches.open(PAGES_CACHE_NAME);
+  for (const locale of [preferred, ...LOCALES.filter((l) => l !== preferred)]) {
+    const cached = await cache.match(publicPageKey(pathname, locale));
+    if (cached) return cached;
+  }
+  return null;
+}
+
+// Copie servie hors ligne : `<html data-offline-copy="<date>">` permet à la
+// page d'indiquer qu'il s'agit d'une version enregistrée (attribut toléré à
+// l'hydratation : `suppressHydrationWarning` sur <html>).
+async function markedOfflineCopy(cached) {
+  const cachedAt = cached.headers.get(CACHED_AT_HEADER) || "";
+  const html = (await cached.text()).replace(
+    /<html(\s|>)/,
+    `<html data-offline-copy="${cachedAt.replace(/[^0-9TZ:.-]/g, "")}"$1`,
+  );
+  return new Response(html, {
+    status: 200,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+async function runPool(items, size, worker) {
+  let index = 0;
+  const lanes = Array.from({ length: Math.min(size, items.length) }, async () => {
+    while (index < items.length) {
+      const item = items[index++];
+      await worker(item);
+    }
+  });
+  await Promise.all(lanes);
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting()),
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.addAll(PRECACHE_URLS);
+      await precacheAppShell();
+      await precachePublicPages();
+      const pages = await caches.open(PAGES_CACHE_NAME);
+      await pages.put(PUBLIC_REFRESH_MARKER, storedDocument(""));
+      await self.skipWaiting();
+    })(),
   );
 });
 
@@ -102,15 +300,23 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) =>
         // Purge limitée au namespace stockmaster-* : jamais un cache d'un
-        // autre namespace/application partageant la même origine.
+        // autre namespace/application partageant la même origine. Les ventes
+        // locales et l'identité hors ligne sont en IndexedDB : jamais
+        // touchées ici.
         Promise.all(
           keys
-            .filter((key) => key.startsWith("stockmaster-") && key !== CACHE_NAME)
+            .filter((key) => key.startsWith("stockmaster-") && !CURRENT_CACHES.includes(key))
             .map((key) => caches.delete(key)),
         ),
       )
       .then(() => self.clients.claim()),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === REFRESH_PUBLIC_MESSAGE) {
+    event.waitUntil(refreshPublicPagesIfStale().catch(() => {}));
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -121,6 +327,7 @@ self.addEventListener("fetch", (event) => {
   if (isInvitationAcceptPath(url.pathname)) return; // token en query : jamais de cache, réseau natif
   if (isEmailVerificationPath(url.pathname)) return; // 1-13A : idem (lien de vérification)
   if (isPasswordResetPath(url.pathname)) return; // 1-13B : idem (lien de réinitialisation)
+  if (isRscRequest(request, url)) return; // 1-22C.1 : données Next.js, réseau natif
 
   // Exception UNIQUE et étroite (1-11B) : uniquement la navigation exacte
   // vers /app/catalog, SANS aucune query string (clé précachée invariante,
@@ -134,13 +341,27 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (isAppOrApiPath(url.pathname)) return; // jamais /app, /api, /socket.io
-
-  if (request.mode === "navigate") {
-    if (!PUBLIC_NAVIGATIONS.has(url.pathname)) return; // page non listée : réseau natif, jamais de cache
-    event.respondWith(networkFirstPublicNavigation(request));
+  // 1-22C.1 : ouverture depuis l'icône (start_url), sans query string.
+  if (request.mode === "navigate" && url.pathname === APP_ENTRY_URL && url.search === "") {
+    event.respondWith(appEntry(request));
     return;
   }
+
+  if (request.mode === "navigate") {
+    if (PUBLIC_NAVIGATIONS.has(url.pathname)) {
+      event.respondWith(networkFirstPublicNavigation(event, url));
+      return;
+    }
+    // 1-22C.1 : toute autre page (dont /app/*) part au réseau, sans lecture
+    // ni écriture de cache pour cette URL ; seul un ÉCHEC RÉSEAU affiche
+    // l'écran hors ligne public. Une réponse HTTP (401, 403, 404, 5xx) est
+    // toujours rendue telle quelle.
+    if (url.pathname.startsWith("/api") || url.pathname.startsWith("/socket.io")) return;
+    event.respondWith(networkOrOfflineScreen(request));
+    return;
+  }
+
+  if (isAppOrApiPath(url.pathname)) return; // jamais /app, /api, /socket.io
 
   if (isVersionedAsset(url.pathname)) {
     event.respondWith(cacheFirst(request));
@@ -160,17 +381,45 @@ async function appShellFallback(request) {
   }
 }
 
-async function networkFirstPublicNavigation(request) {
+// Réseau d'abord ; échec réseau → shell du catalogue hors ligne (ses règles
+// de session décident : identité vérifiée localement ou connexion requise).
+async function appEntry(request) {
   try {
-    const response = await fetch(request);
-    if (response.ok && !isSensitiveUrl(new URL(request.url))) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
+    return await fetch(request);
+  } catch {
+    if (await caches.match(APP_SHELL_URL)) {
+      return Response.redirect(new URL(APP_SHELL_URL, self.location.origin).href, 302);
+    }
+    return offlineScreen();
+  }
+}
+
+async function networkOrOfflineScreen(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return offlineScreen();
+  }
+}
+
+async function offlineScreen() {
+  const cached = await cachedPublicPage(OFFLINE_URL);
+  return cached ?? Response.error();
+}
+
+async function networkFirstPublicNavigation(event, url) {
+  try {
+    const response = await fetch(event.request);
+    // Seule l'URL exacte (sans query) est enregistrée : une variante
+    // paramétrée n'écrase jamais la copie de référence.
+    if (url.search === "" && !isSensitiveUrl(url)) {
+      event.waitUntil(storePublicPage(url.pathname, response.clone()).catch(() => {}));
     }
     return response;
   } catch {
-    const cached = await caches.match(request);
-    return cached ?? (await caches.match(OFFLINE_URL));
+    const cached = await cachedPublicPage(url.pathname);
+    if (cached) return url.pathname === OFFLINE_URL ? cached : markedOfflineCopy(cached);
+    return offlineScreen();
   }
 }
 
