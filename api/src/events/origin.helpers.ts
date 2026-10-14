@@ -61,6 +61,17 @@ export const HTTP_CORS_ALLOWED_HEADERS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * En-têtes de RÉPONSE lisibles par le web (1-22H.1). Le web et l'API ont
+ * des origines distinctes : sans `Access-Control-Expose-Headers`, le
+ * navigateur masque `Retry-After` (429 de quota, 503 de capacité), et le
+ * web retombe sur ses délais de repli. Seul en-tête de réponse lu par le
+ * web ; n'est servi qu'aux origines autorisées (aucun en-tête CORS sinon).
+ */
+export const HTTP_CORS_EXPOSED_HEADERS: readonly string[] = Object.freeze([
+  'Retry-After',
+]);
+
+/**
  * Résultat d'un contrôle d'origine : `allowed === true` ⇒ l'origine est
  * STRICTEMENT dans l'allowlist.
  */
@@ -204,7 +215,8 @@ export function buildOriginAllowlist(
  *   SANS en-tête CORS et SANS 500 (`undefined` serait falsy et déclencherait
  *   une 500 dans cors@2.8.6 — `if (err2 || !origin) next(err2)`).
  * Jamais `credentials` (auth Bearer, pas cookie) ; méthodes/headers
- * explicites (jamais réfléchis).
+ * explicites (jamais réfléchis) ; en-têtes de réponse exposés explicites
+ * (1-22H.1 : `Retry-After`).
  */
 export function buildHttpCorsOptions(allowlist: OriginAllowlist): {
   origin: (
@@ -213,11 +225,13 @@ export function buildHttpCorsOptions(allowlist: OriginAllowlist): {
   ) => void;
   methods: readonly string[];
   allowedHeaders: readonly string[];
+  exposedHeaders: readonly string[];
 } {
   return {
     origin: (requestOrigin, callback) =>
       callback(null, allowlist.isAllowed(requestOrigin ?? null)),
     methods: HTTP_CORS_METHODS,
     allowedHeaders: HTTP_CORS_ALLOWED_HEADERS,
+    exposedHeaders: HTTP_CORS_EXPOSED_HEADERS,
   };
 }

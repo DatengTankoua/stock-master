@@ -11,6 +11,11 @@ import { AppModule } from './../src/app.module';
 import { API_APPLICATION_OPTIONS } from './../src/common/application-options';
 import { HttpExceptionFilter } from './../src/common/filters/http-exception.filter';
 import {
+  buildHttpCorsOptions,
+  buildOriginAllowlist,
+  parseCORSOrigin,
+} from './../src/events/origin.helpers';
+import {
   SubscriptionPeriod,
   SubscriptionPeriodDocument,
 } from './../src/subscriptions/schemas/subscription-period.schema';
@@ -62,6 +67,9 @@ import { FAKE_SASPAY_KEY, FakeSasPay } from './e2e/fake-saspay';
 const TEST_JWT_SECRET = 'saspay-quota-22d-e2e-only-secret-value';
 const WEBHOOK_SECRET = 'saspay-webhook-secret-22d-e2e-only';
 const PASSWORD = 'pay-22d-pw-!1x';
+/** 1-22H.1 : origine du web (autorisée) et origine étrangère. */
+const WEB_ORIGIN = 'https://saspay-22d.example.com';
+const FOREIGN_ORIGIN = 'https://attacker.example.com';
 const LIMITS = PAYMENT_CALL_LIMITS;
 
 const fake = new FakeSasPay();
@@ -251,7 +259,7 @@ describe('Quota SasPay entre organisations (e2e 1-22D)', () => {
     try {
       process.env.MONGODB_URI = validatedEphemeralUri(replSet);
       process.env.JWT_SECRET = TEST_JWT_SECRET;
-      process.env.CORS_ORIGIN = 'https://saspay-22d.example.com';
+      process.env.CORS_ORIGIN = WEB_ORIGIN;
       process.env.PUBLIC_REGISTRATION_ENABLED = 'true';
       moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(EMAIL_SENDER)
@@ -270,6 +278,14 @@ describe('Quota SasPay entre organisations (e2e 1-22D)', () => {
         .useValue('https://app.saspay-22d.example')
         .compile();
       app = moduleFixture.createNestApplication(API_APPLICATION_OPTIONS);
+      // 1-22H.1 : MÊME factory CORS que main.ts, au même endroit (avant les
+      // pipes, filtres et routes) : les 429/503 servis ici portent les
+      // en-têtes CORS réels de la production.
+      app.enableCors(
+        buildHttpCorsOptions(
+          buildOriginAllowlist(parseCORSOrigin(WEB_ORIGIN, 'production')),
+        ),
+      );
       app.useGlobalPipes(
         new ValidationPipe({
           whitelist: true,
@@ -444,9 +460,21 @@ describe('Quota SasPay entre organisations (e2e 1-22D)', () => {
     const rows = await rowsOf(a.orgId);
     const sessions = fake.sessions.size;
     const intent = randomUUID();
-    const refused = await create(a.token, intent);
+    const refused = await create(a.token, intent).set('Origin', WEB_ORIGIN);
     expect(refused.status).toBe(429);
     expect(refused.body.code).toBe('PAYMENT_RATE_LIMITED');
+    // 1-22H.1 : délai lisible par le web (origine distincte de l'API).
+    expect(Number(refused.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+    expect(refused.headers['access-control-allow-origin']).toBe(WEB_ORIGIN);
+    expect(refused.headers['access-control-expose-headers']).toBe(
+      'Retry-After',
+    );
+    // Origine étrangère : même refus, aucun en-tête CORS (rien de lisible).
+    exhaustOrganization(a.orgId);
+    const foreign = await create(a.token, intent).set('Origin', FOREIGN_ORIGIN);
+    expect(foreign.status).toBe(429);
+    expect(foreign.headers['access-control-allow-origin']).toBeUndefined();
+    expect(foreign.headers['access-control-expose-headers']).toBeUndefined();
     expect(await rowsOf(a.orgId)).toBe(rows);
     expect(fake.sessions.size).toBe(sessions);
 
@@ -472,11 +500,16 @@ describe('Quota SasPay entre organisations (e2e 1-22D)', () => {
     const rows = await rowsOf(newcomer.orgId);
     const calls = fake.calls.length;
 
-    const created = await create(newcomer.token);
+    const created = await create(newcomer.token).set('Origin', WEB_ORIGIN);
     expect(created.status).toBe(503);
     expect(created.body.code).toBe('PAYMENT_SERVICE_UNAVAILABLE');
     expect(created.headers['retry-after']).toBe(
       String(LIMITS.capacityRetryAfterSeconds),
+    );
+    // 1-22H.1 : délai de capacité lisible par le web.
+    expect(created.headers['access-control-allow-origin']).toBe(WEB_ORIGIN);
+    expect(created.headers['access-control-expose-headers']).toBe(
+      'Retry-After',
     );
     // Aucune information sur l'activité des autres organisations.
     expect(Object.keys(created.body).sort()).toEqual([

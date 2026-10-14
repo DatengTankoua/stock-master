@@ -4,14 +4,15 @@
 # Contexte de build : racine du dépôt (voir docker-compose.prod.yml).
 #
 # Image de base figée (tag + digest de l'index multi-arch) :
-#   node:22.17.1-alpine3.22 — Node 22.17.1, Alpine 3.22.1, musl
-#   index    sha256:5539840ce9d013fa13e3b9814c9353024be7ac75aca5db6d039504a56c04ea59
-#   amd64    sha256:99351363debf40f3495cb7fc657a777334c3b21143e594dbfcc7de187439633c
+#   node:22.23.3-alpine3.23 — Node 22.23.3, Alpine 3.23, musl (1-22H : correctifs
+#   de sécurité Node 22.22.0 à 22.23.2 ; aucune 22.23.x publiée sur Alpine 3.22)
+#   index    sha256:baf676f7d0e552f3231945c2f979055ca121bce128c152f7a34e6bd1728b1c5a
+#   amd64    sha256:489418a947387da1c5b4c0c5749c963da56ecaac0ced1da74c67db60e42f2b3a
 # pnpm : version exacte du champ `packageManager` (pnpm@11.18.0) via corepack.
 # Sharp : seuls les binaires linux/x64/musl sont installés (--os/--cpu/--libc),
 # sans modifier pnpm-workspace.yaml (qui reste multiplateforme).
 
-FROM node:22.17.1-alpine3.22@sha256:5539840ce9d013fa13e3b9814c9353024be7ac75aca5db6d039504a56c04ea59 AS build
+FROM node:22.23.3-alpine3.23@sha256:baf676f7d0e552f3231945c2f979055ca121bce128c152f7a34e6bd1728b1c5a AS build
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true \
     NEXT_TELEMETRY_DISABLED=1
@@ -42,7 +43,7 @@ ENV DOCKER_BUILD=true \
 RUN pnpm --filter web build
 
 # ─── Runtime : serveur standalone, sans pnpm ni sources ─────────────────────
-FROM node:22.17.1-alpine3.22@sha256:5539840ce9d013fa13e3b9814c9353024be7ac75aca5db6d039504a56c04ea59 AS runtime
+FROM node:22.23.3-alpine3.23@sha256:baf676f7d0e552f3231945c2f979055ca121bce128c152f7a34e6bd1728b1c5a AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
