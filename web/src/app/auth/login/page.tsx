@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useT } from "next-i18next/client";
@@ -9,12 +9,17 @@ import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LoginError, useAuth } from "@/contexts/auth-context";
+import {
+  LOGIN_NETWORK_UNAVAILABLE,
+  LoginError,
+  useAuth,
+} from "@/contexts/auth-context";
 import { EmailVerificationResend } from "@/components/auth/email-verification-resend";
 import { AuthLegalLinks } from "@/components/legal/auth-legal-links";
 import type { SelectableOrganization } from "@/lib/api";
 import { Wordmark } from "@/components/brand/wordmark";
 import { BackToHome } from "@/components/landing/back-to-home";
+import { useHydratedOnlineStatus } from "@/hooks/use-online-status";
 import Link from "next/link";
 import {
   INVITATION_ACCEPT_PATH,
@@ -30,6 +35,8 @@ import {
   type InvitationPreview,
 } from "@/lib/api";
 
+const noSubscription = () => () => {};
+
 export default function LoginPage() {
   const { t } = useT("auth");
   const { login } = useAuth();
@@ -39,6 +46,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useMessage("auth");
+  // 1-22C.1 : sans réseau, aucune tentative (ni simulée, ni mise en file).
+  // Copie enregistrée servie par le service worker : le serveur était
+  // injoignable au chargement (`navigator.onLine` peut rester vrai).
+  const online = useHydratedOnlineStatus();
+  const offlineCopy = useSyncExternalStore(
+    noSubscription,
+    () => document.documentElement.dataset.offlineCopy !== undefined,
+    () => false,
+  );
   // 1-13A : identifiants corrects mais adresse non vérifiée — aucune session
   // créée ; l'adresse saisie sert uniquement au renvoi du lien.
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
@@ -175,6 +191,10 @@ export default function LoginPage() {
   };
 
   const submit = async (organizationId?: string) => {
+    if (!navigator.onLine) {
+      setError((tr) => tr("login.offline"));
+      return;
+    }
     if (challengeRequired && !challengeToken) {
       setError((tr) => tr("login.challenge.missing"));
       return;
@@ -221,6 +241,10 @@ export default function LoginPage() {
         return;
       }
       if (err instanceof LoginError && handleChallengeError(err.code)) {
+        return;
+      }
+      if (err instanceof LoginError && err.code === LOGIN_NETWORK_UNAVAILABLE) {
+        setError((tr) => tr("login.offline"));
         return;
       }
       if (
@@ -449,7 +473,17 @@ export default function LoginPage() {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          {(!online || offlineCopy) && !error && (
+            <p role="status" className="text-sm font-medium">
+              {t("login.offline")}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading || !online}
+          >
             {loading ? t("login.submitting") : t("login.submit")}
           </Button>
         </form>

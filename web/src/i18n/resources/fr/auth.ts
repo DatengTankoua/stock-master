@@ -27,6 +27,8 @@ const authFr = {
     forgot: "Mot de passe oublié ?",
     submit: "Se connecter",
     submitting: "Connexion…",
+    // 1-22C.1 : aucune tentative ni mise en file sans réseau.
+    offline: "Une connexion Internet est nécessaire pour vous connecter.",
     unverifiedTitle: "Adresse email non confirmée",
     unverifiedText:
       "Confirmez votre adresse email pour accéder à votre compte. Ouvrez le lien reçu par email, ou demandez-en un nouveau.",

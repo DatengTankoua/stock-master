@@ -23,7 +23,24 @@ const commonFr = {
   },
   offline: {
     title: "Vous êtes hors connexion",
-    text: "Les données de gestion (catalogue, ventes, analyses) et toute modification nécessitent une connexion Internet. Reconnecte-toi puis réessaie.",
+    // 1-22C.1 : écran de secours de toute page non disponible hors ligne.
+    text: "Cette page nécessite une connexion Internet. Réessayez une fois connecté, ou consultez les pages enregistrées sur cet appareil.",
+    availableTitle: "Disponible hors connexion",
+    links: {
+      home: "Accueil",
+      pricing: "Tarifs",
+      guide: "Guide d'utilisation",
+      contact: "Contact",
+      terms: "Conditions d'utilisation",
+      catalog:
+        "Catalogue et ventes hors ligne (compte déjà connecté sur cet appareil)",
+    },
+  },
+  // 1-22C.1 : page publique servie depuis la copie enregistrée.
+  offlineCopy: {
+    savedAt: "Version enregistrée sur cet appareil le {{date}}.",
+    text: "Les tarifs et conditions affichés peuvent avoir changé depuis. L'inscription, la connexion et le paiement nécessitent une connexion Internet.",
+    refresh: "Actualiser",
   },
   actions: {
     retry: "Réessayer",

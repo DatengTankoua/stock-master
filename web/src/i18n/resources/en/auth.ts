@@ -27,6 +27,7 @@ const authEn: Translation<typeof authFr> = {
     forgot: "Forgot your password?",
     submit: "Log in",
     submitting: "Logging in…",
+    offline: "An Internet connection is required to log in.",
     unverifiedTitle: "Email address not confirmed",
     unverifiedText:
       "Confirm your email address to access your account. Open the link you received by email, or request a new one.",
