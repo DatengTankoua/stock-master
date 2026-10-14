@@ -3,6 +3,9 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "moduleNameMapper": {
+    "(^|/)common/config/app-config$": "<rootDir>/e2e/e2e-app-config.ts"
+  },
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },

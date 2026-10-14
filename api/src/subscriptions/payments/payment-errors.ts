@@ -1,9 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import {
+  PAYMENT_RATE_LIMIT_CODE,
+  PAYMENT_RATE_LIMIT_MESSAGE,
+} from '../../common/subscription-payment-rate-limiting';
 
 /** 1-14D.2B — Codes STABLES des routes de paiement (aucune donnée interne). */
 export const PAYMENT_ERROR_CODES = Object.freeze({
@@ -19,18 +25,51 @@ export const PAYMENT_ERROR_CODES = Object.freeze({
   RECEIPT_UNAVAILABLE: 'PAYMENT_RECEIPT_UNAVAILABLE',
 } as const);
 
-export const paymentServiceUnavailable = () =>
-  new ServiceUnavailableException({
-    code: PAYMENT_ERROR_CODES.SERVICE_UNAVAILABLE,
-    message: 'Le paiement est momentanément indisponible.',
-  });
+/** 1-22D : `Retry-After` posé par le filtre global (`retryAfterSeconds`). */
+const withRetryAfter = <T extends HttpException>(
+  exception: T,
+  retryAfterSeconds?: number,
+): T =>
+  retryAfterSeconds === undefined
+    ? exception
+    : Object.assign(exception, { retryAfterSeconds });
 
-export const paymentStatusUnavailable = () =>
-  new ServiceUnavailableException({
-    code: PAYMENT_ERROR_CODES.STATUS_UNAVAILABLE,
-    message:
-      'Impossible de vérifier ce paiement pour le moment. Réessayez plus tard.',
-  });
+export const paymentServiceUnavailable = (retryAfterSeconds?: number) =>
+  withRetryAfter(
+    new ServiceUnavailableException({
+      code: PAYMENT_ERROR_CODES.SERVICE_UNAVAILABLE,
+      message: 'Le paiement est momentanément indisponible.',
+    }),
+    retryAfterSeconds,
+  );
+
+export const paymentStatusUnavailable = (retryAfterSeconds?: number) =>
+  withRetryAfter(
+    new ServiceUnavailableException({
+      code: PAYMENT_ERROR_CODES.STATUS_UNAVAILABLE,
+      message:
+        'Impossible de vérifier ce paiement pour le moment. Réessayez plus tard.',
+    }),
+    retryAfterSeconds,
+  );
+
+/**
+ * 1-22D — Quota d'appels au prestataire de l'organisation COURANTE atteint
+ * (création, vérification et changement de forfait confondus) : même code
+ * que la limitation des routes ; rien n'a été créé ni modifié.
+ */
+export const paymentRateLimited = (retryAfterSeconds: number) =>
+  withRetryAfter(
+    new HttpException(
+      {
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        code: PAYMENT_RATE_LIMIT_CODE,
+        message: PAYMENT_RATE_LIMIT_MESSAGE,
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    ),
+    retryAfterSeconds,
+  );
 
 /**
  * Succès vérifié mais transaction non aboutie dans le budget (ou contention

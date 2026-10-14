@@ -1,6 +1,7 @@
 import { MonotonicClock, systemMonotonicClock } from '../../subscription-clock';
 import {
   CheckoutCancellationResult,
+  MerchantReferenceLookup,
   PAYMENT_CURRENCY,
   PaymentCollectionRequest,
   PaymentInitiationResult,
@@ -12,6 +13,11 @@ import {
   ProviderPaymentState,
   ProviderPaymentStatus,
 } from '../payment-provider';
+import {
+  PAYMENT_CALL_LIMITS,
+  PaymentCallBudget,
+  PaymentCallCosts,
+} from '../payment-call-budget';
 import { SASPAY_PROVIDER_NAME, SasPayEnvironment } from './saspay-config';
 import {
   SasPayHttpResponse,
@@ -95,8 +101,20 @@ export const SASPAY_LOOKUP_BUDGET_MS = 20_000;
 /**
  * Limite LOCALE d'appels sortants par processus (documenté : 300 / min par
  * compte, toutes origines confondues) : marge laissée aux autres usages.
+ * 1-22D : répartie entre organisations et confirmations
+ * (`PaymentCallBudget`).
  */
-export const SASPAY_MAX_CALLS_PER_MINUTE = 120;
+export const SASPAY_MAX_CALLS_PER_MINUTE = PAYMENT_CALL_LIMITS.global;
+/**
+ * 1-22D — Coûts MAXIMAUX : statut = détail + statut + `verify` ; par
+ * référence marchand, d'abord jusqu'à 5 pages de liste.
+ */
+export const SASPAY_CALL_COSTS: Readonly<PaymentCallCosts> = Object.freeze({
+  initiate: 1,
+  statusByProvider: 3,
+  statusByMerchant: 3 + SASPAY_LOOKUP_MAX_PAGES,
+  cancel: 1,
+});
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Montant décimal exact en chaîne, centimes nuls : `"3000"`, `"3000.00"`. */
@@ -243,27 +261,6 @@ function metadataReference(metadata: unknown): string | null {
     : null;
 }
 
-/**
- * Fenêtre glissante d'appels sortants (par processus) ; au-delà, aucun
- * appel n'est émis (refus local, jamais un dépassement chez SasPay).
- */
-class OutboundBudget {
-  private readonly calls: number[] = [];
-  constructor(
-    private readonly max: number,
-    private readonly monotonic: MonotonicClock,
-  ) {}
-  take(): boolean {
-    const now = this.monotonic();
-    while (this.calls.length > 0 && now - this.calls[0] >= 60_000) {
-      this.calls.shift();
-    }
-    if (this.calls.length >= this.max) return false;
-    this.calls.push(now);
-    return true;
-  }
-}
-
 /** 1-21E — Date ISO 8601 lisible (`expires_at`), sinon `null`. */
 export function parseSasPayDate(value: unknown): Date | null {
   if (typeof value !== 'string' || value.length === 0 || value.length > 64) {
@@ -299,16 +296,15 @@ export class SasPayPaymentProvider implements PaymentProvider {
   private readonly transport: SasPayTransport;
   private readonly monotonic: MonotonicClock;
   private readonly now: () => number;
-  private readonly budget: OutboundBudget;
+  private readonly budget: PaymentCallBudget;
+  readonly callAdmission: PaymentProvider['callAdmission'];
 
   constructor(private readonly config: SasPayProviderConfig) {
     this.transport = config.transport ?? fetchSasPayTransport;
     this.monotonic = config.monotonic ?? systemMonotonicClock;
     this.now = config.now ?? Date.now;
-    this.budget = new OutboundBudget(
-      SASPAY_MAX_CALLS_PER_MINUTE,
-      this.monotonic,
-    );
+    this.budget = new PaymentCallBudget(this.monotonic);
+    this.callAdmission = { budget: this.budget, costs: SASPAY_CALL_COSTS };
   }
 
   private async call(
@@ -323,7 +319,7 @@ export class SasPayPaymentProvider implements PaymentProvider {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), remaining);
     try {
-      return await this.transport({
+      const response = await this.transport({
         method,
         url: `${SASPAY_API_ORIGIN}${SASPAY_API_BASE_PATH}${path}`,
         headers: {
@@ -334,6 +330,9 @@ export class SasPayPaymentProvider implements PaymentProvider {
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
+      // 1-22D : quota du compte marchand atteint → pause locale courte.
+      if (response.status === 429) this.budget.providerThrottled();
+      return response;
     } finally {
       clearTimeout(timer);
     }
@@ -384,12 +383,15 @@ export class SasPayPaymentProvider implements PaymentProvider {
       throw new PaymentProviderUncertainError();
     }
     const { status } = response;
-    // Refus avant création, documentés (validation, authentification,
-    // portée, route, limite de débit) : rien n'a été créé.
+    // Refus avant création (validation, authentification, portée, route) :
+    // rien n'a été créé.
     if (status === 400 || status === 422) return { outcome: 'rejected' };
-    if (status === 401 || status === 403 || status === 404 || status === 429) {
+    if (status === 401 || status === 403 || status === 404) {
       throw new PaymentProviderUnavailableError();
     }
+    // 1-22D.2 : `429` reçu APRÈS l'envoi — aucune source n'établit qu'il
+    // exclut la création : incertain (recherche par référence marchand).
+    // Un refus du budget LOCAL n'envoie rien (`not-sent`, ci-dessus).
     // 409, 5xx, codes inattendus : la session a PU être créée.
     if (status !== 200 && status !== 201) {
       throw new PaymentProviderUncertainError();
@@ -427,10 +429,12 @@ export class SasPayPaymentProvider implements PaymentProvider {
     lookup: PaymentStatusLookup,
   ): Promise<ProviderPaymentStatus | null> {
     if (lookup.by === 'merchant') {
-      const id = await this.findSessionByMerchantReference(
+      const found = await this.lookupByMerchantReference(
         lookup.merchantReference,
       );
-      return id === null ? null : this.statusOfSession(id);
+      return found.outcome === 'found'
+        ? this.statusOfSession(found.providerReference)
+        : null;
     }
     const id = uuidOrNull(lookup.providerReference);
     if (!id) throw new SasPayStatusUnavailableError('invalid-reference');
@@ -661,14 +665,17 @@ export class SasPayPaymentProvider implements PaymentProvider {
 
   /**
    * Recherche BORNÉE d'une session portant notre référence (réponse perdue).
-   * `null` : aucune trouvée DANS les pages lues — jamais une preuve
-   * d'absence. Plusieurs : jamais départagées (incohérence).
+   * `not-found` : aucune DANS les pages lues — jamais une preuve d'absence ;
+   * 1-22D.3 : `complete` seulement si la liste a été lue jusqu'au bout.
+   * Plusieurs : jamais départagées (incohérence).
    */
-  private async findSessionByMerchantReference(
+  async lookupByMerchantReference(
     merchantReference: string,
-  ): Promise<string | null> {
+  ): Promise<MerchantReferenceLookup> {
     const deadline = this.monotonic() + SASPAY_LOOKUP_BUDGET_MS;
     const matches = new Set<string>();
+    let complete = false;
+    let pagesRead = 0;
     for (let page = 1; page <= SASPAY_LOOKUP_MAX_PAGES; page += 1) {
       const listed = await this.getJson(
         `/checkout-sessions/?page=${page}&page_size=${SASPAY_LOOKUP_PAGE_SIZE}`,
@@ -677,6 +684,7 @@ export class SasPayPaymentProvider implements PaymentProvider {
       if (listed.status !== 200 || !isRecord(listed.data)) {
         throw new SasPayStatusUnavailableError('lookup');
       }
+      pagesRead = page;
       const results = listed.data.results;
       if (!Array.isArray(results)) {
         throw new SasPayStatusUnavailableError('lookup-shape');
@@ -690,8 +698,13 @@ export class SasPayPaymentProvider implements PaymentProvider {
       if (matches.size > 1) {
         throw new PaymentProviderInconsistencyError('ambiguous-lookup');
       }
-      if (listed.data.next === null || listed.data.next === undefined) break;
+      if (listed.data.next === null || listed.data.next === undefined) {
+        complete = true;
+        break;
+      }
     }
-    return matches.size === 1 ? [...matches][0] : null;
+    return matches.size === 1
+      ? { outcome: 'found', providerReference: [...matches][0] }
+      : { outcome: 'not-found', complete, pagesRead };
   }
 }

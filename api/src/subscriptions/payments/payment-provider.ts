@@ -1,3 +1,8 @@
+import type {
+  PaymentCallBudget,
+  PaymentCallCosts,
+} from './payment-call-budget';
+
 /**
  * 1-14D.2B — Contrat MINIMAL d'un prestataire de paiement (Mobile Money).
  *
@@ -195,7 +200,30 @@ export interface PaymentProvider {
    * validité des paiements enregistrés AVANT 1-21E (création + durée).
    */
   readonly checkoutTtlMs?: number;
+  /**
+   * 1-22D — Budget d'appels du processus et coûts MAXIMAUX par opération :
+   * les actions propriétaires réservent leur part avant tout effet. Absent :
+   * aucune admission (comportement antérieur).
+   */
+  /**
+   * 1-22D.3 — Recherche BORNÉE de la collecte portant NOTRE référence
+   * marchand (rapprochement opérateur). `not-found` n'est jamais une preuve
+   * d'absence ; `complete` : toutes les pages existantes ont été lues.
+   * Erreur : recherche indisponible ou incohérente.
+   */
+  lookupByMerchantReference?(
+    merchantReference: string,
+  ): Promise<MerchantReferenceLookup>;
+  readonly callAdmission?: {
+    readonly budget: PaymentCallBudget;
+    readonly costs: Readonly<PaymentCallCosts>;
+  };
 }
+
+/** 1-22D.3 — Issue d'une recherche par référence marchand. */
+export type MerchantReferenceLookup =
+  | { outcome: 'found'; providerReference: string }
+  | { outcome: 'not-found'; complete: boolean; pagesRead: number };
 
 /** La requête n'a CERTAINEMENT pas atteint le prestataire. */
 export class PaymentProviderUnavailableError extends Error {

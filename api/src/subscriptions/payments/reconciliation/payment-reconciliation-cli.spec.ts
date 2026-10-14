@@ -227,7 +227,7 @@ const blockedPlan: ReconciliationPlan = {
   paymentId: PAYMENT_ID,
   before: readyPlan.before,
   consultedReference: REFERENCE,
-  verified: { ...readyPlan.verified, amount: null },
+  verified: { ...readyPlan.verified!, amount: null },
   mismatches: ['amount'],
 };
 
@@ -394,6 +394,110 @@ describe('1-21B — clôture explicite d’une page de paiement close sans succ�
       grantRenewalConflict: undefined,
       recordRefund: false,
     });
+  });
+});
+
+describe('1-22D.3 — clôture exceptionnelle sans session', () => {
+  const PROOF = 'saspay-support:TCK-48213';
+  const closeArgs = (extra: string[]) =>
+    applyArgs(extra).filter((a) => !a.startsWith('--reason='));
+
+  it('simulation : preuve référencée exigée et transmise ; incompatible avec --reference et inspect', async () => {
+    const simulate = (extra: string[]) =>
+      parseReconciliationArguments([
+        'reconcile',
+        `--payment-id=${PAYMENT_ID}`,
+        ...extra,
+      ]);
+    expect(
+      simulate(['--close-without-session', `--ticket=${PROOF}`]),
+    ).toMatchObject({ apply: false, closeWithoutSessionProof: PROOF });
+    // Sans preuve, ou simple mot de décision : refusé.
+    for (const extra of [
+      ['--close-without-session'],
+      ['--close-without-session', '--ticket=fermer'],
+      ['--close-without-session', '--ticket=saspay:fermer-quand-meme'],
+      ['--close-without-session', '--ticket=TCK-1'],
+      [
+        '--close-without-session',
+        `--ticket=${PROOF}`,
+        `--reference=${REFERENCE}`,
+      ],
+      [
+        '--close-without-session',
+        '--close-without-session',
+        `--ticket=${PROOF}`,
+      ],
+    ]) {
+      expect(simulate(extra)).toHaveProperty('error');
+    }
+    // Hors de cette option, le ticket reste réservé à l'application.
+    expect(simulate([`--ticket=${PROOF}`])).toHaveProperty('error');
+    expect(
+      parseReconciliationArguments([
+        'inspect',
+        `--payment-id=${PAYMENT_ID}`,
+        '--close-without-session',
+      ]),
+    ).toHaveProperty('error');
+
+    const plan = jest.fn().mockResolvedValue(readyPlan);
+    await run(
+      parsed([
+        'reconcile',
+        `--payment-id=${PAYMENT_ID}`,
+        '--close-without-session',
+        `--ticket=${PROOF}`,
+      ]),
+      fakeService({ plan }),
+    );
+    expect(plan).toHaveBeenCalledWith(
+      PAYMENT_ID,
+      null,
+      expect.objectContaining({ closeWithoutSessionProof: PROOF }),
+    );
+  });
+
+  it('application : motif `provider-no-session` et preuve exigés ; motif réservé à cette option ; erreur de preuve → 2', async () => {
+    expect(
+      parseReconciliationArguments([
+        ...closeArgs(['--close-without-session']),
+        '--reason=provider-no-session',
+        `--ticket=${PROOF}`,
+      ]),
+    ).toMatchObject({
+      apply: true,
+      reasonCode: 'provider-no-session',
+      reasonTicket: PROOF,
+      closeWithoutSessionProof: PROOF,
+    });
+    expect(
+      parseReconciliationArguments([
+        ...closeArgs(['--close-without-session']),
+        '--reason=provider-statement',
+        `--ticket=${PROOF}`,
+      ]),
+    ).toHaveProperty('error');
+    expect(
+      parseReconciliationArguments([
+        ...closeArgs([]),
+        '--reason=provider-no-session',
+        `--ticket=${PROOF}`,
+      ]),
+    ).toHaveProperty('error');
+    const r = await run(
+      parsed([
+        ...closeArgs(['--close-without-session']),
+        '--reason=provider-no-session',
+        `--ticket=${PROOF}`,
+      ]),
+      fakeService({
+        apply: jest
+          .fn()
+          .mockRejectedValue(new ReconciliationError('PROOF_REQUIRED', 'x')),
+      }),
+    );
+    expect(r.code).toBe(RECONCILIATION_EXIT.USAGE);
   });
 });
 

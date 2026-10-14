@@ -76,10 +76,12 @@ import {
   paymentConfirmationPending,
   paymentNotFound,
   paymentOperationConflict,
+  paymentRateLimited,
   paymentReceiptUnavailable,
   paymentServiceUnavailable,
   paymentStatusUnavailable,
 } from './payment-errors';
+import type { PaymentCallPermit } from './payment-call-budget';
 import {
   PAYMENT_HISTORY_DEFAULT_LIMIT,
   PAYMENT_HISTORY_MAX_LIMIT,
@@ -447,6 +449,38 @@ export class SubscriptionPaymentsService {
       .exec();
     if (open) throw paymentAlreadyPending(String(open._id));
 
+    // 1-22D : appel au prestataire réservé AVANT toute écriture ; un refus
+    // (quota de l'organisation, capacité) ne crée ni ne ferme aucun paiement.
+    return this.withOwnerCalls(
+      this.provider,
+      context,
+      this.provider.callAdmission?.costs.initiate ?? 0,
+      'create',
+      () =>
+        this.reserveAndInitiate(
+          organizationId,
+          requestedBy,
+          clientOperationId,
+          fingerprint,
+          price,
+          payerPhone,
+          needsPhone,
+          input.payer,
+        ),
+    );
+  }
+
+  /** Étapes 4 et 5 de `createPayment`, dans la réservation d'appels. */
+  private async reserveAndInitiate(
+    organizationId: Types.ObjectId,
+    requestedBy: Types.ObjectId,
+    clientOperationId: string,
+    fingerprint: string,
+    price: ReturnType<typeof getSubscriptionPrice>,
+    payerPhone: string | null,
+    needsPhone: boolean,
+    payer: { email: string; name: string } | undefined,
+  ): Promise<{ payment: SubscriptionPaymentView; replayed: boolean }> {
     // 4. Persistance + réservation atomique (tarif FIGÉ à cet instant).
     const _id = new Types.ObjectId();
     const merchantReference = merchantReferenceFor(_id);
@@ -506,7 +540,7 @@ export class SubscriptionPaymentsService {
         _id,
         price,
         needsPhone ? payerPhone : null,
-        needsPhone ? undefined : input.payer,
+        needsPhone ? undefined : payer,
       );
     } finally {
       this.signalPayments(organizationId);
@@ -751,7 +785,69 @@ export class SubscriptionPaymentsService {
     paymentId: string,
   ): Promise<SubscriptionPaymentView> {
     const payment = await this.findScoped(context, paymentId);
-    return this.confirmPaymentShared(payment._id);
+    const provider = confirmationProviderFor(
+      payment.provider,
+      this.provider,
+      this.confirmers,
+    );
+    return this.withOwnerCalls(
+      provider,
+      context,
+      this.statusCost(payment, provider),
+      'status',
+      () => this.confirmPaymentShared(payment._id),
+    );
+  }
+
+  /**
+   * 1-22D — Action propriétaire : réserve `cost` appels au prestataire pour
+   * l'organisation COURANTE (contexte serveur), exécute `work` dans cette
+   * réservation, puis rend la part non utilisée. Refus : 429 (quota de
+   * l'organisation) ou 503 (capacité), avec `Retry-After`, sans aucun effet.
+   */
+  private async withOwnerCalls<T>(
+    provider: PaymentProvider | null,
+    context: PaymentRequestContext,
+    cost: number,
+    kind: 'create' | 'status',
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const admission = provider?.callAdmission;
+    if (!admission || cost <= 0) return work();
+    const decision = admission.budget.reserve(context.organizationId, cost);
+    if (!decision.admitted) {
+      if (decision.reason === 'organization') {
+        throw paymentRateLimited(decision.retryAfterSeconds);
+      }
+      throw kind === 'create'
+        ? paymentServiceUnavailable(decision.retryAfterSeconds)
+        : paymentStatusUnavailable(decision.retryAfterSeconds);
+    }
+    const permit: PaymentCallPermit = decision.permit;
+    try {
+      return await admission.budget.run(permit, work);
+    } finally {
+      permit.release();
+    }
+  }
+
+  /** 1-22D — Appels maximaux d'une vérification (0 : état local terminal). */
+  private statusCost(
+    payment: PaymentRecord,
+    provider: PaymentProvider | null,
+  ): number {
+    const costs = provider?.callAdmission?.costs;
+    if (
+      !costs ||
+      payment.status === SubscriptionPaymentStatus.SUCCEEDED ||
+      payment.status === SubscriptionPaymentStatus.REVIEW
+    ) {
+      return 0;
+    }
+    if (payment.providerReference) return costs.statusByProvider;
+    return provider.supportsMerchantReferenceLookup
+      ? costs.statusByMerchant
+      : 0;
   }
 
   /**
@@ -783,6 +879,17 @@ export class SubscriptionPaymentsService {
     paymentId: Types.ObjectId,
   ): Promise<SubscriptionPaymentView> {
     return (await this.checkShared(paymentId)).view;
+  }
+
+  /**
+   * 1-22D — Vérification démarrée APRÈS cet appel (notification) : une
+   * vérification déjà en cours a pu lire le statut avant le changement
+   * notifié. Les appels concurrents partagent UNE seule relecture suivante.
+   */
+  async confirmPaymentFresh(
+    paymentId: Types.ObjectId,
+  ): Promise<SubscriptionPaymentView> {
+    return (await this.checkFresh(paymentId)).view;
   }
 
   /** Vérification regroupée (voir `confirmPaymentShared`), statut compris. */
@@ -972,12 +1079,32 @@ export class SubscriptionPaymentsService {
     // Collecte poussée sur le téléphone (aucune page à fermer) : inchangé.
     if (!provider.cancelCheckout) throw paymentChangeUnavailable();
 
-    const first = await this.checkFresh(payment._id);
+    // 1-22D : vérification, fermeture et relecture réservées ensemble.
+    const costs = provider.callAdmission?.costs;
+    const cost = costs
+      ? this.statusCost(payment, provider) +
+        costs.cancel +
+        costs.statusByProvider
+      : 0;
+    return this.withOwnerCalls(provider, context, cost, 'status', () =>
+      this.closeCheckout(payment._id, provider),
+    );
+  }
+
+  /** Étapes 1 et 2 de `abandonPayment`. */
+  private async closeCheckout(
+    paymentId: Types.ObjectId,
+    provider: PaymentProvider,
+  ): Promise<{
+    outcome: PaymentAbandonOutcome;
+    payment: SubscriptionPaymentView;
+  }> {
+    const first = await this.checkFresh(paymentId);
     const settled = this.abandonOutcome(first);
     if (settled) return { outcome: settled, payment: first.view };
 
     try {
-      await provider.cancelCheckout(first.observed!.providerReference);
+      await provider.cancelCheckout!(first.observed!.providerReference);
     } catch (error) {
       // Demande certainement non transmise : rien n'a changé.
       if (error instanceof PaymentProviderUnavailableError) {
@@ -985,7 +1112,7 @@ export class SubscriptionPaymentsService {
       }
       // Issue inconnue : la relecture tranche.
     }
-    const second = await this.checkFresh(payment._id);
+    const second = await this.checkFresh(paymentId);
     return {
       outcome: this.abandonOutcome(second) ?? 'cancel-unconfirmed',
       payment: second.view,
@@ -1452,6 +1579,9 @@ export class SubscriptionPaymentsService {
     const report = { examined: 0, failed: 0 };
     if (providers.length === 0) return report;
     for (let i = 0; i < options.limit; i += 1) {
+      // 1-22D : budget des confirmations insuffisant → passe interrompue
+      // AVANT de réserver un paiement (repris à la passe suivante).
+      if (!this.confirmationCapacityFor(providers)) break;
       const now = this.clock();
       const claimed = await this.paymentModel
         .findOneAndUpdate(
@@ -1504,6 +1634,22 @@ export class SubscriptionPaymentsService {
       }
     }
     return report;
+  }
+
+  /** 1-22D — Chaque prestataire balayé peut encore lire un statut complet. */
+  private confirmationCapacityFor(names: readonly string[]): boolean {
+    return names.every((name) => {
+      const admission = confirmationProviderFor(
+        name,
+        this.provider,
+        this.confirmers,
+      )?.callAdmission;
+      return (
+        !admission ||
+        admission.budget.confirmationHeadroom() >=
+          admission.costs.statusByMerchant
+      );
+    });
   }
 
   /**

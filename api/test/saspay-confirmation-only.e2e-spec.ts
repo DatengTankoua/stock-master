@@ -14,6 +14,7 @@ import { ensureSubscriptionPeriodIndexes } from './../src/subscriptions/subscrip
 import {
   SubscriptionPayment,
   SubscriptionPaymentDocument,
+  SubscriptionPaymentIncident,
   SubscriptionPaymentStatus,
 } from './../src/subscriptions/payments/schemas/subscription-payment.schema';
 import { ensureSubscriptionPaymentIndexes } from './../src/subscriptions/payments/subscription-payment-indexes';
@@ -23,6 +24,8 @@ import {
   UnavailablePaymentProvider,
 } from './../src/subscriptions/payments/payment-provider';
 import { SasPayPaymentProvider } from './../src/subscriptions/payments/saspay/saspay-payment-provider';
+import { PAYMENT_CALL_LIMITS } from './../src/subscriptions/payments/payment-call-budget';
+import { SubscriptionPaymentsService } from './../src/subscriptions/payments/subscription-payments.service';
 import { EMAIL_SENDER } from '../src/email-verification/email-sender';
 import {
   autoConfirmVerificationEmails,
@@ -248,6 +251,75 @@ describe('Confirmations SasPay sans nouvelles tentatives (e2e 1-21B)', () => {
     expect((await paymentModel.findById(campay.id).lean().exec())!.status).toBe(
       'pending',
     );
+  });
+
+  it('6. 1-22D : nouveaux paiements désactivés, quota de l’organisation appliqué à la vérification ; rapprochement servi', async () => {
+    const o = await owner();
+    const p = await seed(o, { provider: 'saspay' });
+    const sessionId = fake.addForeignSession(p.reference);
+    await paymentModel
+      .updateOne({ _id: p.id }, { $set: { providerReference: sessionId } })
+      .exec();
+    const budget = saspay.callAdmission!.budget;
+    const quota = budget.reserve(o.orgId, PAYMENT_CALL_LIMITS.perOrganization);
+    expect(quota.admitted).toBe(true);
+    try {
+      const calls = fake.calls.length;
+      const limited = await refresh(o.token, p.id);
+      expect(limited.status).toBe(429);
+      expect(limited.body.code).toBe('PAYMENT_RATE_LIMITED');
+      expect(Number(limited.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+      expect(fake.calls.length).toBe(calls);
+      // Confirmation (hors quota propriétaire) toujours possible.
+      fake.attempt(sessionId, 'SUCCESS');
+      await paymentModel.updateMany(
+        {},
+        { $set: { lastCheckedAt: new Date() } },
+      );
+      await paymentModel.updateOne(
+        { _id: p.id },
+        { $set: { lastCheckedAt: null } },
+      );
+      const sweep = await moduleFixture
+        .get(SubscriptionPaymentsService)
+        .sweepOnce({ limit: 10, staleMs: 600_000, lateWindowMs: 3_600_000 });
+      expect(sweep).toEqual({ examined: 1, failed: 0 });
+      expect((await paymentModel.findById(p.id).lean().exec())!.status).toBe(
+        'succeeded',
+      );
+    } finally {
+      if (quota.admitted) quota.permit.release();
+    }
+  });
+
+  it('7. 1-22D.2 : création incertaine après un 429, nouveaux paiements désactivés : introuvable → reste ouverte ; session apparue → confirmée une fois', async () => {
+    const o = await owner();
+    const p = await seed(o, {
+      provider: 'saspay',
+      status: SubscriptionPaymentStatus.UNCERTAIN,
+      incidentCode: SubscriptionPaymentIncident.INITIATION_UNCERTAIN,
+      initiatedAt: null,
+    });
+    const first = await refresh(o.token, p.id);
+    expect(first.status).toBe(200);
+    expect(first.body.status).toBe('uncertain');
+    expect((await paymentModel.findById(p.id).lean().exec())!).toMatchObject({
+      status: 'uncertain',
+      open: true,
+    });
+
+    const sessionId = fake.addForeignSession(p.reference);
+    fake.attempt(sessionId, 'SUCCESS');
+    const confirmed = await refresh(o.token, p.id);
+    expect(confirmed.body.status).toBe('succeeded');
+    expect((await refresh(o.token, p.id)).body.status).toBe('succeeded');
+    const periods = await moduleFixture
+      .get<Model<{ sourceReference: string }>>(
+        getModelToken('SubscriptionPeriod'),
+      )
+      .countDocuments({ sourceReference: `payment:${p.id}` })
+      .exec();
+    expect(periods).toBe(1);
   });
 
   it('5. webhook SasPay désactivé sans secret (défaut) : 503 sans lecture', async () => {

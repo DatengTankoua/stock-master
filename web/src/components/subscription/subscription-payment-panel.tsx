@@ -326,6 +326,13 @@ export function SubscriptionPaymentPanel({
     (error: PaymentErrorKind) => {
       if (error.kind === "rate-limited") {
         setRetryAt(Date.now() + (error.retryAfterMs ?? 60_000));
+      } else if (
+        (error.kind === "service-unavailable" ||
+          error.kind === "status-unavailable") &&
+        error.retryAfterMs !== undefined
+      ) {
+        // 1-22D : capacité du prestataire saturée, délai fourni.
+        setRetryAt(Date.now() + error.retryAfterMs);
       }
       setMessage({ tone: "error", key: messageFor(error, restricted) });
     },

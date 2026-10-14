@@ -111,7 +111,29 @@ export type ReconciliationBlockReason =
   // 1-21E : remboursement consigné → plus aucune action ; option sans objet.
   | 'refunded'
   | 'record-refund-not-applicable'
-  | 'conflicting-options';
+  | 'conflicting-options'
+  // 1-22D.3 : recherche par référence marchand (aucune référence connue).
+  // Sans résultat : jamais une preuve d'absence.
+  | 'lookup-not-found'
+  | 'lookup-incomplete'
+  | 'lookup-unavailable'
+  // 1-22D.3 : clôture exceptionnelle sans session (preuve externe exigée).
+  | 'close-without-session-not-applicable'
+  | 'proof-required';
+
+/**
+ * 1-22D.3 — Résultat AFFICHÉ de la recherche par référence marchand :
+ * `not-found` (liste lue jusqu'au bout), `incomplete` (borne atteinte),
+ * `unavailable`, `inconsistent` (plusieurs sessions). Jamais une preuve
+ * d'absence (`proofOfAbsence` toujours `false`).
+ */
+export interface MerchantLookupReport {
+  outcome:
+    'found' | 'not-found' | 'incomplete' | 'unavailable' | 'inconsistent';
+  providerReference: string | null;
+  pagesRead: number | null;
+  proofOfAbsence: false;
+}
 
 /** Faits VÉRIFIÉS exposés (normalisés) ; jamais la réponse brute. */
 export interface VerifiedFacts {
@@ -137,15 +159,18 @@ export type ReconciliationPlan =
       consultedReference: string | null;
       verified: VerifiedFacts | null;
       mismatches: ConcordanceField[];
+      lookup?: MerchantLookupReport;
     }
   | {
       decision: 'ready';
       action: ReconciliationAction;
       paymentId: string;
       before: PlanBefore;
-      consultedReference: string;
+      /** `null` seulement pour une clôture sans session (1-22D.3). */
+      consultedReference: string | null;
       referenceAttach: boolean;
-      verified: VerifiedFacts;
+      verified: VerifiedFacts | null;
+      lookup?: MerchantLookupReport;
       after: {
         status: SubscriptionPaymentStatus;
         open: boolean;
@@ -175,6 +200,12 @@ export interface ReconciliationOptions {
    * encaissement en résolution (aucune période attribuée). Définitif.
    */
   recordRefund?: boolean;
+  /**
+   * 1-22D.3 — Clôture EXCEPTIONNELLE d'une création incertaine dont aucune
+   * session n'est retrouvée : référence de la preuve EXTERNE (ticket ou
+   * confirmation écrite du prestataire), reprise dans le plan et l'audit.
+   */
+  closeWithoutSessionProof?: string;
 }
 
 /**
@@ -194,6 +225,9 @@ function optionMarkers(options: ReconciliationOptions): string[] {
       ? [`grant-renewal-conflict:${options.grantRenewalConflict}`]
       : []),
     ...(options.recordRefund ? ['record-refund'] : []),
+    ...(options.closeWithoutSessionProof !== undefined
+      ? [`close-without-session:${options.closeWithoutSessionProof}`]
+      : []),
   ];
 }
 
@@ -210,7 +244,7 @@ export interface AppliedReconciliation {
   operationId: string;
   paymentId: string;
   action: ReconciliationAction;
-  consultedReference: string;
+  consultedReference: string | null;
   referenceAttached: boolean;
   before: {
     status: SubscriptionPaymentStatus;
@@ -218,7 +252,7 @@ export interface AppliedReconciliation {
   };
   after: {
     status: SubscriptionPaymentStatus;
-    providerReference: string;
+    providerReference: string | null;
     periodId: string | null;
   };
   appliedAt: string;
@@ -229,7 +263,8 @@ export type ReconciliationErrorCode =
   | 'INVALID_REFERENCE'
   | 'PLAN_STALE'
   | 'OPERATION_CONFLICT'
-  | 'CONFIRMATION_PENDING';
+  | 'CONFIRMATION_PENDING'
+  | 'PROOF_REQUIRED';
 
 export class ReconciliationError extends Error {
   constructor(
@@ -275,7 +310,7 @@ export interface PaymentInspection {
     action: ReconciliationAction;
     beforeStatus: SubscriptionPaymentStatus;
     afterStatus: SubscriptionPaymentStatus;
-    consultedReference: string;
+    consultedReference: string | null;
     referenceAttached: boolean;
     appliedAt: string;
   }[];
@@ -295,8 +330,20 @@ type InternalPlan =
   | { plan: Extract<ReconciliationPlan, { decision: 'blocked' }> }
   | {
       plan: Extract<ReconciliationPlan, { decision: 'ready' }>;
-      status: ProviderPaymentStatus;
+      /** `null` : clôture sans session (aucun statut lu). */
+      status: ProviderPaymentStatus | null;
     };
+
+/** 1-22D.3 — Recherche sans session exploitable → motif du blocage. */
+const LOOKUP_BLOCK: Readonly<
+  Record<MerchantLookupReport['outcome'], ReconciliationBlockReason>
+> = Object.freeze({
+  found: 'lookup-unavailable',
+  'not-found': 'lookup-not-found',
+  incomplete: 'lookup-incomplete',
+  unavailable: 'lookup-unavailable',
+  inconsistent: 'provider-inconsistent',
+});
 
 const ACTION_BY_STATE: Readonly<
   Record<
@@ -402,7 +449,7 @@ export class PaymentReconciliationService {
         action: r.action,
         beforeStatus: r.beforeStatus,
         afterStatus: r.afterStatus,
-        consultedReference: r.consultedReference,
+        consultedReference: r.consultedReference ?? null,
         referenceAttached: r.referenceAttached,
         appliedAt: r.appliedAt.toISOString(),
       })),
@@ -433,6 +480,21 @@ export class PaymentReconciliationService {
 
     const candidate =
       PaymentReconciliationService.normalizeReference(candidateReference);
+    // 1-22D.3 : la clôture sans session exige SON motif et la MÊME preuve
+    // que la simulation ; ce motif ne vaut pour aucune autre action.
+    const closing = options.closeWithoutSessionProof !== undefined;
+    if (
+      closing !==
+        (operation.reasonCode === ReconciliationReason.PROVIDER_NO_SESSION) ||
+      (closing &&
+        (!options.closeWithoutSessionProof ||
+          operation.reasonTicket !== options.closeWithoutSessionProof))
+    ) {
+      throw new ReconciliationError(
+        'PROOF_REQUIRED',
+        'Clôture sans session : --reason=provider-no-session et --ticket=<preuve> identiques à la simulation exigés. Aucune mutation.',
+      );
+    }
     const fingerprint = sha256([
       'reconciliation-v1',
       paymentId.toLowerCase(),
@@ -489,22 +551,57 @@ export class PaymentReconciliationService {
             (current.providerReference ?? null) !==
               plan.before.providerReference ||
             (current.periodId ?? null) !== null ||
-            paymentConcordanceMismatches(
-              current,
-              status,
-              plan.consultedReference,
-            ).length > 0
+            (status === null || plan.consultedReference === null
+              ? // 1-22D.3 : clôture sans session — toujours sans
+                // rattachement, transaction ni encaissement.
+                !this.closableWithoutSession(current)
+              : paymentConcordanceMismatches(
+                  current,
+                  status,
+                  plan.consultedReference,
+                ).length > 0)
           ) {
             return { kind: 'stale' as const };
           }
 
           const now = this.clock();
           let periodId: Types.ObjectId | null = null;
-          if (plan.action === ReconciliationAction.SUCCEED) {
+          if (plan.action === ReconciliationAction.CLOSE_WITHOUT_SESSION) {
+            // 1-22D.3 : paiement, référence marchand, opération et
+            // renouvellement conservés ; tentative close comme une page
+            // fermée sans transaction (succès tardif encore relu, 1-21E).
+            const updated = await this.paymentModel
+              .updateOne(
+                {
+                  _id: current._id,
+                  status: SubscriptionPaymentStatus.UNCERTAIN,
+                  open: true,
+                  providerReference: null,
+                  providerTransactionId: null,
+                  collectedAt: null,
+                  periodId: null,
+                  refundedAt: null,
+                },
+                {
+                  $set: {
+                    status: SubscriptionPaymentStatus.FAILED,
+                    open: false,
+                    failedAt: now,
+                    incidentCode: SubscriptionPaymentIncident.CHECKOUT_CLOSED,
+                    lastCheckedAt: now,
+                  },
+                },
+                { session },
+              )
+              .exec();
+            if (updated.modifiedCount !== 1) {
+              throw new Error('Reconciliation lost its race');
+            }
+          } else if (plan.action === ReconciliationAction.SUCCEED) {
             periodId = await this.payments.grantAndMarkSucceededInSession(
               session,
               current,
-              status,
+              status!,
               { claimRenewal: options.grantRenewalConflict !== 'additional' },
             );
           } else if (plan.action === ReconciliationAction.RECORD_REFUND) {
@@ -583,7 +680,7 @@ export class PaymentReconciliationService {
                 afterStatus: plan.after.status,
                 afterProviderReference: plan.consultedReference,
                 afterPeriodId: periodId,
-                verifiedState: status.state,
+                verifiedState: status?.state ?? 'no-session',
                 // Égalités revérifiées ci-dessus dans la session.
                 verifiedProviderReference: plan.consultedReference,
                 verifiedMerchantReference: current.merchantReference,
@@ -658,8 +755,8 @@ export class PaymentReconciliationService {
       throw new ReconciliationError(
         'PLAN_STALE',
         'Plan obsolète : le paiement a changé pendant l’application. Aucune mutation.',
-        (await this.buildPlan(paymentId, candidate).catch(() => null))?.plan ??
-          null,
+        (await this.buildPlan(paymentId, candidate, options).catch(() => null))
+          ?.plan ?? null,
       );
     }
     // 1-21E : forfait initial retenu → le renouvellement est réglé ; la
@@ -706,6 +803,8 @@ export class PaymentReconciliationService {
       open: payment.open,
       providerReference: payment.providerReference ?? null,
     };
+    // 1-22D.3 : recherche par référence marchand, affichée dans le plan.
+    let lookup: MerchantLookupReport | undefined;
     const blocked = (
       reason: ReconciliationBlockReason,
       consultedReference: string | null = null,
@@ -720,6 +819,7 @@ export class PaymentReconciliationService {
         consultedReference,
         verified,
         mismatches,
+        ...(lookup ? { lookup } : {}),
       },
     });
 
@@ -746,8 +846,37 @@ export class PaymentReconciliationService {
     if (persisted !== null && candidate !== null && candidate !== persisted) {
       return blocked('reference-differs-from-persisted', persisted);
     }
-    const reference = persisted ?? candidate;
-    if (reference === null) return blocked('reference-required');
+    let reference = persisted ?? candidate;
+    const closing = options.closeWithoutSessionProof !== undefined;
+    // 1-22D.3 : clôture sans session seulement pour une création incertaine
+    // jamais rattachée, sans encaissement ; jamais avec une référence.
+    if (closing) {
+      if (reference !== null || !this.closableWithoutSession(payment)) {
+        return blocked('close-without-session-not-applicable', reference);
+      }
+      if (!options.closeWithoutSessionProof) return blocked('proof-required');
+    }
+    if (reference === null) {
+      if (!provider.lookupByMerchantReference) {
+        return blocked('reference-required');
+      }
+      lookup = await this.lookupSession(provider, payment.merchantReference);
+      if (lookup.outcome === 'found' && lookup.providerReference) {
+        // Session retrouvée : rattachement par les contrôles habituels ;
+        // une clôture n'a plus d'objet.
+        if (closing) {
+          return blocked(
+            'close-without-session-not-applicable',
+            lookup.providerReference,
+          );
+        }
+        reference = lookup.providerReference;
+      } else if (closing && lookup.outcome === 'not-found') {
+        return this.closurePlan(payment, before, lookup, options);
+      } else {
+        return blocked(LOOKUP_BLOCK[lookup.outcome]);
+      }
+    }
     if (persisted === null) {
       const holder = await this.paymentModel
         .findOne({
@@ -806,6 +935,7 @@ export class PaymentReconciliationService {
         ReconciliationAction.RECORD_REFUND,
         verified,
         ...optionMarkers(options),
+        ...(lookup ? [lookup] : []),
       ]).slice(0, 32);
       return {
         plan: {
@@ -816,6 +946,7 @@ export class PaymentReconciliationService {
           consultedReference: reference,
           referenceAttach: persisted === null,
           verified,
+          ...(lookup ? { lookup } : {}),
           after: refundAfter,
           planToken: refundToken,
         },
@@ -882,6 +1013,7 @@ export class PaymentReconciliationService {
       action,
       verified,
       ...optionMarkers(options),
+      ...(lookup ? [lookup] : []),
     ]).slice(0, 32);
     return {
       plan: {
@@ -892,11 +1024,107 @@ export class PaymentReconciliationService {
         consultedReference: reference,
         referenceAttach: persisted === null,
         verified,
+        ...(lookup ? { lookup } : {}),
         after,
         planToken,
       },
       status,
     };
+  }
+
+  /**
+   * 1-22D.3 — Création incertaine jamais rattachée : aucune référence ni
+   * transaction prestataire, aucun encaissement, aucune période.
+   */
+  private closableWithoutSession(payment: PaymentRecord): boolean {
+    return (
+      payment.status === SubscriptionPaymentStatus.UNCERTAIN &&
+      payment.incidentCode ===
+        SubscriptionPaymentIncident.INITIATION_UNCERTAIN &&
+      payment.open &&
+      !payment.providerReference &&
+      !payment.providerTransactionId &&
+      !payment.collectedAt &&
+      !payment.periodId &&
+      !payment.refundedAt
+    );
+  }
+
+  /**
+   * 1-22D.3 — Plan de clôture EXCEPTIONNELLE : recherche COMPLÈTE sans
+   * résultat (contrôle de sécurité, jamais la preuve) ET preuve externe
+   * référencée (`closeWithoutSessionProof`, dans le jeton). Effet prévu :
+   * `failed` / `checkout_closed`, paiement et liens conservés.
+   */
+  private closurePlan(
+    payment: PaymentRecord,
+    before: PlanBefore,
+    lookup: MerchantLookupReport,
+    options: ReconciliationOptions,
+  ): InternalPlan {
+    const paymentKey = payment._id.toHexString();
+    const action = ReconciliationAction.CLOSE_WITHOUT_SESSION;
+    return {
+      plan: {
+        decision: 'ready',
+        action,
+        paymentId: paymentKey,
+        before,
+        consultedReference: null,
+        referenceAttach: false,
+        verified: null,
+        lookup,
+        after: {
+          status: SubscriptionPaymentStatus.FAILED,
+          open: false,
+          grantsPeriod: false,
+        },
+        planToken: sha256([
+          'reconciliation-plan-v1',
+          paymentKey,
+          before,
+          null,
+          action,
+          lookup,
+          ...optionMarkers(options),
+        ]).slice(0, 32),
+      },
+      status: null,
+    };
+  }
+
+  /** 1-22D.3 — Recherche bornée par référence marchand, jamais une preuve. */
+  private async lookupSession(
+    provider: PaymentProvider,
+    merchantReference: string,
+  ): Promise<MerchantLookupReport> {
+    const report = (
+      outcome: MerchantLookupReport['outcome'],
+      providerReference: string | null = null,
+      pagesRead: number | null = null,
+    ): MerchantLookupReport => ({
+      outcome,
+      providerReference,
+      pagesRead,
+      proofOfAbsence: false,
+    });
+    try {
+      const found =
+        await provider.lookupByMerchantReference!(merchantReference);
+      return found.outcome === 'found'
+        ? report('found', found.providerReference)
+        : report(
+            found.complete ? 'not-found' : 'incomplete',
+            null,
+            found.pagesRead,
+          );
+    } catch (error) {
+      return report(
+        error instanceof PaymentProviderInconsistencyError
+          ? 'inconsistent'
+          : 'unavailable',
+      );
+    }
   }
 
   private findOperation(
@@ -930,7 +1158,7 @@ export class PaymentReconciliationService {
       operationId: record.operationId,
       paymentId: record.paymentId.toHexString(),
       action: record.action,
-      consultedReference: record.consultedReference,
+      consultedReference: record.consultedReference ?? null,
       referenceAttached: record.referenceAttached,
       before: {
         status: record.beforeStatus,
@@ -938,7 +1166,7 @@ export class PaymentReconciliationService {
       },
       after: {
         status: record.afterStatus,
-        providerReference: record.afterProviderReference,
+        providerReference: record.afterProviderReference ?? null,
         periodId: record.afterPeriodId
           ? record.afterPeriodId.toHexString()
           : null,
