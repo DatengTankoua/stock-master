@@ -24,6 +24,7 @@ const publicEn: Translation<typeof publicFr> = {
     tagline: "Stock, sales and team for shops, from your phone.",
     help: "Help and account",
     legal: "Legal information",
+    languages: "Page language",
     login: "Log in",
     register: "Sign up",
     copyright: "© {{year}} {{name}}",
@@ -46,20 +47,27 @@ const publicEn: Translation<typeof publicFr> = {
     caption:
       "Real screenshots of the app, English interface · Demo Shop, sample products and sales.",
   },
+  // Banner shown (in English) on a device set to English.
+  languageHint: {
+    text: "This page is also available in English.",
+    link: "View in English",
+    dismiss: "Dismiss",
+  },
   landing: {
     meta: {
-      title: "Stock Master — Your shop's stock and sales, on your phone",
+      title: "Stock and sales management software in Cameroon | Stock Master",
       description:
-        "Real-time sales and stock, restocking guidance and monthly Excel/PDF history. In French and English.",
-      price: "{{monthly}} for 1 month, or {{best}} paid once for {{term}}",
+        "Manage your shop's stock and track your sales from your phone: products, team and rights, analytics, Excel/PDF history. For shops and small businesses in Cameroon.",
+      price: "{{monthly}} for 1 month",
       trial: "{{days}}-day free trial, then {{price}}.",
       subscription: "Subscription: {{price}}.",
       ogDescription:
-        "Stock, sales, team and analytics for shops and small businesses.",
+        "Stock management and sales tracking from your phone, for shops and small businesses in Cameroon.",
       ogTrial: "{{days}}-day free trial.",
     },
     hero: {
-      title: "Track your stock and sales from your phone",
+      eyebrow: "Stock management and sales tracking for shops in Cameroon",
+      title: "Manage your shop's stock and sales from your phone",
       text: "Sold two soaps? Stock goes down and connected teammates see the update. Stock Master brings catalogue, sales and clear indicators together to help you run your shop.",
       trialNote:
         "{{days}}-day free trial, no payment required. Then <price>{{price}} for {{term}}</price> with the monthly plan.",
@@ -72,19 +80,39 @@ const publicEn: Translation<typeof publicFr> = {
       login: "Log in",
       seePricing: "See pricing",
     },
-    benefits: {
-      title: "Everything you need to run the shop",
-      stock: {
-        title: "Track your stock",
-        text: "Organise rice, oil and soap by section. Each sale updates stock, and low or out-of-stock products are flagged based on your rights.",
-      },
-      sales: {
-        title: "Record your sales",
-        text: "Choose the product, quantity and actual price, then confirm. Every sale keeps its date and the seller's name. Connected teammates see updates without reloading.",
+    audience: {
+      title: "For shops, retailers and small businesses in Cameroon",
+      text: "Stock Master is for traders who sell products from stock and want to know at any time what is left and what has been sold, whether you run your shop alone or work with several sellers.",
+      owner: {
+        title: "Owners who want to follow their sales",
+        text: "From your phone, see sales, remaining stock and products to restock, even when you are not at the counter.",
       },
       team: {
-        title: "Work with your team",
-        text: "Invite your sellers with a link and choose what each person can do: sell, manage the catalogue, see the figures. The price does not change with the number of sellers.",
+        title: "Shops with several sellers",
+        text: "Each seller has their own access. You decide what they can see and do, and every sale keeps the name of the person who recorded it.",
+      },
+      business: {
+        title: "Small businesses that want orderly stock",
+        text: "Catalogues and sub-catalogues, product records with photo, purchase and selling prices in FCFA, stock adjustments and change history. Up to {{capacity}} product records kept per shop, trash included.",
+      },
+      local: {
+        title: "Built for everyday business in Cameroon",
+        text: "Prices in FCFA, subscription paid by Mobile Money (MTN or Orange), French or English interface, and sales still possible during a network outage, within the limits described below.",
+      },
+    },
+    benefits: {
+      title: "Everything you need to manage your shop day to day",
+      stock: {
+        title: "Manage your products and stock",
+        text: "Organise rice, oil and soap by catalogue, with photo, purchase price and selling price. Each sale updates stock, and low or out-of-stock products are flagged based on your rights.",
+      },
+      sales: {
+        title: "Track your sales",
+        text: "Choose the product, quantity and actual price, then confirm. Every sale keeps its date and the seller's name. Connected teammates see updates without reloading, and sales history stays available according to your rights.",
+      },
+      team: {
+        title: "Give everyone the right access",
+        text: "Invite your sellers with a link. By default, a seller records sales and sees their own; you add other rights one by one: manage the catalogue, adjust stock, see all sales, costs or analytics, invite members. An administrator has every right, and access can be suspended. The price does not change with the number of sellers.",
       },
       analytics: {
         title: "Understand your business",
@@ -141,6 +169,11 @@ const publicEn: Translation<typeof publicFr> = {
         question: "Can my sellers use the app?",
         answer:
           "Yes. In the Organisation area, create an invitation: you get a link to send to the seller, for example by text message or a messaging app. They create their access with this link. Every member can record sales; you add the other rights one by one.",
+      },
+      remote: {
+        question: "Can I follow my shop's sales remotely?",
+        answer:
+          "Yes. Log in from your phone: sales recorded by your sellers appear as soon as they are sent, with stock updated. With the matching right, you can also receive a notification for each new sale by another member.",
       },
       install: {
         question: "Do I need to install an app on my phone?",

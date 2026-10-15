@@ -20,6 +20,7 @@ const authEn: Translation<typeof authFr> = {
     mismatch: "The passwords do not match.",
   },
   login: {
+    metaTitle: "Log in",
     subtitle: "Log in to your management space",
     chooseOrganization: "Choose the organisation to log in to",
     back: "Back",
@@ -44,6 +45,7 @@ const authEn: Translation<typeof authFr> = {
     },
   },
   register: {
+    metaTitle: "Create an account",
     closedTitle: "Sign-up disabled",
     closedText:
       "Online sign-up is temporarily unavailable. If you already have an account, log in.",

@@ -7,6 +7,7 @@ import {
   type LegalAcceptanceContext,
 } from "@/lib/legal/acceptance";
 import { rich } from "@/i18n/rich";
+import { useLocalizedHref } from "@/i18n/use-localized-href";
 
 // 1-16C.2 — Case d'acceptation des conditions, JAMAIS cochée d'avance.
 // - La case ne couvre que les documents à ACCEPTER du parcours ; la
@@ -36,6 +37,7 @@ export function TermsAcceptanceField({
   errorId?: string;
 }) {
   const { t } = useT("legal");
+  const href = useLocalizedHref();
   const { documents, notices } = legalDocumentsFor(context);
   return (
     <div className="space-y-2">
@@ -61,7 +63,7 @@ export function TermsAcceptanceField({
                   : t("acceptance.comma"))}
               {t("acceptance.article")}{" "}
               <a
-                href={doc.href}
+                href={href(doc.href)}
                 target="_blank"
                 rel="noopener"
                 className={linkClass}
@@ -85,7 +87,7 @@ export function TermsAcceptanceField({
           {rich(t("acceptance.notice", { version: doc.version }), {
             doc: () => (
               <a
-                href={doc.href}
+                href={href(doc.href)}
                 target="_blank"
                 rel="noopener"
                 className={linkClass}

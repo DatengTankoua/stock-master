@@ -6,8 +6,9 @@
 // introduction et sections ; ni sommaire, ni en-tête, ni pied de page). La
 // langue est celle de `<html lang>`, la version celle de `data-legal-version`.
 //
-// 1-16G : les pages sont rendues à la requête, dans la langue choisie
-// (cookie `stockmaster.lang`). Le script démarre donc `next start` sur le
+// 1-16G : les pages sont rendues à la requête, dans la langue de leur URL
+// (référencement : français sans préfixe, anglais sous `/en`). Le script
+// démarre donc `next start` sur le
 // build (`--next-dir`), ou utilise un serveur déjà lancé (`--base-url`), et
 // lit le HTML servi pour CHAQUE langue publiée (fr, en).
 //
@@ -180,11 +181,16 @@ export function extractPresentedText(html) {
 
 /**
  * 1-16G — Texte RÉELLEMENT servi d'une page, dans une langue : la page est
- * demandée au serveur Next (rendu dynamique) avec le cookie de langue, comme
- * un navigateur. La langue lue dans `<html lang>` doit être celle demandée.
+ * demandée au serveur Next (rendu dynamique), comme un navigateur. La
+ * langue lue dans `<html lang>` doit être celle demandée.
+ * Référencement : l'URL détermine la langue des pages publiques (français
+ * sans préfixe, anglais sous `/en`) ; cookie et Accept-Language restent
+ * envoyés, sans effet sur ces pages.
  */
 async function presentedPage(baseUrl, route, locale) {
-  const response = await fetch(`${baseUrl}${route}`, {
+  const localizedRoute =
+    locale === "en" ? (route === "/" ? "/en" : `/en${route}`) : route;
+  const response = await fetch(`${baseUrl}${localizedRoute}`, {
     headers: {
       cookie: `${LOCALE_COOKIE}=${locale}`,
       "accept-language": locale,

@@ -4,6 +4,8 @@ import type { Translation } from "../types";
 const commonEn: Translation<typeof commonFr> = {
   meta: {
     appDescription: "Stock and sales management app",
+    shareImageAlt:
+      "Stock Master logo and a screenshot of the app's Analytics screen (sample shop)",
   },
   language: {
     title: "Language",

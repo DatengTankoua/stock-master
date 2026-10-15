@@ -20,6 +20,7 @@ const authFr = {
     mismatch: "Les mots de passe ne correspondent pas.",
   },
   login: {
+    metaTitle: "Connexion",
     subtitle: "Connexion à ton espace de gestion",
     chooseOrganization: "Choisis l'organisation à laquelle te connecter",
     back: "Retour",
@@ -45,6 +46,7 @@ const authFr = {
     },
   },
   register: {
+    metaTitle: "Créer un compte",
     closedTitle: "Inscription désactivée",
     closedText:
       "L'inscription en ligne est momentanément indisponible. Si tu as déjà un compte, connecte-toi.",

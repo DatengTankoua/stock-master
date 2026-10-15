@@ -10,6 +10,10 @@ import { ThemeSync } from "@/components/theme/use-theme";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { LocaleProvider } from "@/i18n/locale-provider";
 import { getRequestLocale, getServerT } from "@/i18n/server";
+import { SITE } from "@/lib/legal/site-identity";
+import { CANONICAL_ORIGIN } from "@/lib/seo/public-routes";
+import { shareImage } from "@/lib/seo/metadata";
+import { EnglishVersionHint } from "@/components/i18n/english-version-hint";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -23,10 +27,16 @@ const geistMono = Geist_Mono({
 });
 
 // 1-16G : description dans la langue de la requête.
+// Référencement : `metadataBase` résout les URL relatives (canonical,
+// hreflang, images de partage) sur l'origine canonique. Les pages publiques
+// définissent leurs propres métadonnées (`lib/seo/metadata.ts`) ; celles-ci
+// valent pour les autres pages (connexion, application…), non indexées.
 export async function generateMetadata(): Promise<Metadata> {
-  const { t } = await getServerT("common");
+  const { t, lng } = await getServerT("common");
   const description = t("meta.appDescription");
+  const image = shareImage(lng, t("meta.shareImageAlt"));
   return {
+    metadataBase: new URL(CANONICAL_ORIGIN),
     title: "Stock Master",
     description,
     applicationName: "Stock Master",
@@ -51,9 +61,33 @@ export async function generateMetadata(): Promise<Metadata> {
       ],
     },
     openGraph: {
+      type: "website",
+      siteName: SITE.name,
       title: "Stock Master",
       description,
+      images: [image],
     },
+    twitter: {
+      card: "summary_large_image",
+      title: "Stock Master",
+      description,
+      images: [image],
+    },
+    // Balises de vérification Search Console / Bing Webmaster Tools :
+    // jetons fournis par les comptes propriétaires, jamais inventés.
+    // Absentes tant que la variable n'est pas définie (la vérification DNS
+    // du domaine reste la méthode recommandée).
+    verification: siteVerification(),
+  };
+}
+
+function siteVerification(): Metadata["verification"] {
+  const google = process.env.GOOGLE_SITE_VERIFICATION?.trim();
+  const bing = process.env.BING_SITE_VERIFICATION?.trim();
+  if (!google && !bing) return undefined;
+  return {
+    ...(google ? { google } : {}),
+    ...(bing ? { other: { "msvalidate.01": bing } } : {}),
   };
 }
 
@@ -93,6 +127,7 @@ export default async function RootLayout({
           <AuthProvider>
             {/* 1-22C.1 : copie enregistrée servie hors connexion. */}
             <OfflineCopyNotice />
+            <EnglishVersionHint />
             <main className="flex-1 flex flex-col">{children}</main>
             <Toaster />
           </AuthProvider>

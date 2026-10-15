@@ -191,10 +191,17 @@ const DRAFT_1_21D = {
   version: "0.5",
   updatedAt: OCTOBER_13_2026,
 } as const;
-const DRAFT_COOKIES_0_6 = {
+// (Cookies 0.6 du 13 octobre 2026 ; remplacée par la 0.7 ci-dessous.)
+
+// Référencement — Cookies 0.7 : description du cookie de langue mise à jour
+// (pages publiques : langue de l'adresse, anglais sous /en). Document
+// non archivé (non soumis à acceptation) : numéro et date seulement. Si la
+// publication a lieu plus tard, reporter ici la date effective.
+const OCTOBER_15_2026 = { fr: "15 octobre 2026", en: "15 October 2026" };
+const DRAFT_COOKIES_0_7 = {
   status: "projet",
-  version: "0.6",
-  updatedAt: OCTOBER_13_2026,
+  version: "0.7",
+  updatedAt: OCTOBER_15_2026,
 } as const;
 
 // 1-16G — Cookies 0.4 : ajout du cookie de langue `stockmaster.lang`.
@@ -228,7 +235,7 @@ export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
   {
     id: "cookies",
     href: "/cookies",
-    ...DRAFT_COOKIES_0_6,
+    ...DRAFT_COOKIES_0_7,
   },
   {
     id: "traitement-donnees",

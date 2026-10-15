@@ -112,6 +112,18 @@ L'application est installable sur mobile et desktop. Le manifest est généré d
 
 ---
 
+## Référencement (SEO)
+
+- **Domaine canonique** : `https://www.stock-master.app` (l'apex redirige vers www en production). Défini dans `src/lib/seo/public-routes.ts` (`CANONICAL_ORIGIN`) ; `SITE.url` reste le texte affiché dans les mentions légales.
+- **Pages publiques bilingues** (`/`, `/guide`, `/contact`, textes juridiques) : l'URL détermine toujours la langue — français sans préfixe, anglais sous `/en` (`/en`, `/en/guide`…, routes `src/app/en/*` qui réexportent les pages françaises ; langue imposée par `src/proxy.ts`) — quels que soient le cookie `stockmaster.lang` et la langue du navigateur. Le sélecteur ouvre l'URL de l'autre langue ; un bandeau propose la version `/en` quand l'anglais est choisi ou que l'appareil est réglé en anglais. `/auth` et `/app` gardent la détection cookie → navigateur → français. Le service worker range une copie hors ligne par URL (FR sans préfixe, EN sous `/en`).
+- **Métadonnées** : `src/lib/seo/metadata.ts` (canonical de la langue rendue, hreflang `fr`/`en`/`x-default`, Open Graph et X avec `public/marketing/og-stock-master-{fr,en}.jpg`). JSON-LD (Organization, WebSite, SoftwareApplication avec les tarifs du catalogue serveur) sur l'accueil.
+- **`/robots.txt`** (`src/app/robots.ts`) : tout est explorable ; **`/sitemap.xml`** (`src/app/sitemap.ts`) : uniquement les pages indexables, FR et EN. Les textes juridiques à l'état « projet » sont `noindex` et absents du sitemap jusqu'à leur validation.
+- **Non indexé** : `X-Robots-Tag: noindex` sur `/app`, `/auth/*`, `/access`, `/offline` (`next.config.ts`). robots.txt ne protège rien : l'accès reste contrôlé par l'API.
+- **Vérification Search Console / Bing** : DNS recommandé ; sinon variables `GOOGLE_SITE_VERIFICATION` / `BING_SITE_VERIFICATION` (voir `.env.example`).
+- **Images** : `scripts/generate-seo-images.ps1` régénère les aperçus de partage et le logo allégé (`/brand/stock-master-logo-horizontal-720.png`).
+
+---
+
 ## Commandes
 
 ```bash

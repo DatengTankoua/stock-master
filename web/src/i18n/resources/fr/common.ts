@@ -3,6 +3,8 @@
 const commonFr = {
   meta: {
     appDescription: "Application de gestion des stocks et des ventes",
+    shareImageAlt:
+      "Logo Stock Master et capture de l'écran Analyse de l'application (boutique fictive)",
   },
   language: {
     title: "Langue",

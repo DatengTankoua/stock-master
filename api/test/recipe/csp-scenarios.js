@@ -10,8 +10,9 @@
  * servis par le navigateur de test sous leurs origines officielles (routes),
  * toute autre requête vers ces hôtes est annulée. PAY bascule l'API sur le
  * fournisseur `saspay` simulé puis revient à `simulated`. PWA remplace
- * temporairement le `sw.js` de la COPIE ISOLÉE (base v5, puis dépôt), comme
- * un déploiement, et le restaure toujours.
+ * temporairement le `sw.js` de la COPIE ISOLÉE (base HEAD, puis dépôt), comme
+ * un déploiement, et le restaure toujours. PUB : pages publiques bilingues
+ * en anglais sous `/en` (langue imposée par l'URL).
  */
 'use strict';
 const path = require('path');
@@ -121,7 +122,11 @@ async function uiLogin(page, email) {
 
 const scenarios = {
   // Pages publiques FR/EN et connexion : aucun blocage, scripts exécutés.
+  // Référencement : la langue des pages publiques bilingues est celle de
+  // leur URL (anglais sous `/en`) ; la connexion, l'inscription et l'écran
+  // hors ligne suivent toujours la langue du navigateur.
   async PUB(browser) {
+    const bilingual = ['/', '/guide', '/contact', '/confidentialite'];
     for (const locale of ['fr-FR', 'en-US']) {
       const context = await newContext(browser, { locale });
       const page = await context.newPage();
@@ -135,7 +140,13 @@ const scenarios = {
         '/auth/register',
         '/auth/forgot-password',
         '/offline',
-      ];
+      ].map((p) =>
+        locale === 'en-US' && bilingual.includes(p)
+          ? p === '/'
+            ? '/en'
+            : `/en${p}`
+          : p,
+      );
       for (const p of pages) {
         const res = await page.goto(`${WEB}${p}`, { waitUntil: 'networkidle' });
         const info = await page.evaluate(() => ({
@@ -653,14 +664,22 @@ const scenarios = {
   async PWA(browser) {
     const context = await newContext(browser, { serviceWorkers: 'allow' });
     // Mise à jour réelle : le serveur de la copie isolée sert d'abord le
-    // sw.js de la base (v5), puis celui du dépôt (v6), comme un déploiement.
+    // sw.js de la base (HEAD), puis celui du dépôt, comme un déploiement.
+    // Versions lues dans les fichiers (CACHE_VERSION).
     const fs = require('fs');
     const servedSw = path.join(REPO, '.stockmaster-recipe-web/public/sw.js');
     const newSw = fs.readFileSync(path.join(REPO, 'web/public/sw.js'));
-    fs.writeFileSync(
-      servedSw,
-      execFileSync('git', ['-C', REPO, 'show', 'HEAD:web/public/sw.js']),
-    );
+    const baseSw = execFileSync('git', [
+      '-C',
+      REPO,
+      'show',
+      'HEAD:web/public/sw.js',
+    ]);
+    const swVersion = (buf) =>
+      (/const CACHE_VERSION = "(v\d+)"/.exec(String(buf)) || [])[1];
+    const oldV = swVersion(baseSw);
+    const newV = swVersion(newSw);
+    fs.writeFileSync(servedSw, baseSw);
     try {
       const page = await context.newPage();
       watch(context, page);
@@ -697,26 +716,26 @@ const scenarios = {
         }
         return false;
       };
-      const v5 = await swReady('v5');
-      record('PWA ancienne version v5 installée (base)', v5, {
+      const v5 = await swReady(oldV);
+      record(`PWA ancienne version ${oldV} installée (base)`, v5, {
         keys: await page.evaluate(() => caches.keys()),
       });
 
-      // Mise à jour : la nouvelle version (dépôt) remplace v5.
+      // Mise à jour : la nouvelle version (dépôt) remplace la base.
       fs.writeFileSync(servedSw, newSw);
       await page.evaluate(async () =>
         (await navigator.serviceWorker.getRegistration()).update(),
       );
-      const v6 = await swReady('v6');
+      const v6 = await swReady(newV);
       // Purge des anciens caches : asynchrone, pendant l'activation.
       let keys = [];
       for (let i = 0; i < 30; i++) {
         keys = await page.evaluate(() => caches.keys());
-        if (!keys.some((k) => k.endsWith('-v5'))) break;
+        if (!keys.some((k) => k.endsWith(`-${oldV}`))) break;
         await page.waitForTimeout(1000);
       }
-      const stored = await page.evaluate(async () => {
-        const cache = await caches.open('stockmaster-pages-v6');
+      const stored = await page.evaluate(async (v) => {
+        const cache = await caches.open(`stockmaster-pages-${v}`);
         const out = {};
         for (const p of ['/guide', '/offline', '/']) {
           const r =
@@ -735,17 +754,17 @@ const scenarios = {
           };
         }
         const shell = await (
-          await caches.open('stockmaster-v6')
+          await caches.open(`stockmaster-${v}`)
         ).match('/app/catalog');
         out.shell = shell
           ? !!shell.headers.get('Content-Security-Policy')
           : null;
         return out;
-      });
+      }, newV);
       record(
-        'PWA mise à jour v5 → v6, anciens caches purgés, copies avec leur CSP',
+        `PWA mise à jour ${oldV} → ${newV}, anciens caches purgés, copies avec leur CSP`,
         v6 &&
-          !keys.includes('stockmaster-pages-v5') &&
+          !keys.includes(`stockmaster-pages-${oldV}`) &&
           Object.values(stored).every(
             (x) => x === true || (x && x.csp && x.nonceInHtml),
           ),

@@ -4,8 +4,12 @@ import Image from "next/image";
 // remplacée par un SVG maison — voir web/scripts/generate-pwa-icons.ps1 et
 // docs/architecture/phase-1-11a-pwa-foundation.md. Ratio figé (jamais étiré).
 const SOURCES = {
+  // Référencement (performance mobile) : variante 720 px du logo officiel
+  // (web/scripts/generate-seo-images.ps1), affichée à 230 px au plus, donc
+  // nette jusqu'à l'échelle 3 ; le PNG source de 2172 px pesait 386 Ko et
+  // était préchargé sur chaque page publique.
   horizontal: {
-    src: "/brand/stock-master-logo-horizontal.png",
+    src: "/brand/stock-master-logo-horizontal-720.png",
     ratio: 2172 / 724,
   },
   icon: { src: "/brand/stock-master-icon.png", ratio: 1 },

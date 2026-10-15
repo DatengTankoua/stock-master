@@ -46,6 +46,9 @@ function Phone({
         width={WIDTH}
         height={HEIGHT}
         priority={priority}
+        // Candidate au LCP mobile (production : capture Analyse) : priorité
+        // réseau haute, en plus du préchargement.
+        fetchPriority={priority ? "high" : undefined}
         sizes="(min-width: 1024px) 280px, 56vw"
         className="block h-auto w-full"
       />

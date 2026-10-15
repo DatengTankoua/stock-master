@@ -10,10 +10,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { I18nProvider } from "next-i18next/client";
 import { resources } from "@/i18n/resources";
 import { writeDeviceLocale } from "@/lib/device-locale-db";
+import { localizedPath, publicPageOf } from "@/lib/seo/public-routes";
 import {
   DEFAULT_LOCALE,
   LOCALES,
@@ -78,6 +79,23 @@ function isOnline(): boolean {
   return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
+// Référencement : sur une page publique bilingue, l'URL impose la langue
+// (`en` sous `/en`, `fr` sinon) ; le cookie ne s'applique pas à la page
+// affichée.
+function urlLocale(): Locale | null {
+  return publicPageOf(window.location.pathname)?.locale ?? null;
+}
+
+// Page publique bilingue : adresse de la même page dans l'autre langue
+// (ancre conservée), sinon `null` (simple rafraîchissement).
+function publicAlternateHref(next: Locale): string | null {
+  const page = publicPageOf(window.location.pathname);
+  if (!page) return null;
+  const target = localizedPath(page.path, next);
+  if (target === window.location.pathname) return null;
+  return `${target}${window.location.search}${window.location.hash}`;
+}
+
 // 1-22C.1 : copie enregistrée d'une page publique (servie par le service
 // worker, texte rendu côté serveur dans une seule langue) et sans aucun
 // champ de saisie : la recharger ne perd rien et sert la copie de l'autre
@@ -121,6 +139,16 @@ export function LocaleProvider({
       if (!isLocale(next)) return;
       writeLocaleCookie(next);
       if (next === localeRef.current) return;
+      // Page publique bilingue : ouverture de son URL dans la langue
+      // choisie (`/guide` ↔ `/en/guide`), en ligne comme hors connexion
+      // (le service worker sert la copie de CETTE URL). Chargement complet :
+      // `<html lang>`, métadonnées et texte serveur repartent de l'URL. Ces
+      // pages n'ont aucun champ de saisie à préserver.
+      const alternate = publicAlternateHref(next);
+      if (alternate) {
+        window.location.assign(alternate);
+        return;
+      }
       apply(next);
       window.dispatchEvent(
         new CustomEvent(LOCALE_CHANGE_EVENT, { detail: next }),
@@ -139,18 +167,27 @@ export function LocaleProvider({
     void writeDeviceLocale(locale);
   }, [locale]);
 
+  // Navigation client vers une page publique bilingue : sa langue est celle
+  // de l'URL, quel que soit l'état précédent (texte serveur et composants
+  // client restent cohérents). Vers une autre page (application,
+  // connexion…), la préférence enregistrée reprend la main, comme côté
+  // serveur.
+  const pathname = usePathname();
   useEffect(() => {
-    // Document servi par le cache du service worker (hors connexion) : il a
-    // pu être rendu dans une autre langue que la préférence enregistrée.
-    const saved = readLocaleCookie();
-    if (saved && saved !== localeRef.current) apply(saved);
+    const target = urlLocale() ?? readLocaleCookie();
+    if (target && target !== localeRef.current) apply(target);
+  }, [pathname, apply]);
 
+  useEffect(() => {
+    // (Langue du document servi par le cache hors connexion : réalignée par
+    // l'effet `pathname` ci-dessus — URL, sinon préférence enregistrée.)
     const onOnline = () => {
       if (refreshPending.current) refreshServerText();
     };
     // Choix fait dans un autre onglet : appliqué au retour sur celui-ci.
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      if (urlLocale()) return;
       const current = readLocaleCookie();
       if (current && current !== localeRef.current) {
         apply(current);

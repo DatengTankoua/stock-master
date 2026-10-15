@@ -46,9 +46,11 @@ const content: DocumentContent = {
             </li>
             <li>
               Read and then accept the{" "}
-              <Link href="/conditions-utilisation">Terms of Use</Link> and the{" "}
-              <Link href="/conditions-abonnement">Subscription Terms</Link> by
-              ticking the box provided: the account is not created without it.
+              <Link href="/en/conditions-utilisation">Terms of Use</Link> and
+              the{" "}
+              <Link href="/en/conditions-abonnement">Subscription Terms</Link>{" "}
+              by ticking the box provided: the account is not created without
+              it.
             </li>
             <li>
               A confirmation email is sent to you. Open the link it contains
@@ -298,7 +300,7 @@ const content: DocumentContent = {
           </li>
           <li>
             Lengths and prices are set out in the{" "}
-            <Link href="/conditions-abonnement">Subscription Terms</Link>.
+            <Link href="/en/conditions-abonnement">Subscription Terms</Link>.
           </li>
           <li>
             To renew, the owner chooses a length in Organisation, then
@@ -403,7 +405,7 @@ const content: DocumentContent = {
             If you cannot access your shop, write to <MailLink to="support" />{" "}
             stating the name of your shop, the screen concerned and what you
             tried. The other contacts are on the{" "}
-            <Link href="/contact">Contact</Link> page.
+            <Link href="/en/contact">Contact</Link> page.
           </p>
         </>
       ),

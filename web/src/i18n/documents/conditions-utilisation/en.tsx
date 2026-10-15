@@ -17,7 +17,8 @@ const content: DocumentContent = {
       These terms explain how to use {SITE.name}, what you can expect from the
       service and what is expected of you. They apply to anyone who creates an
       account or joins a shop. The rules specific to the subscription are set
-      out in the <Link href="/conditions-abonnement">Subscription Terms</Link>.
+      out in the{" "}
+      <Link href="/en/conditions-abonnement">Subscription Terms</Link>.
     </p>
   ),
   sections: [
@@ -47,7 +48,7 @@ const content: DocumentContent = {
           <p>
             The service is operated by {OPERATOR.legalName}, a business
             established in Cameroon (see the{" "}
-            <Link href="/mentions-legales">Legal notice</Link>).
+            <Link href="/en/mentions-legales">Legal notice</Link>).
           </p>
         </>
       ),
@@ -145,7 +146,8 @@ const content: DocumentContent = {
             When you record information about your own customers, it is your
             shop that decides how it is used. {SITE.name} processes it on your
             behalf, under the conditions of the{" "}
-            <Link href="/traitement-donnees">Data Processing Agreement</Link>.
+            <Link href="/en/traitement-donnees">Data Processing Agreement</Link>
+            .
           </p>
         </>
       ),
@@ -188,8 +190,8 @@ const content: DocumentContent = {
             encrypted form (hashing), confirmation and invitation links with a
             limited lifetime, each shop&apos;s data kept separate from the
             others, rights checked by the server for every action. The{" "}
-            <Link href="/confidentialite">Privacy Policy</Link> describes these
-            measures.
+            <Link href="/en/confidentialite">Privacy Policy</Link> describes
+            these measures.
           </p>
           <p>On your side:</p>
           <ul>
@@ -230,7 +232,7 @@ const content: DocumentContent = {
           <p>
             You can stop using {SITE.name} at any time. The effects on the
             current subscription are described in the{" "}
-            <Link href="/conditions-abonnement">Subscription Terms</Link>.
+            <Link href="/en/conditions-abonnement">Subscription Terms</Link>.
           </p>
           <p>
             Access to an account or a shop may be suspended in the event of a
@@ -261,7 +263,7 @@ const content: DocumentContent = {
             For a complaint, write to <MailLink to="support" /> stating the shop
             concerned and the problem encountered, or use Organisation, then
             Support. All contact details are on the{" "}
-            <Link href="/contact">Contact</Link> page.
+            <Link href="/en/contact">Contact</Link> page.
           </p>
           <p>
             These terms do not reduce any right that the law gives you, in

@@ -3,16 +3,20 @@ import Link from "next/link";
 import {
   BarChart3Icon,
   BellRingIcon,
+  BuildingIcon,
   ChevronDownIcon,
   FileSpreadsheetIcon,
+  MapPinIcon,
   PackageIcon,
   ReceiptTextIcon,
+  SmartphoneIcon,
   UsersIcon,
 } from "lucide-react";
 import { LandingHeader } from "@/components/landing/landing-header";
 import { ProductPreview } from "@/components/landing/product-preview";
 import { SessionCta } from "@/components/landing/session-cta";
 import { PublicFooter } from "@/components/public/public-footer";
+import { JsonLd } from "@/components/seo/json-ld";
 import { OfferConditions } from "@/components/subscription/subscription-offers";
 import {
   BEST_SAVING_TERM,
@@ -20,9 +24,19 @@ import {
   TRIAL_DAYS,
   formatFcfa,
   monthlyEquivalentXaf,
+  type SubscriptionOffer,
 } from "@/lib/subscription-offers";
 import { offerPitch } from "@/lib/subscription-offer-pitch";
+import { PRODUCT_CAPACITY } from "@/lib/product-capacity";
+import { CONTACT_EMAILS, SITE } from "@/lib/legal/site-identity";
+import { publicPageMetadata } from "@/lib/seo/metadata";
+import {
+  CANONICAL_ORIGIN,
+  absoluteUrl,
+  localizedPath,
+} from "@/lib/seo/public-routes";
 import { getServerT } from "@/i18n/server";
+import { intlLocale, type Locale } from "@/i18n/settings";
 import { rich } from "@/i18n/rich";
 
 // 1-16B — Accueil public. Tous les contenus décrivent des capacités LIVRÉES
@@ -47,32 +61,38 @@ const bestOffer = SUBSCRIPTION_OFFERS.find(
 const monthlyOffer = SUBSCRIPTION_OFFERS.find((offer) => offer.months === 1);
 
 // 1-16G : textes dans `public` (`landing.*`), durées dans `subscription`.
+// Référencement : URL canonique de la langue rendue, hreflang FR/EN et
+// aperçu de partage (`lib/seo/metadata.ts`).
 export async function generateMetadata(): Promise<Metadata> {
   const { t, lng } = await getServerT("public");
-  const { t: ts } = await getServerT("subscription");
+  const { t: tc } = await getServerT("common");
   const metaPrice = t("landing.meta.price", {
     monthly: formatFcfa(monthlyOffer?.totalXaf ?? 0, lng),
-    best: formatFcfa(bestOffer?.totalXaf ?? 0, lng),
-    term: bestOffer ? ts(`offers.term.${bestOffer.term}`) : "",
   });
-  const title = t("landing.meta.title");
-  return {
-    title,
+  return publicPageMetadata({
+    path: "/",
+    locale: lng,
+    title: t("landing.meta.title"),
     description: `${t("landing.meta.description")} ${
       registrationEnabled
         ? t("landing.meta.trial", { days: TRIAL_DAYS, price: metaPrice })
         : t("landing.meta.subscription", { price: metaPrice })
     }`,
-    openGraph: {
-      title,
-      description: `${t("landing.meta.ogDescription")}${
-        registrationEnabled
-          ? ` ${t("landing.meta.ogTrial", { days: TRIAL_DAYS })}`
-          : ""
-      }`,
-    },
-  };
+    shareDescription: `${t("landing.meta.ogDescription")}${
+      registrationEnabled
+        ? ` ${t("landing.meta.ogTrial", { days: TRIAL_DAYS })}`
+        : ""
+    }`,
+    imageAlt: tc("meta.shareImageAlt"),
+  });
 }
+
+const AUDIENCE = [
+  { icon: SmartphoneIcon, key: "owner" },
+  { icon: UsersIcon, key: "team" },
+  { icon: BuildingIcon, key: "business" },
+  { icon: MapPinIcon, key: "local" },
+] as const;
 
 const BENEFITS = [
   { icon: PackageIcon, key: "stock" },
@@ -88,6 +108,7 @@ const OFFLINE_STEPS = ["open", "sell", "sync"] as const;
 const FAQ = [
   registrationEnabled ? "startOpen" : "startClosed",
   "sellers",
+  "remote",
   "install",
   "network",
   "subscription",
@@ -109,11 +130,19 @@ export default async function LandingPage() {
   const { t, lng } = await getServerT("public");
   const { t: ts } = await getServerT("subscription");
   const fcfa = (amount: number) => formatFcfa(amount, lng);
+  const capacity = new Intl.NumberFormat(intlLocale(lng)).format(
+    PRODUCT_CAPACITY,
+  );
   return (
     <div
       id="haut"
       className="flex flex-1 touch-manipulation flex-col bg-(--public-bg) text-(--brand-ink) [&_:target]:scroll-mt-20"
     >
+      <JsonLd
+        data={structuredData(lng, t("landing.meta.description"), (offer) =>
+          ts(`offers.term.${offer.term}`),
+        )}
+      />
       <a
         href="#contenu"
         className="sr-only z-40 rounded-md bg-(--public-bg) px-4 py-3 font-semibold text-(--brand-ink) focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:outline-2 focus:outline-(--brand-ink)"
@@ -130,6 +159,9 @@ export default async function LandingPage() {
         >
           <div className="mx-auto grid max-w-6xl gap-10 px-4 pt-8 pb-12 sm:pt-14 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-8 lg:pt-16 lg:pb-16">
             <div className="max-w-xl">
+              <p className="mb-3 text-sm font-semibold text-pretty text-(--brand-orange) sm:text-base">
+                {t("landing.hero.eyebrow")}
+              </p>
               <h1
                 id="hero-title"
                 className="text-[2.1rem] leading-[1.08] font-extrabold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]"
@@ -197,6 +229,43 @@ export default async function LandingPage() {
 
             <ProductPreview />
           </div>
+        </section>
+
+        {/* Pour qui : publics réellement servis (capacités livrées). */}
+        <section
+          id="pour-qui"
+          aria-labelledby="pour-qui-title"
+          className="mx-auto max-w-6xl px-4 pt-16 sm:pt-20"
+        >
+          <h2
+            id="pour-qui-title"
+            className="max-w-2xl text-3xl font-extrabold tracking-tight text-balance sm:text-4xl"
+          >
+            {t("landing.audience.title")}
+          </h2>
+          <p className="mt-4 max-w-3xl leading-relaxed text-pretty text-(--public-muted)">
+            {t("landing.audience.text")}
+          </p>
+          <ul className="mt-10 grid gap-x-12 gap-y-10 sm:grid-cols-2">
+            {AUDIENCE.map(({ icon: Icon, key }) => (
+              <li key={key} className="flex gap-4">
+                <span
+                  aria-hidden
+                  className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-(--brand-solid)/10 text-(--brand-ink)"
+                >
+                  <Icon className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-bold">
+                    {t(`landing.audience.${key}.title`)}
+                  </h3>
+                  <p className="mt-1.5 leading-relaxed text-pretty text-(--public-muted)">
+                    {t(`landing.audience.${key}.text`, { capacity })}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
 
         {/* Bénéfices : quatre usages concrets, sans cartes identiques. */}
@@ -435,7 +504,72 @@ export default async function LandingPage() {
         </section>
       </div>
 
-      <PublicFooter onHome />
+      <PublicFooter onHome path="/" />
     </div>
   );
+}
+
+// Référencement — données structurées fondées uniquement sur des valeurs
+// vérifiées du dépôt : identité (`site-identity.ts`), tarifs du catalogue
+// serveur (`subscription-offers.ts`). Aucune note, aucun avis, aucune
+// adresse postale (aucun siège déclaré).
+function structuredData(
+  lng: Locale,
+  description: string,
+  offerName: (offer: SubscriptionOffer) => string,
+) {
+  const organizationId = `${CANONICAL_ORIGIN}/#organization`;
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: SITE.name,
+        url: `${CANONICAL_ORIGIN}/`,
+        logo: {
+          "@type": "ImageObject",
+          url: absoluteUrl("/icons/icon-512.png"),
+          width: 512,
+          height: 512,
+        },
+        email: CONTACT_EMAILS.contact,
+        areaServed: { "@type": "Country", name: "Cameroon" },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${CANONICAL_ORIGIN}/#website`,
+        name: SITE.name,
+        url: `${CANONICAL_ORIGIN}/`,
+        inLanguage: ["fr", "en"],
+        publisher: { "@id": organizationId },
+      },
+      {
+        "@type": "SoftwareApplication",
+        name: SITE.name,
+        url: absoluteUrl(localizedPath("/", lng)),
+        description,
+        inLanguage: lng,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        publisher: { "@id": organizationId },
+        offers: SUBSCRIPTION_OFFERS.map((offer) => ({
+          "@type": "Offer",
+          name: offerName(offer),
+          price: offer.totalXaf,
+          priceCurrency: "XAF",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: offer.totalXaf,
+            priceCurrency: "XAF",
+            referenceQuantity: {
+              "@type": "QuantitativeValue",
+              value: offer.months,
+              unitCode: "MON",
+            },
+          },
+        })),
+      },
+    ],
+  };
 }

@@ -43,7 +43,7 @@ const content: DocumentContent = {
             Never send your password: {SITE.name} will never ask you for it.
           </p>
           <p>
-            The <Link href="/guide">user guide</Link> answers the most common
+            The <Link href="/en/guide">user guide</Link> answers the most common
             questions.
           </p>
         </>
@@ -73,7 +73,7 @@ const content: DocumentContent = {
           <p>
             Write from your account&apos;s address. The rights and how they work
             are detailed in the{" "}
-            <Link href="/confidentialite">Privacy Policy</Link>.
+            <Link href="/en/confidentialite">Privacy Policy</Link>.
           </p>
         </>
       ),
