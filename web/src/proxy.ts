@@ -1,14 +1,19 @@
-import { NextRequest, type NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createProxy } from "next-i18next/proxy";
-import { baseI18nConfig } from "@/i18n/settings";
+import { LOCALE_HEADER, baseI18nConfig } from "@/i18n/settings";
 import {
   buildContentSecurityPolicy,
   createNonce,
 } from "@/lib/security-headers";
+import {
+  englishBasePath,
+  isLocalizedPublicPath,
+} from "@/lib/seo/public-routes";
 
 // 1-16G — Langue de chaque requête de page (URL inchangées). Ordre :
 // cookie de préférence `stockmaster.lang`, sinon en-tête Accept-Language du
-// navigateur (proposition initiale de l'anglais), sinon français. Le
+// navigateur (proposition initiale de l'anglais), sinon français. Exception
+// (référencement) : pages publiques bilingues, voir plus bas. Le
 // résultat est transmis au rendu serveur par un en-tête interne, réécrit à
 // chaque requête (une valeur envoyée par le client est remplacée). Le proxy
 // ne pose aucun cookie et ne lit aucune session.
@@ -30,7 +35,23 @@ export function proxy(request: NextRequest): NextResponse | Response {
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", csp);
-  const response = i18nProxy(new NextRequest(request, { headers }));
+
+  // Référencement — pages publiques bilingues (`lib/seo/public-routes.ts`) :
+  // l'URL détermine toujours la langue, quels que soient le cookie et
+  // Accept-Language. `/en/...` (routes `app/en/*`, qui réexportent les
+  // pages françaises) est servi en anglais, l'URL sans préfixe toujours en
+  // français. Les autres routes gardent la détection ci-dessous.
+  const { pathname } = request.nextUrl;
+  let response: NextResponse | Response;
+  if (englishBasePath(pathname)) {
+    headers.set(LOCALE_HEADER, "en");
+    response = NextResponse.next({ request: { headers } });
+  } else if (isLocalizedPublicPath(pathname)) {
+    headers.set(LOCALE_HEADER, "fr");
+    response = NextResponse.next({ request: { headers } });
+  } else {
+    response = i18nProxy(new NextRequest(request, { headers }));
+  }
   response.headers.set("Content-Security-Policy", csp);
   return response;
 }

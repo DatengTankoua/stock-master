@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/public/public-header";
 import { getServerT } from "@/i18n/server";
+import { localizedPath } from "@/lib/seo/public-routes";
 
 // 1-16F — Page introuvable : en-tête public commun (contrôle du thème
 // inclus) au lieu de la page par défaut, aux couleurs Stock Master.
 export default async function NotFound() {
-  const { t } = await getServerT("common");
+  const { t, lng } = await getServerT("common");
   return (
     <div className="flex flex-1 flex-col bg-(--public-bg) text-(--brand-ink)">
       <PublicHeader />
@@ -18,7 +19,7 @@ export default async function NotFound() {
         </h1>
         <p className="text-(--public-muted)">{t("notFound.text")}</p>
         <Link
-          href="/"
+          href={localizedPath("/", lng)}
           className="inline-flex min-h-11 items-center justify-center rounded-lg bg-(--brand-solid) px-5 text-sm font-semibold text-white hover:bg-(--brand-solid)/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--brand-ink)"
         >
           {t("backToHome")}

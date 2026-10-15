@@ -28,7 +28,7 @@ const content: DocumentContent = {
       These terms describe the free trial and the paid subscription to{" "}
       {SITE.name}: what they include, how long they last, their price and what
       happens when they end. They supplement the{" "}
-      <Link href="/conditions-utilisation">Terms of Use</Link>.
+      <Link href="/en/conditions-utilisation">Terms of Use</Link>.
     </p>
   ),
   sections: [
@@ -279,7 +279,9 @@ const content: DocumentContent = {
           <p>
             The proof of acceptance is recorded by the server as described in
             the{" "}
-            <Link href="/conditions-utilisation#acceptation">Terms of Use</Link>
+            <Link href="/en/conditions-utilisation#acceptation">
+              Terms of Use
+            </Link>
             , together with the shop concerned.
           </p>
         </>

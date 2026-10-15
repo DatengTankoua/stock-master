@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { rich } from "@/i18n/rich";
+import { useLocalizedHref } from "@/i18n/use-localized-href";
 import { useOrganizationShell } from "@/contexts/organization-shell-context";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { isOrganizationRole } from "@/lib/organization-permissions";
@@ -70,6 +71,7 @@ export default function SupportPage() {
 
 function SupportForm() {
   const { t } = useT("organization");
+  const localized = useLocalizedHref();
   const errorText = (kind: SupportErrorKind) =>
     t(`support.errors.${kind}`, { email: CONTACT_EMAILS.support });
   const { authContext } = useOrganizationShell();
@@ -210,7 +212,10 @@ function SupportForm() {
         <p className="text-sm text-muted-foreground">
           {rich(t("support.forbidden"), {
             contact: (chunk) => (
-              <Link href="/contact" className="underline underline-offset-2">
+              <Link
+                href={localized("/contact")}
+                className="underline underline-offset-2"
+              >
                 {chunk}
               </Link>
             ),

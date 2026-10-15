@@ -8,14 +8,21 @@ import fr from "@/i18n/documents/contact/fr";
 const CONTENT = { fr, en } as const;
 
 export async function generateMetadata() {
-  const content = CONTENT[await getRequestLocale()];
-  return documentMetadata(content.metaTitle, content.metaDescription);
+  const locale = await getRequestLocale();
+  const content = CONTENT[locale];
+  return documentMetadata({
+    path: "/contact",
+    locale,
+    title: content.metaTitle,
+    description: content.metaDescription,
+  });
 }
 
 export default async function ContactPage() {
   const content = CONTENT[await getRequestLocale()];
   return (
     <DocumentPage
+      path={"/contact"}
       title={content.title}
       intro={content.intro}
       sections={content.sections}

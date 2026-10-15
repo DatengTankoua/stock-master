@@ -33,6 +33,8 @@ import { CurrencyConverter } from "@/components/currency/currency-converter";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { useLocale } from "@/i18n/locale-provider";
+import { localizedHref } from "@/lib/seo/public-routes";
 import { useMessage } from "@/i18n/use-message";
 import { EngagementPrompt } from "@/components/notifications/engagement-prompt";
 import { LegalAcceptancePrompt } from "@/components/legal/legal-acceptance-prompt";
@@ -274,6 +276,7 @@ export default function AppShellLayout({
     useAuth();
   const { t } = useT("common");
   const { t: ts } = useT("subscription");
+  const { locale } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const [organization, setOrganization] =
@@ -410,7 +413,11 @@ export default function AppShellLayout({
   const online = useOnlineStatus();
   const navOffline = !online || (!authContext && offlineIdentity !== null);
 
-  const navItems = visibleNavItems(authContext);
+  const navItems = visibleNavItems(authContext).map((item) => ({
+    ...item,
+    // Guide public dans la langue de l'interface (`/en/guide` en anglais).
+    href: localizedHref(item.href, locale),
+  }));
   const mobileCompact = navItems.length > MOBILE_PRIMARY_COUNT;
   const mobilePrimary = mobileCompact
     ? navItems.slice(0, MOBILE_PRIMARY_COUNT)

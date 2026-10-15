@@ -22,6 +22,7 @@ const publicFr = {
     tagline: "Stock, ventes et équipe pour les commerces, depuis le téléphone.",
     help: "Aide et compte",
     legal: "Informations légales",
+    languages: "Langue de la page",
     login: "Connexion",
     register: "Inscription",
     copyright: "© {{year}} {{name}}",
@@ -44,21 +45,30 @@ const publicFr = {
     caption:
       "Captures réelles de l'application, interface en français · Boutique Démo, produits et ventes fictifs.",
   },
+  // Bandeau affiché (en anglais) sur un appareil réglé en anglais.
+  languageHint: {
+    text: "Cette page existe aussi en anglais.",
+    link: "Voir la version anglaise",
+    dismiss: "Fermer",
+  },
   landing: {
     meta: {
-      title: "Stock Master — Stock et ventes de votre commerce, sur téléphone",
+      title:
+        "Logiciel de gestion de stock et de ventes au Cameroun | Stock Master",
       description:
-        "Ventes et stock en temps réel, aide au réapprovisionnement et historique mensuel Excel/PDF. En français et en anglais.",
-      price:
-        "{{monthly}} pour 1 mois, ou {{best}} payés en une fois pour {{term}}",
+        "Gérez le stock de votre boutique et suivez vos ventes depuis votre téléphone : produits, équipe et droits, analyses, historique Excel/PDF. Pour les commerces et PME au Cameroun.",
+      price: "{{monthly}} pour 1 mois",
       trial: "Essai gratuit de {{days}} jours, puis {{price}}.",
-      subscription: "Abonnement de {{price}}.",
+      subscription: "Abonnement : {{price}}.",
       ogDescription:
-        "Stock, ventes, équipe et analyses pour les commerces et PME.",
+        "Gestion de stock et suivi des ventes depuis le téléphone, pour les commerces et PME au Cameroun.",
       ogTrial: "Essai gratuit de {{days}} jours.",
     },
     hero: {
-      title: "Suivez votre stock et vos ventes depuis votre téléphone",
+      eyebrow:
+        "Gestion de stock et suivi des ventes pour les commerces au Cameroun",
+      title:
+        "Gérez le stock et les ventes de votre boutique depuis votre téléphone",
       text: "Une vente de deux savons ? Le stock baisse et vos collègues connectés voient la mise à jour. Stock Master rassemble le catalogue, les ventes et les repères utiles pour tenir votre boutique.",
       trialNote:
         "{{days}} jours d'essai gratuit, aucun paiement requis. Ensuite, <price>{{price}} pour {{term}}</price>, avec la formule mensuelle.",
@@ -71,19 +81,39 @@ const publicFr = {
       login: "Se connecter",
       seePricing: "Voir les tarifs",
     },
-    benefits: {
-      title: "Tout ce qu'il faut pour tenir la boutique",
-      stock: {
-        title: "Suivre votre stock",
-        text: "Rangez le riz, l'huile et les savons par rayon. Chaque vente met à jour le stock ; les produits presque épuisés ou en rupture sont signalés selon vos droits.",
-      },
-      sales: {
-        title: "Enregistrer vos ventes",
-        text: "Choisissez le produit, la quantité et le prix réel. La vente garde sa date et le nom du vendeur. Les collègues connectés retrouvent les mises à jour sans recharger la page.",
+    audience: {
+      title: "Pour les boutiques, commerces et PME au Cameroun",
+      text: "Stock Master s'adresse aux commerçants qui vendent des produits en stock et veulent savoir à tout moment ce qui reste et ce qui a été vendu, que vous teniez seul votre boutique ou que vous travailliez avec plusieurs vendeurs.",
+      owner: {
+        title: "Le propriétaire qui veut suivre ses ventes",
+        text: "Depuis votre téléphone, voyez les ventes, le stock restant et les produits à réapprovisionner, même quand vous n'êtes pas au comptoir.",
       },
       team: {
-        title: "Travailler avec votre équipe",
-        text: "Invitez vos vendeurs avec un lien et choisissez ce que chacun peut faire : vendre, gérer le catalogue, voir les chiffres. Le prix ne change pas avec le nombre de vendeurs.",
+        title: "La boutique avec plusieurs vendeurs",
+        text: "Chaque vendeur a son propre accès. Vous décidez de ce qu'il peut voir et faire, et chaque vente garde le nom de celui qui l'a enregistrée.",
+      },
+      business: {
+        title: "La PME qui veut un stock en ordre",
+        text: "Catalogues et sous-catalogues, fiches produit avec photo, prix d'achat et de vente en FCFA, ajustements de stock et historique des modifications. Jusqu'à {{capacity}} fiches produit conservées par commerce, corbeille comprise.",
+      },
+      local: {
+        title: "Pensé pour le quotidien au Cameroun",
+        text: "Prix en FCFA, abonnement payé par Mobile Money (MTN ou Orange), interface en français ou en anglais, et ventes possibles pendant une coupure de réseau, dans les limites décrites plus bas.",
+      },
+    },
+    benefits: {
+      title: "Tout pour gérer votre boutique au quotidien",
+      stock: {
+        title: "Gérer vos produits et votre stock",
+        text: "Rangez le riz, l'huile et les savons par catalogue, avec photo, prix d'achat et prix de vente. Chaque vente met à jour le stock ; les produits presque épuisés ou en rupture sont signalés selon vos droits.",
+      },
+      sales: {
+        title: "Suivre vos ventes",
+        text: "Choisissez le produit, la quantité et le prix réel. La vente garde sa date et le nom du vendeur. Les collègues connectés retrouvent les mises à jour sans recharger la page, et l'historique des ventes reste consultable selon vos droits.",
+      },
+      team: {
+        title: "Donner à chacun les bons droits",
+        text: "Invitez vos vendeurs avec un lien. Par défaut, un vendeur enregistre des ventes et voit les siennes ; vous ajoutez les autres droits un par un : gérer le catalogue, ajuster le stock, voir toutes les ventes, les coûts ou les analyses, inviter des membres. Un administrateur a tous les droits, et un accès peut être suspendu. Le prix ne change pas avec le nombre de vendeurs.",
       },
       analytics: {
         title: "Comprendre votre activité",
@@ -141,6 +171,11 @@ const publicFr = {
         question: "Mes vendeurs peuvent-ils utiliser l'application ?",
         answer:
           "Oui. Depuis l'espace Organisation, créez une invitation : vous obtenez un lien à transmettre au vendeur, par SMS ou messagerie par exemple. Il crée son accès avec ce lien. Chaque membre peut enregistrer des ventes ; vous ajoutez les autres droits un par un.",
+      },
+      remote: {
+        question: "Puis-je suivre les ventes de ma boutique à distance ?",
+        answer:
+          "Oui. Connectez-vous depuis votre téléphone : les ventes enregistrées par vos vendeurs apparaissent dès qu'elles sont envoyées, avec le stock mis à jour. Avec le droit correspondant, vous pouvez aussi recevoir une notification à chaque nouvelle vente d'un autre membre.",
       },
       install: {
         question: "Faut-il installer une application sur le téléphone ?",
