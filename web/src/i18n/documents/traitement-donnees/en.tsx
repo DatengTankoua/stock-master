@@ -36,7 +36,7 @@ const content: DocumentContent = {
           <li>
             For account data (name, email, password, subscription,
             notifications, support requests), the operator is the controller:
-            the <Link href="/confidentialite">Privacy Policy</Link> applies.
+            the <Link href="/en/confidentialite">Privacy Policy</Link> applies.
           </li>
         </ul>
       ),

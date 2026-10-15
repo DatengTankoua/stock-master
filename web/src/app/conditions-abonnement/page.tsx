@@ -11,14 +11,22 @@ const CONTENT = { fr, en } as const;
 const doc = legalDocument("/conditions-abonnement");
 
 export async function generateMetadata() {
-  const content = CONTENT[await getRequestLocale()];
-  return documentMetadata(content.metaTitle, content.metaDescription, doc);
+  const locale = await getRequestLocale();
+  const content = CONTENT[locale];
+  return documentMetadata({
+    path: doc.href,
+    locale,
+    title: content.metaTitle,
+    description: content.metaDescription,
+    doc,
+  });
 }
 
 export default async function ConditionsAbonnementPage() {
   const content = CONTENT[await getRequestLocale()];
   return (
     <DocumentPage
+      path={doc.href}
       title={content.title}
       doc={doc}
       intro={content.intro}

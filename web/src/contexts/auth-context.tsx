@@ -9,7 +9,9 @@ import {
   useState,
 } from "react";
 import axios from "axios";
+import { usePathname } from "next/navigation";
 import { useLocale } from "@/i18n/locale-provider";
+import { publicPageOf } from "@/lib/seo/public-routes";
 import {
   getToken,
   setToken,
@@ -298,9 +300,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // chaque choix « Français / English ». Jeton applicatif ou limité de
   // CETTE session ; échec silencieux (hors connexion : au prochain envoi).
   // Aucune autre requête, aucune relance de vente ni de paiement.
+  // Référencement : sur une page publique bilingue, la langue affichée est
+  // imposée par l'URL (`/en` ou non) et n'est pas une préférence : rien
+  // n'est envoyé ; la préférence (cookie) part dès la page suivante hors de
+  // ces pages (application, connexion…).
   const { locale } = useLocale();
+  const pathname = usePathname();
   const sentRef = useRef<string | null>(null);
   useEffect(() => {
+    if (publicPageOf(window.location.pathname)) return;
     const token = user ? getToken() : restrictedToken;
     if (!token) return;
     const key = `${token}:${locale}`;
@@ -310,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateAccountLocale(locale, token).catch(() => {
       sentRef.current = null;
     });
-  }, [user, restrictedToken, sessionVersion, locale]);
+  }, [user, restrictedToken, sessionVersion, locale, pathname]);
 
   return (
     <AuthContext.Provider

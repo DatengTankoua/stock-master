@@ -13,7 +13,13 @@
 // de la politique est celui des scripts du même HTML) ; les copies v5,
 // enregistrées sans CSP, sont remplacées. Voir
 // docs/architecture/phase-1-22f-browser-security-headers.md.
-const CACHE_VERSION = "v6";
+// Référencement : v7 — l'URL détermine la langue des pages publiques
+// bilingues (français sans préfixe, anglais sous `/en`) : chaque copie est
+// téléchargée sous SA propre URL, n'est enregistrée que si sa langue est
+// celle de l'URL, et n'est servie hors ligne que pour cette URL. Les copies
+// v6 (rangées selon la langue de l'appareil, même URL pour les deux
+// langues) sont purgées à l'activation. Logo horizontal allégé (720 px).
+const CACHE_VERSION = "v7";
 const CACHE_NAME = `stockmaster-${CACHE_VERSION}`;
 // 1-22C.1 : documents publics localisés, dans un cache distinct (aucune
 // autre réponse n'y est jamais écrite).
@@ -38,12 +44,14 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
   "/icons/apple-touch-icon.png",
-  "/brand/stock-master-logo-horizontal.png",
+  "/brand/stock-master-logo-horizontal-720.png",
   "/brand/stock-master-icon.png",
 ];
 
 // 1-22C.1 — Pages publiques disponibles hors ligne, en français et en
-// anglais (même URL, langue choisie par le serveur). Jamais : /app/*,
+// anglais. Pages bilingues : une URL par langue (voir BILINGUAL_PAGES) ;
+// connexion, inscription, mot de passe et écran hors ligne : même URL,
+// langue choisie par le serveur. Jamais : /app/*,
 // /access, liens à jeton (invitation, vérification, réinitialisation).
 const LOCALES = ["fr", "en"];
 const PUBLIC_PAGES = [
@@ -62,6 +70,44 @@ const PUBLIC_PAGES = [
   "/auth/forgot-password",
 ];
 const PUBLIC_NAVIGATIONS = new Set(PUBLIC_PAGES);
+
+// Référencement : pages publiques bilingues, dont l'URL détermine TOUJOURS
+// la langue (cookie et Accept-Language ignorés par le serveur) : français
+// sans préfixe, anglais sous `/en` (`/en`, `/en/guide`…). Chaque copie est
+// rangée sous la clé « chemin sans préfixe + langue de l'URL ». Miroir de
+// `src/lib/seo/public-routes.ts` (LOCALIZED_PUBLIC_PATHS).
+const EN_PREFIX = "/en";
+const BILINGUAL_PAGES = new Set([
+  "/",
+  "/guide",
+  "/contact",
+  "/mentions-legales",
+  "/conditions-utilisation",
+  "/conditions-abonnement",
+  "/confidentialite",
+  "/cookies",
+  "/traitement-donnees",
+]);
+
+function englishPath(pathname) {
+  return pathname === "/" ? EN_PREFIX : `${EN_PREFIX}${pathname}`;
+}
+
+// `/en/guide` → `/guide`, `/en` → `/` ; sinon null.
+function englishBasePath(pathname) {
+  if (pathname === EN_PREFIX) return "/";
+  if (!pathname.startsWith(`${EN_PREFIX}/`)) return null;
+  const base = pathname.slice(EN_PREFIX.length);
+  return BILINGUAL_PAGES.has(base) ? base : null;
+}
+
+// Page bilingue désignée par une URL : clé (chemin sans préfixe) et langue
+// de l'URL ; sinon null.
+function bilingualPageOf(pathname) {
+  const english = englishBasePath(pathname);
+  if (english) return { path: english, locale: "en" };
+  return BILINGUAL_PAGES.has(pathname) ? { path: pathname, locale: "fr" } : null;
+}
 
 // Actualisation des pages publiques en ligne (tarifs, textes juridiques) :
 // à chaque visite (réseau d'abord) et, pour les pages non visitées, au plus
@@ -131,9 +177,10 @@ function isSensitiveUrl(url) {
 }
 
 // ─── Documents publics localisés (1-22C.1) ──────────────────────────────────
-// Clé interne par langue : la même URL est rendue en FR ou en EN selon le
-// cookie, que le service worker ne lit pas. La langue d'un document est
-// celle de son `<html lang>`.
+// Clé interne : chemin sans préfixe + langue. Page bilingue : langue de son
+// URL (`/en` → en, sinon fr). Autre page : la même URL est rendue en FR ou
+// en EN selon le cookie, que le service worker ne lit pas. La langue d'un
+// document est celle de son `<html lang>`.
 function publicPageKey(pathname, locale) {
   return new Request(`${self.location.origin}${pathname}?__sw_locale=${locale}`);
 }
@@ -183,13 +230,17 @@ function storedDocument(html, csp) {
 
 // Enregistre une réponse de page publique sous sa langue réelle. Ignore
 // silencieusement toute réponse non exploitable (erreur HTTP, redirection,
-// autre type) : la copie précédente reste en place.
-async function storePublicPage(pathname, response) {
+// autre type) : la copie précédente reste en place. `fetchedPath` : chemin
+// réellement demandé. Page bilingue : la langue du document doit être celle
+// de cette URL (sinon rien n'est enregistré).
+async function storePublicPage(pathname, response, fetchedPath = pathname) {
   if (!response.ok || response.redirected || !isHtmlResponse(response)) return false;
-  if (new URL(response.url).pathname !== pathname) return false;
+  if (new URL(response.url).pathname !== fetchedPath) return false;
   const html = await response.text();
   const locale = documentLocale(html);
   if (!locale) return false;
+  const bilingual = bilingualPageOf(fetchedPath);
+  if (bilingual && (bilingual.locale !== locale || bilingual.path !== pathname)) return false;
   await cacheDocumentAssets(html, response.headers.get("Link"));
   const cache = await caches.open(PAGES_CACHE_NAME);
   await cache.put(
@@ -200,13 +251,24 @@ async function storePublicPage(pathname, response) {
 }
 
 // Téléchargement explicite d'une page dans une langue : sans cookie (jamais
-// de réponse liée à une session), langue imposée par Accept-Language.
+// de réponse liée à une session). Page bilingue : URL de la langue (sans
+// préfixe en français, `/en` en anglais) ; autre page : langue imposée par
+// Accept-Language.
+function publicPageSource(pathname, locale) {
+  return locale === "en" && BILINGUAL_PAGES.has(pathname) ? englishPath(pathname) : pathname;
+}
+
 function fetchPublicPage(pathname, locale) {
-  return fetch(pathname, {
+  return fetch(publicPageSource(pathname, locale), {
     credentials: "omit",
     cache: "no-store",
     headers: { "Accept-Language": locale },
   });
+}
+
+async function downloadPublicPage(pathname, locale) {
+  const response = await fetchPublicPage(pathname, locale);
+  return { response, fetchedPath: publicPageSource(pathname, locale) };
 }
 
 // Préparation complète (installation) : un échec réseau ou serveur (5xx)
@@ -217,9 +279,9 @@ async function precachePublicPages() {
     LOCALES.map((locale) => ({ pathname, locale })),
   );
   await runPool(jobs, 4, async ({ pathname, locale }) => {
-    const response = await fetchPublicPage(pathname, locale);
+    const { response, fetchedPath } = await downloadPublicPage(pathname, locale);
     if (response.status >= 500) throw new Error("page-unavailable");
-    await storePublicPage(pathname, response);
+    await storePublicPage(pathname, response, fetchedPath);
   });
 }
 
@@ -247,17 +309,21 @@ async function refreshPublicPagesIfStale() {
   );
   await runPool(jobs, 2, async ({ pathname, locale }) => {
     try {
-      await storePublicPage(pathname, await fetchPublicPage(pathname, locale));
+      const { response, fetchedPath } = await downloadPublicPage(pathname, locale);
+      await storePublicPage(pathname, response, fetchedPath);
     } catch {
       // copie précédente conservée
     }
   });
 }
 
-// Langue de l'appareil d'abord (écrite par la page), puis l'autre langue.
-async function cachedPublicPage(pathname) {
-  const preferred = await readDeviceLocale();
+// Page bilingue : UNIQUEMENT la copie de la langue de son URL (jamais
+// l'autre langue sous la même adresse). Autre page publique : langue de
+// l'appareil (écrite par la page) d'abord, puis l'autre langue.
+async function cachedPublicPage(pathname, urlLocale = null) {
   const cache = await caches.open(PAGES_CACHE_NAME);
+  if (urlLocale) return (await cache.match(publicPageKey(pathname, urlLocale))) || null;
+  const preferred = await readDeviceLocale();
   for (const locale of [preferred, ...LOCALES.filter((l) => l !== preferred)]) {
     const cached = await cache.match(publicPageKey(pathname, locale));
     if (cached) return cached;
@@ -359,6 +425,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
+    // Page bilingue (FR sans préfixe, EN sous `/en`) : clé et langue de l'URL.
+    const bilingual = bilingualPageOf(url.pathname);
+    if (bilingual) {
+      event.respondWith(
+        networkFirstPublicNavigation(event, url, bilingual.path, bilingual.locale),
+      );
+      return;
+    }
     if (PUBLIC_NAVIGATIONS.has(url.pathname)) {
       event.respondWith(networkFirstPublicNavigation(event, url));
       return;
@@ -418,18 +492,22 @@ async function offlineScreen() {
   return cached ?? Response.error();
 }
 
-async function networkFirstPublicNavigation(event, url) {
+// `pathname` : clé de la page (sans préfixe) ; `urlLocale` : langue imposée
+// par l'URL d'une page bilingue (`fr` sans préfixe, `en` sous `/en`).
+async function networkFirstPublicNavigation(event, url, pathname = url.pathname, urlLocale = null) {
   try {
     const response = await fetch(event.request);
     // Seule l'URL exacte (sans query) est enregistrée : une variante
     // paramétrée n'écrase jamais la copie de référence.
     if (url.search === "" && !isSensitiveUrl(url)) {
-      event.waitUntil(storePublicPage(url.pathname, response.clone()).catch(() => {}));
+      event.waitUntil(
+        storePublicPage(pathname, response.clone(), url.pathname).catch(() => {}),
+      );
     }
     return response;
   } catch {
-    const cached = await cachedPublicPage(url.pathname);
-    if (cached) return url.pathname === OFFLINE_URL ? cached : markedOfflineCopy(cached);
+    const cached = await cachedPublicPage(pathname, urlLocale);
+    if (cached) return pathname === OFFLINE_URL ? cached : markedOfflineCopy(cached);
     return offlineScreen();
   }
 }

@@ -171,9 +171,10 @@ RECIPE_PLAYWRIGHT_DIR=<dir> node api/test/recipe/csp-scenarios.js [PUB TURNSTILE
 ```
 
 Violations CSP relevées dans chaque page, fonctionnalités vérifiées (pages
-FR/EN, Turnstile servi localement sous son origine officielle, photos
-signées, temps réel, export, départ SasPay simulé et reçu, script injecté
-bloqué, mise à jour v5 → v6 du service worker et hors ligne). Aucun appel
+FR/EN — pages publiques bilingues en anglais sous `/en` —, Turnstile servi
+localement sous son origine officielle, photos signées, temps réel, export,
+départ SasPay simulé et reçu, script injecté bloqué, mise à jour du service
+worker de la version de `HEAD` vers celle du dépôt, et hors ligne). Aucun appel
 à Cloudflare ni à SasPay : ces hôtes sont servis ou refusés par le
 navigateur de test.
 

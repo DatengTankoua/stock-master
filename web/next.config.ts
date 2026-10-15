@@ -7,6 +7,14 @@ import { STATIC_SECURITY_HEADERS } from "./src/lib/security-headers";
 // La racine de traçage est celle du workspace pnpm (lockfile racine).
 const isDockerBuild = process.env.DOCKER_BUILD === "true";
 
+const NOINDEX_PATHS = [
+  "/app",
+  "/app/:path*",
+  "/auth/:path*",
+  "/access",
+  "/offline",
+];
+
 const nextConfig: NextConfig = {
   ...(isDockerBuild
     ? {
@@ -22,6 +30,14 @@ const nextConfig: NextConfig = {
       // est posée par proxy.ts). En PREMIER : une règle plus loin qui
       // redéfinit la même clé l'emporte (Referrer-Policy des liens à jeton).
       { source: "/:path*", headers: [...STATIC_SECURITY_HEADERS] },
+      // Référencement : espaces privés et pages techniques jamais indexés.
+      // Leur exploration n'est PAS bloquée dans robots.txt (un robot doit
+      // pouvoir lire cette directive) ; l'accès reste contrôlé par
+      // l'authentification, jamais par robots.txt.
+      ...NOINDEX_PATHS.map((source) => ({
+        source,
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      })),
       {
         source: "/auth/verify-email",
         headers: [

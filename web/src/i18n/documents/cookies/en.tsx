@@ -80,7 +80,7 @@ const content: DocumentContent = {
             {
               name: "stockmaster.lang",
               purpose:
-                "Language chosen with the “Français / English” button (fr or en). Set only when you choose a language; without it, the page is shown in the browser's language, otherwise in French.",
+                "Language chosen with the “Français / English” button or links (fr or en). Set only when you choose a language. It applies to log-in, sign-up and the app: without it, they follow the browser's language, otherwise French. Public pages (home, guide, contact, legal texts) always follow their address: English if it starts with /en, French otherwise.",
               duration: "365 days, renewed with each choice",
             },
           ]}
@@ -282,7 +282,7 @@ const content: DocumentContent = {
           </li>
           <li>
             To stop notifications on a device, see the{" "}
-            <Link href="/guide#notifications">guide</Link>.
+            <Link href="/en/guide#notifications">guide</Link>.
           </li>
         </ul>
       ),

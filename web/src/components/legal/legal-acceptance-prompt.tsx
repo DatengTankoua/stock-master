@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "next-i18next/client";
 import { useLocale } from "@/i18n/locale-provider";
+import { localizedHref } from "@/lib/seo/public-routes";
 import { rich } from "@/i18n/rich";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,7 +160,7 @@ export function LegalAcceptancePrompt({ scope }: { scope: string }) {
                         : t("acceptance.comma"))}
                     {t("acceptance.article")}{" "}
                     <a
-                      href={doc.href}
+                      href={localizedHref(doc.href, locale)}
                       target="_blank"
                       rel="noopener"
                       className="font-medium underline underline-offset-2"
@@ -181,7 +182,7 @@ export function LegalAcceptancePrompt({ scope }: { scope: string }) {
                 {rich(t("prompt.notice", { version: doc.version }), {
                   doc: () => (
                     <a
-                      href={doc.href}
+                      href={localizedHref(doc.href, locale)}
                       target="_blank"
                       rel="noopener"
                       className="font-medium underline underline-offset-2"

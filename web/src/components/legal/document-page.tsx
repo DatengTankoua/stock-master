@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PublicFooter } from "@/components/public/public-footer";
 import { PublicHeader } from "@/components/public/public-header";
 import type { PublicDocument } from "@/lib/legal/site-identity";
+import { localizedHref } from "@/lib/seo/public-routes";
 import { getServerT } from "@/i18n/server";
 import { rich } from "@/i18n/rich";
 
@@ -25,11 +26,14 @@ const bodyClass =
   "doc-body text-base leading-relaxed text-(--public-body) [&_a]:font-medium [&_a]:text-(--brand-ink) [&_a]:underline [&_a]:underline-offset-4 [&_a]:rounded-sm [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-offset-2 [&_a:focus-visible]:outline-(--brand-ink) [&_h3]:mt-6 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-(--brand-ink) [&_p]:mt-3 [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5 [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5 [&_strong]:font-semibold [&_strong]:text-(--brand-ink) [&_table]:mt-4 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_th]:border-b [&_th]:border-(--brand-ink)/20 [&_th]:py-2 [&_th]:pr-3 [&_th]:text-left [&_th]:align-top [&_th]:font-semibold [&_td]:border-b [&_td]:border-(--brand-ink)/10 [&_td]:py-2 [&_td]:pr-3 [&_td]:align-top";
 
 export async function DocumentPage({
+  path,
   title,
   intro,
   doc,
   sections,
 }: {
+  /** Chemin de la page sans préfixe de langue (`/guide`…). */
+  path: string;
   title: string;
   intro: React.ReactNode;
   /** Absent pour les pages d'aide (pas de version juridique). */
@@ -127,7 +131,7 @@ export async function DocumentPage({
               {rich(t("document.question"), {
                 contact: (chunk) => (
                   <Link
-                    href="/contact"
+                    href={localizedHref("/contact", lng)}
                     className="font-medium text-(--brand-ink) underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--brand-ink)"
                   >
                     {chunk}
@@ -139,7 +143,7 @@ export async function DocumentPage({
         </div>
       </div>
 
-      <PublicFooter />
+      <PublicFooter path={path} />
     </div>
   );
 }

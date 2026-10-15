@@ -5,6 +5,7 @@ import { useT } from "next-i18next/client";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { Wordmark } from "@/components/brand/wordmark";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { useLocalizedHref } from "@/i18n/use-localized-href";
 
 // 1-22C.1 : pages préparées hors ligne par le service worker. Liens HTML
 // simples (jamais `Link`) : le document est servi par le cache, sans
@@ -24,6 +25,9 @@ const OFFLINE_LINKS = [
 // mutation ni appel réseau déclenché ici.
 export default function OfflinePage() {
   const { t } = useT("common");
+  // Pages publiques dans la langue affichée (`/en/...` en anglais) : leur
+  // copie hors ligne est rangée par URL.
+  const localized = useLocalizedHref();
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center gap-4 px-4 py-12 text-center">
       {/* 1-16F : thème disponible aussi hors connexion (préférence locale).
@@ -53,7 +57,10 @@ export default function OfflinePage() {
         <ul className="mt-2 flex flex-col gap-1 text-sm">
           {OFFLINE_LINKS.map(({ href, key }) => (
             <li key={key}>
-              <a href={href} className="underline underline-offset-4">
+              <a
+                href={localized(href)}
+                className="underline underline-offset-4"
+              >
                 {t(`offline.links.${key}`)}
               </a>
             </li>

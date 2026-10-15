@@ -91,7 +91,7 @@ const content: DocumentContent = {
             {
               name: "stockmaster.lang",
               purpose:
-                "Langue choisie avec le bouton « Français / English » (fr ou en). Posé seulement quand vous choisissez une langue ; sans lui, la page s'affiche selon la langue du navigateur, sinon en français.",
+                "Langue choisie avec le bouton ou les liens « Français / English » (fr ou en). Posé seulement quand vous choisissez une langue. Il s'applique à la connexion, à l'inscription et à l'application : sans lui, elles suivent la langue du navigateur, sinon le français. Les pages publiques (accueil, guide, contact, textes juridiques) suivent toujours leur adresse : en anglais si elle commence par /en, en français sinon.",
               duration: "365 jours, renouvelés à chaque choix",
             },
           ]}

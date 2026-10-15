@@ -47,7 +47,8 @@ const content: DocumentContent = {
             shop records, it is the <strong>shop</strong> that decides how they
             are used: it is responsible for them. {SITE.name} processes them on
             its behalf, as a processor, under the{" "}
-            <Link href="/traitement-donnees">Data Processing Agreement</Link>.
+            <Link href="/en/traitement-donnees">Data Processing Agreement</Link>
+            .
           </p>
           <h3>Contact for your data</h3>
           <p>
@@ -164,7 +165,7 @@ const content: DocumentContent = {
           </ul>
           <p>
             What the application keeps on your device is described on the{" "}
-            <Link href="/cookies">Cookies and storage on your device</Link>{" "}
+            <Link href="/en/cookies">Cookies and storage on your device</Link>{" "}
             page.
           </p>
         </>
