@@ -1,0 +1,36 @@
+{
+ "vente": {
+  "product": "Huile d’argan 50 ml",
+  "before": 3,
+  "after": 2
+ },
+ "consoleErrors": [
+  "grace: WebSocket connection to 'ws://127.0.0.1:4230/socket.io/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_INTERNET_DISCONNECTED",
+  "grace: Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+  "grace: Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+  "grace: Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+  "grace: WebSocket connection to 'ws://127.0.0.1:4230/socket.io/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_INTERNET_DISCONNECTED",
+  "grace: WebSocket connection to 'ws://127.0.0.1:4230/socket.io/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_INTERNET_DISCONNECTED"
+ ],
+ "horsligne": {
+  "product": "Savon noir artisanal 250 g",
+  "stockBefore": 37,
+  "stockAfter": 35,
+  "salesOnServerBeforeReconnect": 5,
+  "salesOnServerAfterReconnect": 6,
+  "newSales": 1,
+  "duplicateOperationIds": 0
+ },
+ "facts": {
+  "revenueXaf": 440700,
+  "transactions": 117,
+  "unitsSold": 140,
+  "lowStockCount": 1,
+  "products": 24
+ },
+ "export": {
+  "file": "historique-royalvibe-cosmetique-f6fb6658-2026-10.xlsx",
+  "bytes": 14408
+ },
+ "at": "2026-10-14T21:18:38.287Z"
+}

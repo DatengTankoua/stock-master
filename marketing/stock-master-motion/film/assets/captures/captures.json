@@ -1,0 +1,496 @@
+{
+ "p01-accueil": {
+  "file": "p01-accueil.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {
+   "catalogue": null
+  },
+  "at": "2026-10-14T21:18:14.324Z"
+ },
+ "p02-rayons": {
+  "file": "p02-rayons.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/catalog",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {
+   "laits": {
+    "x": 60,
+    "y": 285,
+    "w": 111,
+    "h": 24
+   }
+  },
+  "at": "2026-10-14T21:18:16.119Z"
+ },
+ "p03-rayon-laits": {
+  "file": "p03-rayon-laits.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/catalog/6acff07eea22b059d695f91b",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {},
+  "at": "2026-10-14T21:18:18.685Z"
+ },
+ "p03-rayon-laits-long": {
+  "file": "p03-rayon-laits-long.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/catalog/6acff07eea22b059d695f91b",
+  "fullPage": true,
+  "hiddenFixed": [
+   {
+    "tag": "HEADER",
+    "position": "sticky",
+    "y": 0,
+    "h": 65
+   },
+   {
+    "tag": "NAV",
+    "position": "fixed",
+    "y": 779,
+    "h": 65
+   }
+  ],
+  "boxes": {},
+  "at": "2026-10-14T21:18:19.620Z"
+ },
+ "p04-rayon-huiles": {
+  "file": "p04-rayon-huiles.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/catalog/6acff07eea22b059d695f91e",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {
+   "argan": {
+    "x": 32,
+    "y": 581,
+    "w": 127,
+    "h": 18
+   }
+  },
+  "at": "2026-10-14T21:18:22.294Z"
+ },
+ "d01-rayon-laits": {
+  "file": "d01-rayon-laits.png",
+  "device": "desktop",
+  "account": "owner",
+  "url": "/app/catalog/6acff07eea22b059d695f91b",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {},
+  "at": "2026-10-14T21:18:26.216Z"
+ },
+ "p05-produit-avant": {
+  "file": "p05-produit-avant.png",
+  "device": "phone",
+  "account": "junior",
+  "url": "/app/catalog/products/6acff082ea22b059d695f944",
+  "fullPage": false,
+  "boxes": {
+   "record": {
+    "x": 16,
+    "y": 567,
+    "w": 358,
+    "h": 28
+   },
+   "stock": {
+    "x": 217,
+    "y": 651,
+    "w": 141,
+    "h": 16
+   }
+  },
+  "at": "2026-10-14T21:14:10.673Z"
+ },
+ "p06-fenetre-vente": {
+  "file": "p06-fenetre-vente.png",
+  "device": "phone",
+  "account": "junior",
+  "url": "/app/catalog/products/6acff082ea22b059d695f944",
+  "fullPage": false,
+  "boxes": {
+   "quantity": {
+    "x": 32,
+    "y": 286,
+    "w": 326,
+    "h": 32
+   },
+   "price": {
+    "x": 32,
+    "y": 376,
+    "w": 326,
+    "h": 32
+   },
+   "confirm": {
+    "x": 32,
+    "y": 588,
+    "w": 326,
+    "h": 32
+   }
+  },
+  "at": "2026-10-14T21:14:11.747Z"
+ },
+ "p07-vente-enregistree": {
+  "file": "p07-vente-enregistree.png",
+  "device": "phone",
+  "account": "junior",
+  "url": "/app/catalog/products/6acff082ea22b059d695f944",
+  "fullPage": false,
+  "boxes": {
+   "toast": {
+    "x": 56,
+    "y": 792,
+    "w": 103,
+    "h": 20
+   },
+   "stock": {
+    "x": 217,
+    "y": 651,
+    "w": 141,
+    "h": 16
+   }
+  },
+  "at": "2026-10-14T21:14:13.034Z"
+ },
+ "p08-produit-apres": {
+  "file": "p08-produit-apres.png",
+  "device": "phone",
+  "account": "junior",
+  "url": "/app/catalog/products/6acff082ea22b059d695f944",
+  "fullPage": false,
+  "boxes": {
+   "stock": {
+    "x": 217,
+    "y": 651,
+    "w": 141,
+    "h": 16
+   }
+  },
+  "at": "2026-10-14T21:14:16.675Z"
+ },
+ "p09-cloche": {
+  "file": "p09-cloche.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app",
+  "fullPage": false,
+  "boxes": {
+   "bell": null
+  },
+  "at": "2026-10-14T21:14:48.930Z"
+ },
+ "p10-notifications": {
+  "file": "p10-notifications.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/notifications",
+  "fullPage": false,
+  "boxes": {},
+  "at": "2026-10-14T21:14:50.671Z"
+ },
+ "p11-membres": {
+  "file": "p11-membres.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/organization/members",
+  "fullPage": false,
+  "boxes": {
+   "junior": {
+    "x": 32,
+    "y": 460,
+    "w": 326,
+    "h": 20
+   },
+   "grace": {
+    "x": 32,
+    "y": 628,
+    "w": 326,
+    "h": 20
+   },
+   "editGrace": {
+    "x": 32,
+    "y": 698,
+    "w": 93,
+    "h": 28
+   }
+  },
+  "at": "2026-10-14T21:14:52.527Z"
+ },
+ "p12-droits-avant": {
+  "file": "p12-droits-avant.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/organization/members",
+  "fullPage": false,
+  "boxes": {
+   "right": {
+    "x": 32,
+    "y": 323,
+    "w": 16,
+    "h": 16
+   }
+  },
+  "at": "2026-10-14T21:14:53.476Z"
+ },
+ "p13-droits-coches": {
+  "file": "p13-droits-coches.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/organization/members",
+  "fullPage": false,
+  "boxes": {
+   "right": {
+    "x": 32,
+    "y": 323,
+    "w": 16,
+    "h": 16
+   },
+   "save": {
+    "x": 32,
+    "y": 709,
+    "w": 326,
+    "h": 32
+   }
+  },
+  "at": "2026-10-14T21:14:54.266Z"
+ },
+ "p14-membres-apres": {
+  "file": "p14-membres-apres.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/organization/members",
+  "fullPage": false,
+  "boxes": {
+   "grace": {
+    "x": 32,
+    "y": 628,
+    "w": 326,
+    "h": 20
+   }
+  },
+  "at": "2026-10-14T21:14:56.886Z"
+ },
+ "p15-hors-ligne-produit": {
+  "file": "p15-hors-ligne-produit.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/catalog/products/6acff080ea22b059d695f930",
+  "fullPage": false,
+  "boxes": {
+   "record": {
+    "x": 16,
+    "y": 671,
+    "w": 358,
+    "h": 28
+   }
+  },
+  "at": "2026-10-14T21:15:11.463Z"
+ },
+ "p16-hors-ligne-fenetre": {
+  "file": "p16-hors-ligne-fenetre.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/catalog/products/6acff080ea22b059d695f930",
+  "fullPage": false,
+  "boxes": {
+   "offlineNote": {
+    "x": 32,
+    "y": 224,
+    "w": 326,
+    "h": 40
+   },
+   "quantity": {
+    "x": 32,
+    "y": 310,
+    "w": 326,
+    "h": 32
+   },
+   "confirm": {
+    "x": 32,
+    "y": 612,
+    "w": 326,
+    "h": 32
+   }
+  },
+  "at": "2026-10-14T21:15:12.562Z"
+ },
+ "p17-hors-ligne-en-attente": {
+  "file": "p17-hors-ligne-en-attente.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/catalog/products/6acff080ea22b059d695f930",
+  "fullPage": false,
+  "boxes": {
+   "toast": {
+    "x": 56,
+    "y": 734,
+    "w": 301,
+    "h": 39
+   }
+  },
+  "at": "2026-10-14T21:15:13.622Z"
+ },
+ "p17b-indicateur": {
+  "file": "p17b-indicateur.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/catalog/products/6acff080ea22b059d695f930",
+  "fullPage": false,
+  "boxes": {
+   "pending": {
+    "x": 156,
+    "y": 20,
+    "w": 39,
+    "h": 24
+   }
+  },
+  "at": "2026-10-14T21:15:14.002Z"
+ },
+ "p18-ventes-en-attente": {
+  "file": "p18-ventes-en-attente.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/catalog#offline-sales-panel",
+  "fullPage": false,
+  "boxes": {},
+  "at": "2026-10-14T21:15:15.728Z"
+ },
+ "p19-synchronisee": {
+  "file": "p19-synchronisee.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/catalog#offline-sales-panel",
+  "fullPage": false,
+  "boxes": {},
+  "at": "2026-10-14T21:16:49.775Z"
+ },
+ "p19b-recemment-synchronisees": {
+  "file": "p19b-recemment-synchronisees.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/sales/pending",
+  "fullPage": false,
+  "boxes": {},
+  "at": "2026-10-14T21:16:52.197Z"
+ },
+ "p19c-synchronisee-detail": {
+  "file": "p19c-synchronisee-detail.png",
+  "device": "phone",
+  "account": "grace",
+  "url": "/app/sales/pending",
+  "fullPage": false,
+  "boxes": {
+   "status": {
+    "x": 29,
+    "y": 392,
+    "w": 332,
+    "h": 20
+   }
+  },
+  "at": "2026-10-14T21:16:54.342Z"
+ },
+ "p20-ventes-proprietaire": {
+  "file": "p20-ventes-proprietaire.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/sales",
+  "fullPage": false,
+  "boxes": {},
+  "at": "2026-10-14T21:16:57.545Z"
+ },
+ "p21-analyse": {
+  "file": "p21-analyse.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/analytics",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {},
+  "at": "2026-10-14T21:18:30.351Z"
+ },
+ "p21-analyse-long": {
+  "file": "p21-analyse-long.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/analytics",
+  "fullPage": true,
+  "hiddenFixed": [
+   {
+    "tag": "HEADER",
+    "position": "sticky",
+    "y": 0,
+    "h": 65
+   },
+   {
+    "tag": "NAV",
+    "position": "fixed",
+    "y": 779,
+    "h": 65
+   }
+  ],
+  "boxes": {},
+  "at": "2026-10-14T21:18:30.833Z"
+ },
+ "p22-historique": {
+  "file": "p22-historique.png",
+  "device": "phone",
+  "account": "owner",
+  "url": "/app/sales",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {},
+  "at": "2026-10-14T21:18:32.610Z"
+ },
+ "d02-analyse": {
+  "file": "d02-analyse.png",
+  "device": "desktop",
+  "account": "owner",
+  "url": "/app/analytics",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {},
+  "at": "2026-10-14T21:18:36.742Z"
+ },
+ "d02-analyse-long": {
+  "file": "d02-analyse-long.png",
+  "device": "desktop",
+  "account": "owner",
+  "url": "/app/analytics",
+  "fullPage": true,
+  "hiddenFixed": [
+   {
+    "tag": "HEADER",
+    "position": "sticky",
+    "y": 0,
+    "h": 106
+   }
+  ],
+  "boxes": {},
+  "at": "2026-10-14T21:18:37.053Z"
+ },
+ "d03-export": {
+  "file": "d03-export.png",
+  "device": "desktop",
+  "account": "owner",
+  "url": "/app/analytics",
+  "fullPage": false,
+  "hiddenFixed": [],
+  "boxes": {
+   "excel": {
+    "x": 484,
+    "y": 496,
+    "w": 186,
+    "h": 32
+   }
+  },
+  "at": "2026-10-14T21:18:37.771Z"
+ }
+}

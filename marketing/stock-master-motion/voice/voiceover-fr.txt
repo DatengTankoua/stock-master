@@ -1,0 +1,13 @@
+Combien reste-t-il de lait de karité en rayon ? Qui a vendu quoi aujourd'hui ? Avec Stock Master, vous le savez.
+
+Chez Royal Vibe Cosmétique, chaque produit a sa fiche : sa photo, son prix en francs CFA, son stock. Et tout est rangé par rayon.
+
+Une cliente prend une huile d'argan. Junior enregistre la vente… et le stock passe de trois à deux. Stock Master signale aussitôt un stock faible.
+
+Mireille, la propriétaire, est prévenue. C'est elle qui choisit les droits de chacun : vendre, ajuster le stock, voir toutes les ventes.
+
+Le réseau coupe ? Grâce continue de vendre. Au retour de la connexion, la vente est envoyée, une seule fois, et le stock se met à jour.
+
+Le soir, l'analyse fait le point : le montant des ventes, les produits classés par montant vendu, et les stocks faibles. L'historique du mois se télécharge en Excel ou en PDF.
+
+Vos produits, vos ventes, votre équipe : tout est au même endroit. Découvrez Stock Master sur stock tiret master point app.

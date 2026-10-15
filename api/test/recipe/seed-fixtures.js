@@ -59,6 +59,14 @@ async function main() {
   try {
     const connection = moduleRef.get(getConnectionToken());
     const schema = await createFixtureSchema(connection);
+    // 1-23A : base persistante déjà peuplée → schéma et index seulement.
+    if (process.env.RECIPE_FIXTURES_SCHEMA_ONLY === '1') {
+      process.stdout.write(
+        `FIXTURES ${JSON.stringify({ schema, accounts: {} })}
+`,
+      );
+      return;
+    }
 
     const auth = moduleRef.get(AuthService);
     const invitations = moduleRef.get(InvitationAcceptanceService);

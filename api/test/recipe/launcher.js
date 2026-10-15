@@ -565,7 +565,12 @@ async function start(options) {
         await new Promise((resolve) => stack.storage.close(() => resolve()));
       if (stack.replSet) {
         try {
-          await stack.replSet.stop({ doCleanup: true, force: true });
+          // 1-23A : les données du profil persistant sont conservées.
+          await stack.replSet.stop(
+            C.PERSISTENT
+              ? { doCleanup: false, force: false }
+              : { doCleanup: true, force: true },
+          );
         } catch {
           // instance déjà arrêtée
         }
@@ -601,11 +606,25 @@ async function start(options) {
   try {
     stack.webBuild = await buildWeb();
 
-    say('MongoDB éphémère (MongoMemoryReplSet, 127.0.0.1) …');
+    say(
+      `MongoDB ${C.PERSISTENT ? 'persistante' : 'éphémère'} (MongoMemoryReplSet, 127.0.0.1) …`,
+    );
     const { MongoMemoryReplSet } = C.apiRequire('mongodb-memory-server');
+    // 1-23A : profil persistant → port fixe (la configuration du replica
+    // set enregistrée dans les données le suppose) et dossier de données
+    // dédié, hors dépôt, conservé à l'arrêt.
+    if (C.PERSISTENT) fs.mkdirSync(C.PERSISTENT.dbPath, { recursive: true });
     stack.replSet = new MongoMemoryReplSet({
       binary: { version: C.MONGODB_BINARY_VERSION },
-      instanceOpts: [{ ip: C.HOST }],
+      instanceOpts: [
+        C.PERSISTENT
+          ? {
+              ip: C.HOST,
+              port: C.PERSISTENT.mongoPort,
+              dbPath: C.PERSISTENT.dbPath,
+            }
+          : { ip: C.HOST },
+      ],
       replSet: { count: 1, dbName: C.DB_NAME, storageEngine: 'wiredTiger' },
     });
     await stack.replSet.start();
@@ -626,6 +645,9 @@ async function start(options) {
       );
     }
 
+    // 1-23A : base persistante déjà peuplée → schéma seul, aucun compte.
+    const seeded = C.PERSISTENT && (await persistentDatabaseSeeded(stack.uri));
+    if (seeded) say('base persistante déjà peuplée : aucun nouveau compte.');
     say('fixtures explicites (schéma et comptes fictifs) …');
     const output = await run(
       'fixtures',
@@ -633,7 +655,10 @@ async function start(options) {
       [path.join(__dirname, 'seed-fixtures.js')],
       {
         cwd: C.WORK_DIR,
-        env: C.apiEnv(stack.uri, { RECIPE_LAUNCHED: '1' }),
+        env: C.apiEnv(stack.uri, {
+          RECIPE_LAUNCHED: '1',
+          ...(seeded ? { RECIPE_FIXTURES_SCHEMA_ONLY: '1' } : {}),
+        }),
       },
     );
     const line = output.split('\n').find((l) => l.startsWith('FIXTURES '));
@@ -646,6 +671,7 @@ async function start(options) {
       host: C.HOST,
       port: C.PORTS.storage,
       bucket: 'recipe-fictitious',
+      persistDir: C.PERSISTENT ? C.PERSISTENT.storageDir : null,
     });
     say(`API compilée (fournisseur ${stack.provider}) …`);
     await startApi();
@@ -677,6 +703,16 @@ async function start(options) {
   }
 }
 
+/** 1-23A : la base persistante contient-elle déjà des comptes ? */
+async function persistentDatabaseSeeded(uri) {
+  const connection = await require('./db-tools').connect(uri);
+  try {
+    return (await connection.db.collection('users').countDocuments()) > 0;
+  } finally {
+    await connection.close();
+  }
+}
+
 function printSummary(stack) {
   const lines = [
     '',
@@ -684,7 +720,7 @@ function printSummary(stack) {
     `  Web        ${C.WEB_ORIGIN}/auth/login`,
     `  API        ${C.API_URL}   (fournisseur : ${stack.provider})`,
     `  Contrôle   ${C.CONTROL_URL}   (simulateurs, 127.0.0.1 uniquement)`,
-    `  MongoDB    éphémère, base ${C.DB_NAME} (127.0.0.1, port ${new URL(stack.uri).port})`,
+    `  MongoDB    ${C.PERSISTENT ? `persistante (${C.PERSISTENT.dbPath})` : 'éphémère'}, base ${C.DB_NAME} (127.0.0.1, port ${new URL(stack.uri).port})`,
     `  Mot de passe des comptes : ${C.PASSWORD}`,
     ...ACCOUNTS.map(
       (a) => `    ${a.email.padEnd(42)} ${a.role.padEnd(7)} ${a.use}`,

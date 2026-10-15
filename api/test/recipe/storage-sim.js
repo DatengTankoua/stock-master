@@ -16,7 +16,8 @@
  *   elle ne prouve rien du service R2 réel ;
  * - `GET /__stats` : compteurs et clés, pour les assertions de la campagne.
  *
- * Écoute 127.0.0.1 seulement, hôte exact exigé ; aucune donnée persistée.
+ * Écoute 127.0.0.1 seulement, hôte exact exigé ; aucune donnée persistée,
+ * sauf `persistDir` (profil de démonstration 1-23A).
  */
 'use strict';
 
@@ -96,8 +97,11 @@ function decodeAwsChunked(buffer) {
   return Buffer.concat(parts);
 }
 
-function startStorageSimulator({ host, port, bucket }) {
-  const objects = new Map();
+function startStorageSimulator({ host, port, bucket, persistDir = null }) {
+  // 1-23A : `persistDir` (profil de démonstration seulement) conserve les
+  // objets sur disque entre deux démarrages ; absent = mémoire seule.
+  const objects = persistDir ? loadPersisted(persistDir) : new Map();
+  const persist = persistDir ? persistence(persistDir) : null;
   const stats = { puts: 0, deletes: 0, gets: 0, misses: 0, denied: 0 };
   const denials = { unsigned: 0, expired: 0, invalid: 0 };
   const verify = createSignatureVerifier({ bucket });
@@ -193,12 +197,14 @@ function startStorageSimulator({ host, port, bucket }) {
             req.headers['content-type'] || 'application/octet-stream',
           lastModified: new Date(),
         });
+        if (persist) persist.write(key, objects.get(key));
         stats.puts += 1;
         res.writeHead(200, { etag: `"${stats.puts}"` }).end();
         return;
       }
       if (req.method === 'DELETE') {
         objects.delete(key);
+        if (persist) persist.remove(key);
         stats.deletes += 1;
         res.writeHead(204).end();
         return;
@@ -258,6 +264,54 @@ function startStorageSimulator({ host, port, bucket }) {
     server.once('error', reject);
     server.listen(port, host, () => resolve(server));
   });
+}
+
+// ─── 1-23A : persistance disque (profil de démonstration) ─────────────────
+
+const fs = require('fs');
+const path = require('path');
+
+/** Nom de fichier sûr et réversible pour une clé d'objet. */
+const fileNameFor = (key) => Buffer.from(key, 'utf8').toString('base64url');
+
+function persistence(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  return {
+    write(key, object) {
+      const base = path.join(dir, fileNameFor(key));
+      fs.writeFileSync(`${base}.bin`, object.body);
+      fs.writeFileSync(
+        `${base}.json`,
+        JSON.stringify({
+          key,
+          contentType: object.contentType,
+          lastModified: object.lastModified.toISOString(),
+        }),
+      );
+    },
+    remove(key) {
+      const base = path.join(dir, fileNameFor(key));
+      fs.rmSync(`${base}.bin`, { force: true });
+      fs.rmSync(`${base}.json`, { force: true });
+    },
+  };
+}
+
+function loadPersisted(dir) {
+  const objects = new Map();
+  if (!fs.existsSync(dir)) return objects;
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith('.json')) continue;
+    const meta = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+    const body = path.join(dir, name.replace(/\.json$/, '.bin'));
+    if (!fs.existsSync(body)) continue;
+    objects.set(meta.key, {
+      body: fs.readFileSync(body),
+      contentType: meta.contentType,
+      lastModified: new Date(meta.lastModified),
+    });
+  }
+  return objects;
 }
 
 module.exports = { startStorageSimulator, decodeAwsChunked };

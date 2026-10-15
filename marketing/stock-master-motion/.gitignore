@@ -1,0 +1,9 @@
+# Lot 1-23A : dépendances, caches et rendus lourds hors Git.
+node_modules/
+exports/
+renders/
+.work/
+film/snapshots/
+film/.hyperframes/
+captures/raw/
+*.log

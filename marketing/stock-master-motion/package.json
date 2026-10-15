@@ -1,0 +1,21 @@
+{
+  "name": "stock-master-motion-23a",
+  "private": true,
+  "description": "Lot 1-23A : film de présentation Stock Master (outillage marketing isolé, hors runtime de l'application).",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "scripts": {
+    "demo": "node demo/motion-demo.js",
+    "hf": "node scripts/hf.js",
+    "preview": "node scripts/hf.js preview",
+    "lint:film": "node scripts/hf.js lint",
+    "check:film": "node scripts/hf.js check",
+    "snapshot": "node scripts/hf.js snapshot --describe false"
+  },
+  "devDependencies": {
+    "geist": "1.7.2",
+    "gsap": "3.14.2",
+    "hyperframes": "0.8.75",
+    "playwright": "1.62.1"
+  }
+}

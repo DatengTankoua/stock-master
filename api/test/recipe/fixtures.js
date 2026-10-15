@@ -96,4 +96,10 @@ for (const account of ACCOUNTS) {
   }
 }
 
-module.exports = { ACCOUNTS };
+// 1-23A : le profil de démonstration du film a ses propres comptes.
+module.exports = {
+  ACCOUNTS:
+    process.env.RECIPE_PROFILE === 'motion-23a'
+      ? require('./fixtures-motion-23a').ACCOUNTS
+      : ACCOUNTS,
+};

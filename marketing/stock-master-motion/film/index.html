@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, height=1080" />
+<title>Stock Master — film de présentation (lot 1-23A)</title>
+<!-- Tout est local : GSAP, polices, captures, photos, audio. Aucun appel réseau au rendu. -->
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/cues.js"></script>
+<script src="assets/facts.js"></script>
+<script src="assets/mode.js"></script>
+<script src="assets/timing.js"></script>
+<style>
+@font-face{font-family:"Geist";font-weight:100 900;font-display:block;src:url("assets/fonts/Geist-Variable.woff2") format("woff2")}
+@font-face{font-family:"Geist Mono";font-weight:100 900;font-display:block;src:url("assets/fonts/GeistMono-Variable.woff2") format("woff2")}
+
+:root{
+  --navy:#062B5C; --navy-deep:#041C3D; --orange:#FF6A00;
+  --paper:#F5F2EC; --ink:#0B1B33; --mist:#C9D6E8; --soft:#FAF8F4;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--navy-deep)}
+#root{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:"Geist",sans-serif;color:var(--soft)}
+.scene{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden}
+.fill{position:absolute;left:0;top:0;width:1920px;height:1080px}
+.abs{position:absolute}
+
+/* Fonds */
+.stage{background:
+  radial-gradient(60% 70% at 70% 45%, rgba(255,106,0,.09) 0%, rgba(255,106,0,0) 60%),
+  radial-gradient(90% 90% at 50% 50%, #08356E 0%, var(--navy) 45%, var(--navy-deep) 100%)}
+.stage::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(180deg, rgba(201,214,232,.05) 0 2px, transparent 2px 120px)}
+.paperbg{background:radial-gradient(80% 90% at 50% 45%, #FFFDF9 0%, var(--paper) 60%, #E9E3D8 100%)}
+.grain{position:absolute;left:0;top:0;opacity:.16;mix-blend-mode:overlay;pointer-events:none}
+
+/* Typographie */
+.kick{position:absolute;font:600 22px "Geist Mono",monospace;letter-spacing:.18em;color:var(--orange);white-space:nowrap}
+.h1{font-weight:800;font-size:112px;line-height:1.0;letter-spacing:-.025em}
+.h2{position:absolute;font-weight:800;font-size:74px;line-height:1.05;letter-spacing:-.02em}
+.ink{color:var(--ink)}
+.w{display:inline-block;white-space:pre}
+.accent{color:var(--orange)}
+.ghost{position:absolute;font-weight:900;font-size:340px;letter-spacing:-.04em;line-height:1;color:transparent;
+  -webkit-text-stroke:2px rgba(201,214,232,.10);white-space:nowrap}
+
+/* Téléphone générique (aucune marque d'appareil) : position animée sur .dev, échelle fixe sur .phone */
+.dev{position:absolute}
+.phone{position:relative;width:404px;height:880px;border-radius:62px;background:#0A0F18;padding:14px;transform-origin:0 0;
+  box-shadow:0 2px 0 1px #27303D inset, 0 40px 90px rgba(0,0,0,.45), 0 12px 24px rgba(0,0,0,.35)}
+.screen{position:relative;width:376px;height:852px;border-radius:48px;overflow:hidden;background:#fff}
+.cam{position:absolute;left:50%;top:24px;width:92px;height:24px;margin-left:-46px;border-radius:14px;background:#0A0F18;z-index:5}
+.vp{position:absolute;left:0;top:38px;width:376px;height:814px;overflow:hidden}
+.vp img{position:absolute;left:0;top:0;width:376px;display:block}
+.tap{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;border:4px solid var(--orange);
+  background:rgba(255,106,0,.18);z-index:6;opacity:0}
+.hl{position:absolute;border:3px solid var(--orange);border-radius:12px;z-index:6;opacity:0;box-shadow:0 0 0 6px rgba(255,106,0,.18)}
+
+/* Ordinateur générique */
+.lap{position:absolute}
+.lap .bezel{width:100%;border-radius:22px;background:#0A0F18;padding:16px 16px 22px;box-shadow:0 50px 110px rgba(0,0,0,.42)}
+.lap .bezel img{width:100%;display:block;border-radius:6px}
+.lap .base{height:18px;margin:0 -40px;border-radius:0 0 18px 18px;background:#1B2330}
+
+/* Pastilles et composants */
+.demo-tag{position:absolute;right:56px;top:40px;font:600 18px "Geist Mono",monospace;letter-spacing:.06em;color:var(--mist);
+  border:1.5px solid rgba(201,214,232,.35);border-radius:999px;padding:8px 18px}
+.demo-tag.dark{color:#4A5870;border-color:rgba(11,27,51,.22)}
+.chip{position:absolute;display:inline-flex;align-items:center;gap:14px;border-radius:999px;padding:14px 26px;
+  font-weight:700;font-size:30px;background:rgba(4,28,61,.78);border:1.5px solid rgba(201,214,232,.22);white-space:nowrap;color:var(--soft)}
+.chip i{width:14px;height:14px;border-radius:50%;background:var(--orange);display:block}
+.chip.light{background:#fff;color:var(--ink);border-color:rgba(11,27,51,.12)}
+.chip.orange{background:var(--orange);color:#1B0D02;border:none;font-size:26px}
+.counter{position:absolute;border-radius:28px;background:rgba(4,28,61,.72);border:1.5px solid rgba(201,214,232,.18);padding:34px 40px;width:470px}
+.counter .label{font:600 22px "Geist Mono",monospace;letter-spacing:.12em;color:var(--mist)}
+.counter .digits{position:relative;height:190px;overflow:hidden;margin-top:6px}
+.counter .digit{position:absolute;left:0;top:0;font:700 190px/190px "Geist Mono",monospace;letter-spacing:-.04em}
+.badge{display:inline-flex;margin-top:18px;border-radius:999px;padding:12px 24px;font-weight:700;font-size:28px;background:var(--orange);color:#1B0D02}
+.node{position:absolute;display:flex;align-items:center;gap:18px;border-radius:24px;padding:22px 30px;background:rgba(4,28,61,.78);
+  border:1.5px solid rgba(201,214,232,.22);font-weight:700;font-size:30px}
+.node small{display:block;font:500 20px "Geist Mono",monospace;color:var(--mist);margin-top:4px}
+.pill{position:absolute;display:inline-flex;align-items:center;gap:12px;border-radius:999px;padding:12px 24px;font-weight:700;font-size:26px;white-space:nowrap}
+.pill.off{background:#2A1305;color:var(--orange);border:2px solid var(--orange)}
+.pill.light{background:var(--soft);color:var(--ink)}
+.cond{position:absolute;border-radius:20px;background:rgba(4,28,61,.88);border-left:8px solid var(--orange);padding:22px 30px;
+  font-weight:600;font-size:30px;line-height:1.3;color:var(--mist)}
+.cond b{display:block;font:700 22px "Geist Mono",monospace;letter-spacing:.14em;color:var(--orange);margin-bottom:8px}
+.cond strong{display:block;font-weight:800;font-size:40px;line-height:1.15;color:var(--soft);margin-bottom:8px}
+.kpi{position:absolute;border-radius:24px;background:#fff;border:1.5px solid rgba(11,27,51,.08);padding:22px 28px;color:var(--ink);
+  box-shadow:0 18px 40px rgba(11,27,51,.10)}
+.kpi small{display:block;font:600 18px "Geist Mono",monospace;letter-spacing:.1em;color:#4A5870}
+.kpi b{display:block;font:700 52px "Geist Mono",monospace;letter-spacing:-.03em;margin-top:6px;white-space:nowrap}
+
+/* Mur de produits (accroche) */
+.wall{position:absolute;left:-160px;top:-140px;width:2240px;display:grid;grid-template-columns:repeat(8,250px);gap:26px}
+.wall img{width:250px;height:250px;border-radius:22px;display:block;object-fit:cover;opacity:.92}
+.veil{background:linear-gradient(180deg, rgba(4,28,61,.30) 0%, rgba(4,28,61,.78) 55%, rgba(4,28,61,.95) 100%)}
+
+/* Conclusion */
+.rays{position:absolute;left:50%;top:50%;width:2600px;height:2600px;margin:-1300px 0 0 -1300px;
+  background:repeating-conic-gradient(from 0deg, rgba(6,43,92,.022) 0deg 6deg, transparent 6deg 18deg)}
+.cta{position:absolute;left:560px;top:690px;width:800px;text-align:center;border-radius:999px;background:var(--orange);color:#1B0D02;
+  font-weight:800;font-size:64px;letter-spacing:-.01em;padding:26px 0}
+
+/* Loupe : agrandissement ponctuel d'une zone réelle de la capture */
+.loupe{position:absolute;overflow:hidden;border-radius:22px;background:#fff;border:3px solid var(--orange);
+  box-shadow:0 30px 70px rgba(0,0,0,.40);opacity:0;z-index:20}
+.loupe img{position:absolute;display:block}
+/* Sous-titres incrustés (version réseaux sociaux) */
+#subs{position:absolute;left:0;width:1920px;top:930px;height:130px;z-index:60}
+#subs div{position:absolute;left:0;right:0;bottom:0;margin:0 auto;width:fit-content;max-width:1560px;text-align:center;
+  font-weight:700;font-size:42px;line-height:1.25;color:#FFFFFF;background:rgba(6,10,20,.78);border-radius:14px;padding:10px 24px}
+/* Animatique : étiquette et réplique de voix PRÉVUE (absentes du master final) */
+.ani{position:absolute;left:56px;top:40px;font:700 18px "Geist Mono",monospace;letter-spacing:.08em;color:#1B0D02;
+  background:#FFD9BF;border-radius:999px;padding:8px 18px;z-index:50}
+#vocap{position:absolute;left:0;width:1920px;top:972px;height:80px;z-index:50}
+#vocap span{position:absolute;left:0;right:0;margin:0 auto;width:fit-content;max-width:1500px;border-radius:16px;padding:12px 22px;
+  font-weight:600;font-size:27px;line-height:1.3;color:var(--soft);background:rgba(4,12,26,.84);text-align:center}
+#vocap em{font:700 16px "Geist Mono",monospace;letter-spacing:.1em;color:var(--orange);font-style:normal;margin-right:12px}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="90" data-width="1920" data-height="1080">
+
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="grainf"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="23"/><feColorMatrix type="saturate" values="0"/></filter>
+  </svg>
+
+  <!-- ═══ S1 · Accroche (0–8,3 s) ═══ -->
+  <div id="s1" class="scene clip" data-start="0" data-duration="8.3" data-plan="0,8.3" data-track-index="1">
+    <div class="fill stage"></div>
+    <div id="s1-wall" class="wall"></div>
+    <div class="fill veil"></div>
+    <svg class="grain" width="1920" height="1080"><rect width="1920" height="1080" filter="url(#grainf)"/></svg>
+    <div id="s1-q1" class="h1 abs" style="left:150px;top:380px;width:1500px"></div>
+    <div id="s1-q2" class="h1 abs" style="left:150px;top:520px;width:1500px"></div>
+    <div id="s1-flood" class="fill paperbg" style="clip-path:circle(0px at 1040px 440px)"></div>
+    <img id="s1-logo" class="abs" src="assets/brand/stock-master-logo-horizontal.png" alt="Stock Master" style="left:480px;top:340px;width:960px;opacity:0" />
+  </div>
+
+  <!-- ═══ S2 · Produits (7,3–20,2 s) ═══ -->
+  <div id="s2" class="scene clip" data-start="7.3" data-duration="12.9" data-plan="7.3,12.9" data-track-index="2">
+    <div id="s2-in" class="fill" style="clip-path:circle(0px at 605px 500px)">
+      <div class="fill stage"></div>
+      <svg class="grain" width="1920" height="1080"><rect width="1920" height="1080" filter="url(#grainf)"/></svg>
+      <div class="ghost" style="left:40px;top:600px;font-size:300px">RAYONS</div>
+      <div class="demo-tag">Données de démonstration</div>
+      <div class="kick" style="left:150px;top:170px">MIREILLE · PROPRIÉTAIRE</div>
+      <div id="s2-t1" class="h2" style="left:150px;top:214px;width:640px"></div>
+      <div id="s2-t2" class="h2" style="left:150px;top:214px;width:640px"></div>
+      <div id="s2-lap" class="lap" style="left:780px;top:250px;width:1040px"><div class="bezel"><img src="assets/captures/d01-rayon-laits.png" alt="" /></div><div class="base"></div></div>
+      <div id="s2-phone"></div>
+      <div id="s2-c1" class="chip" style="left:1330px;top:330px"><i></i>Photo</div>
+      <div id="s2-c2" class="chip" style="left:1330px;top:430px"><i></i>Prix en FCFA</div>
+      <div id="s2-c3" class="chip" style="left:1330px;top:530px"><i></i>Stock</div>
+      <div id="s2-c4" class="chip" style="left:150px;top:470px"><i></i><span id="s2-count"></span></div>
+    </div>
+  </div>
+
+  <!-- ═══ S3 · Vente (19,6–35,2 s) ═══ -->
+  <div id="s3" class="scene clip" data-start="19.6" data-duration="15.6" data-plan="19.6,15.6" data-track-index="1">
+    <div class="fill stage"></div>
+    <svg class="grain" width="1920" height="1080"><rect width="1920" height="1080" filter="url(#grainf)"/></svg>
+    <div id="s3-ghost" class="ghost" style="left:60px;top:330px">VENTE</div>
+    <div class="demo-tag">Données de démonstration</div>
+    <div class="kick" style="left:150px;top:170px">JUNIOR · VENDEUR</div>
+    <div id="s3-title" class="h2" style="left:150px;top:214px;width:560px"></div>
+    <div id="s3-phone"></div>
+    <div id="s3-counter" class="counter" style="left:1290px;top:300px">
+      <div id="s3-lab1" class="label">STOCK RESTANT</div><div id="s3-lab2" style="font-weight:700;font-size:30px;margin-top:8px">Huile d’argan 50 ml</div>
+      <div id="s3-digits" class="digits"><div id="s3-d3" class="digit">3</div><div id="s3-d2" class="digit accent">2</div></div>
+      <div id="s3-badge" class="badge">Stock faible</div>
+    </div>
+  </div>
+
+  <!-- ═══ S4 · Équipe (34,9–48,4 s) ═══ -->
+  <div id="s4" class="scene clip" data-start="34.9" data-duration="13.5" data-plan="34.9,13.5" data-track-index="2">
+    <div class="fill stage"></div>
+    <svg class="grain" width="1920" height="1080"><rect width="1920" height="1080" filter="url(#grainf)"/></svg>
+    <div id="s4-ghost" class="ghost" style="left:300px;top:640px;font-size:300px">ÉQUIPE</div>
+    <div class="demo-tag">Données de démonstration</div>
+    <div id="s4-pj"></div>
+    <div id="s4-pm"></div>
+    <div id="s4-k1" class="kick" style="left:1320px;top:250px">MIREILLE · PROPRIÉTAIRE</div>
+    <div id="s4-t1" class="h2" style="left:1320px;top:294px;width:520px"></div>
+    <div id="s4-b" class="fill">
+      <div id="s4-pm2"></div>
+      <div class="kick" style="left:860px;top:200px">LES DROITS DE CHACUN</div>
+      <div id="s4-t2" class="h2" style="left:860px;top:244px;width:940px"></div>
+      <div id="s4-r1" class="chip" style="left:860px;top:470px"><i></i>Vendre</div>
+      <div id="s4-r2" class="chip" style="left:860px;top:570px"><i></i>Ajuster le stock</div>
+      <div id="s4-r3" class="chip" style="left:860px;top:670px"><i></i>Voir toutes les ventes</div>
+    </div>
+  </div>
+
+  <!-- ═══ S5 · Hors ligne puis synchronisation (47,9–63,4 s) ═══ -->
+  <div id="s5" class="scene clip" data-start="47.9" data-duration="15.5" data-plan="47.9,15.5" data-track-index="1">
+    <div id="s5-all" class="fill">
+      <div class="fill stage"></div>
+      <svg class="grain" width="1920" height="1080"><rect width="1920" height="1080" filter="url(#grainf)"/></svg>
+      <div class="ghost" style="left:640px;top:700px;font-size:260px">HORS LIGNE</div>
+      <div class="demo-tag">Données de démonstration</div>
+      <div class="kick" style="left:960px;top:150px">GRÂCE · VENDEUSE</div>
+      <div id="s5-title" class="h2" style="left:960px;top:194px;width:880px"></div>
+      <div id="s5-cond" class="cond" style="left:960px;top:368px;width:880px"><b>CONDITION</b><strong>Avoir ouvert l’application en ligne sur ce téléphone</strong>dans les 72 h avant la coupure, avec le même compte.<br>Hors ligne : catalogue et ventes uniquement.</div>
+      <div id="s5-phone"></div>
+      <svg id="s5-wire" class="abs" width="1920" height="1080" style="left:0;top:0;overflow:visible">
+        <path d="M 600 710 L 1320 710" stroke="#C9D6E8" stroke-width="5" stroke-dasharray="14 14" fill="none" opacity=".75"/>
+        <path id="s5-live" d="M 600 710 L 1320 710" stroke="#FF6A00" stroke-width="7" fill="none" stroke-dasharray="720" stroke-dashoffset="720"/>
+      </svg>
+      <div id="s5-cut" class="pill off" style="left:850px;top:684px">Réseau coupé</div>
+      <div id="s5-server" class="node" style="left:1330px;top:662px">
+        <img src="assets/brand/stock-master-icon.png" alt="" style="width:64px;height:64px;border-radius:14px;background:var(--soft)" />
+        <div>Stock Master<small>serveur</small></div>
+      </div>
+      <div id="s5-packet" class="pill light" style="left:600px;top:776px">Savon noir × 2 · en attente</div>
+      <div id="s5-once" class="pill light" style="left:1330px;top:776px">1 vente reçue · 1 seule fois</div>
+    </div>
+    <div id="s5-horizon" class="abs" style="left:0;top:707px;width:1920px;height:7px;background:var(--orange);opacity:0"></div>
+  </div>
+
+  <!-- ═══ S6 · Activité (62,6–77,6 s) ═══ -->
+  <div id="s6" class="scene clip" data-start="62.6" data-duration="15" data-plan="62.6,15" data-track-index="2">
+    <div id="s6-in" class="fill" style="clip-path:inset(65.5% 0 34.5% 0)">
+      <div class="fill paperbg"></div>
+      <div class="demo-tag dark">Données de démonstration</div>
+      <div class="kick" style="left:150px;top:150px">LE SOIR · ANALYSE</div>
+      <div id="s6-title" class="h2 ink" style="left:150px;top:194px;width:620px"></div>
+      <div id="s6-lap" class="lap" style="left:760px;top:170px;width:1060px"><div class="bezel"><img src="assets/captures/d02-analyse.png" alt="" /></div><div class="base"></div></div>
+      <div id="s6-k1" class="kpi" style="left:150px;top:420px;width:540px"><small>MONTANT DES VENTES</small><b id="s6-rev"></b></div>
+      <div id="s6-k2" class="kpi" style="left:150px;top:580px;width:220px"><small>VENTES</small><b id="s6-tx"></b></div>
+      <div id="s6-k3" class="kpi" style="left:390px;top:580px;width:300px"><small>STOCK FAIBLE</small><b id="s6-low" style="font-size:40px;line-height:62px"></b></div>
+      <div id="s6-phone"></div>
+      <div id="s6-rank" class="chip light" style="left:150px;top:385px"><i></i>Produits classés par montant vendu</div>
+      <div id="s6-file" class="chip orange" style="left:150px;top:660px;font-size:34px"></div>
+    </div>
+  </div>
+
+  <!-- ═══ S7 · Conclusion (77–90 s) ═══ -->
+  <div id="s7" class="scene clip" data-start="77" data-duration="13" data-plan="77,13" data-track-index="1">
+    <div class="fill paperbg"></div>
+    <div id="s7-rays" class="rays"></div>
+    <img id="s7-logo" class="abs" src="assets/brand/stock-master-logo-horizontal.png" alt="Stock Master" style="left:560px;top:150px;width:800px" />
+    <div id="s7-tag" class="abs" style="left:0;width:1920px;top:470px;text-align:center;font-weight:700;font-size:44px;color:var(--navy)">Vos produits, vos ventes, votre équipe.</div>
+    <div id="s7-head" class="abs" style="left:0;width:1920px;top:560px;text-align:center;font-weight:800;font-size:76px;letter-spacing:-.02em;color:var(--ink)">Découvrez Stock Master</div>
+    <div id="s7-cta" class="cta">stock-master.app</div>
+  </div>
+
+  <!-- ═══ Animatique : étiquette + répliques prévues (absentes du master) ═══ -->
+  <div id="ani" class="clip" data-start="0" data-duration="90" data-track-index="5">
+    <div class="ani">ANIMATIQUE · sans voix off finale</div>
+    <div id="vocap"></div>
+  </div>
+
+  <div id="subs-clip" class="clip" data-start="0" data-duration="90" data-track-index="6"><div id="subs"></div></div>
+
+  <!-- AUDIO:BEGIN -->
+  <audio id="bgm" class="clip" src="assets/audio/music/afro-house-455843.mp3" data-start="0" data-duration="90" data-track-index="10" data-volume="1" data-fade-in="1" data-fade-out="3.5" data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0.22},{"t":0.05,"v":0.16},{"t":0.3,"v":0.07},{"t":2.45,"v":0.16},{"t":2.7,"v":0.07},{"t":2.9,"v":0.07},{"t":3.3,"v":0.16},{"t":4.7,"v":0.07},{"t":5.05,"v":0.16},{"t":5.1,"v":0.16},{"t":5.3,"v":0.07},{"t":7.7,"v":0.07},{"t":8.1,"v":0.16},{"t":8.25,"v":0.16},{"t":8.5,"v":0.07},{"t":13.9,"v":0.07},{"t":14.05,"v":0.16},{"t":14.3,"v":0.16},{"t":14.31,"v":0.07},{"t":16.5,"v":0.07},{"t":16.9,"v":0.16},{"t":20.25,"v":0.16},{"t":20.5,"v":0.07},{"t":22.65,"v":0.16},{"t":22.9,"v":0.07},{"t":22.91,"v":0.07},{"t":23.3,"v":0.16},{"t":27.5,"v":0.07},{"t":27.9,"v":0.16},{"t":28.05,"v":0.16},{"t":28.3,"v":0.07},{"t":31.3,"v":0.07},{"t":31.7,"v":0.16},{"t":35.25,"v":0.16},{"t":35.5,"v":0.07},{"t":37.9,"v":0.07},{"t":38.3,"v":0.16},{"t":40.05,"v":0.16},{"t":40.3,"v":0.07},{"t":46.3,"v":0.07},{"t":46.7,"v":0.16},{"t":48.25,"v":0.16},{"t":48.5,"v":0.07},{"t":49.85,"v":0.16},{"t":50.1,"v":0.07},{"t":50.11,"v":0.07},{"t":50.5,"v":0.16},{"t":52.1,"v":0.07},{"t":52.5,"v":0.16},{"t":56.05,"v":0.16},{"t":56.3,"v":0.07},{"t":61.7,"v":0.07},{"t":62.1,"v":0.16},{"t":63.25,"v":0.16},{"t":63.5,"v":0.07},{"t":69.9,"v":0.07},{"t":70.3,"v":0.16},{"t":70.65,"v":0.16},{"t":70.9,"v":0.07},{"t":74.9,"v":0.07},{"t":75.3,"v":0.16},{"t":77.65,"v":0.16},{"t":77.9,"v":0.07},{"t":81.65,"v":0.16},{"t":81.7,"v":0.07},{"t":81.9,"v":0.07},{"t":82.1,"v":0.16},{"t":85.7,"v":0.07},{"t":86,"v":0.2},{"t":86.1,"v":0.16}]}]}'></audio>
+  <audio id="sfx-0" class="clip" src="assets/audio/sfx/reveal.wav" data-start="5.5" data-duration="1.2" data-track-index="11" data-volume="0.35"></audio>
+  <audio id="sfx-1" class="clip" src="assets/audio/sfx/tick.wav" data-start="9.7" data-duration="1.2" data-track-index="12" data-volume="0.45"></audio>
+  <audio id="sfx-2" class="clip" src="assets/audio/sfx/whoosh-soft.wav" data-start="13.9" data-duration="1.2" data-track-index="13" data-volume="0.3"></audio>
+  <audio id="sfx-3" class="clip" src="assets/audio/sfx/tick.wav" data-start="21.8" data-duration="1.2" data-track-index="11" data-volume="0.45"></audio>
+  <audio id="sfx-4" class="clip" src="assets/audio/sfx/tick.wav" data-start="25.6" data-duration="1.2" data-track-index="12" data-volume="0.45"></audio>
+  <audio id="sfx-5" class="clip" src="assets/audio/sfx/confirm.wav" data-start="26.4" data-duration="1.2" data-track-index="13" data-volume="0.4"></audio>
+  <audio id="sfx-6" class="clip" src="assets/audio/sfx/pop.wav" data-start="35.2" data-duration="1.2" data-track-index="11" data-volume="0.4"></audio>
+  <audio id="sfx-7" class="clip" src="assets/audio/sfx/tick.wav" data-start="41.6" data-duration="1.2" data-track-index="12" data-volume="0.45"></audio>
+  <audio id="sfx-8" class="clip" src="assets/audio/sfx/tick.wav" data-start="43.6" data-duration="1.2" data-track-index="13" data-volume="0.45"></audio>
+  <audio id="sfx-9" class="clip" src="assets/audio/sfx/confirm.wav" data-start="45" data-duration="1.2" data-track-index="11" data-volume="0.35"></audio>
+  <audio id="sfx-10" class="clip" src="assets/audio/sfx/whoosh-soft.wav" data-start="47.7" data-duration="1.2" data-track-index="12" data-volume="0.35"></audio>
+  <audio id="sfx-11" class="clip" src="assets/audio/sfx/tick.wav" data-start="52.6" data-duration="1.2" data-track-index="13" data-volume="0.45"></audio>
+  <audio id="sfx-12" class="clip" src="assets/audio/sfx/tick.wav" data-start="54.2" data-duration="1.2" data-track-index="11" data-volume="0.45"></audio>
+  <audio id="sfx-13" class="clip" src="assets/audio/sfx/confirm.wav" data-start="57" data-duration="1.2" data-track-index="12" data-volume="0.4"></audio>
+  <audio id="sfx-14" class="clip" src="assets/audio/sfx/tick.wav" data-start="73.6" data-duration="1.2" data-track-index="13" data-volume="0.45"></audio>
+  <audio id="sfx-15" class="clip" src="assets/audio/sfx/reveal.wav" data-start="77.4" data-duration="1.2" data-track-index="11" data-volume="0.35"></audio>
+  <!-- AUDIO:END -->
+</div>
+
+<script>
+(function () {
+  const CUES = window.FILM_CUES, F = window.FILM_FACTS;
+  // Correspondance temps prévu -> temps réel (recalage sur la voix mesurée ; identité tant
+  // qu'aucune voix n'est intégrée). Les durées d'animation ne changent jamais : seuls les
+  // instants de départ suivent la voix.
+  const TIMING = window.FILM_TIMING || {};
+  const MAP = TIMING.timemap || [];
+  const T = (t) => {
+    if (!MAP.length || typeof t !== "number") return t;
+    if (t <= MAP[0][0]) return t + (MAP[0][1] - MAP[0][0]);
+    for (let i = 1; i < MAP.length; i++) {
+      const [a0, b0] = MAP[i - 1], [a1, b1] = MAP[i];
+      if (t <= a1) return b0 + ((t - a0) * (b1 - b0)) / (a1 - a0);
+    }
+    const [aN, bN] = MAP[MAP.length - 1];
+    return t + (bN - aN);
+  };
+  const tlRaw = gsap.timeline({ paused: true });
+  const tl = {
+    to: (el, v, p) => tlRaw.to(el, v, T(p)),
+    fromTo: (el, a, b, p) => tlRaw.fromTo(el, a, b, T(p)),
+    set: (el, v, p) => tlRaw.set(el, v, T(p)),
+  };
+  const MODE = window.FILM_MODE || "animatic"; // animatic | master | master-subtitled
+  const $ = (id) => document.getElementById(id);
+  const fcfa = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
+
+  // ── Aides ───────────────────────────────────────────────────────────────
+  const K = 376 / 390;                     // px CSS de la capture → px de l'écran du téléphone
+  const SCALE = 0.92;                      // téléphone 404 × 880 → 372 × 810
+  function phone(hostId, x, y) {
+    const host = $(hostId);
+    host.className = "dev"; host.style.left = x + "px"; host.style.top = y + "px";
+    host.innerHTML = '<div class="phone" style="transform:scale(' + SCALE + ')"><div class="screen"><div class="vp"></div></div><div class="cam"></div></div>';
+    const vp = host.querySelector(".vp");
+    const layers = {};
+    return {
+      el: host,
+      shot(name, src, visible) {
+        const img = document.createElement("img");
+        img.src = "assets/captures/" + src + ".png"; img.alt = "";
+        img.style.opacity = visible ? 1 : 0;
+        vp.appendChild(img); layers[name] = img; return img;
+      },
+      // Capture longue (éléments fixes masqués à la prise) + en-tête et barre réelles superposées.
+      long(name, longSrc, viewSrc, visible) {
+        const box = document.createElement("div");
+        box.style.cssText = "position:absolute;left:0;top:0;width:376px;height:814px;overflow:hidden;opacity:" + (visible ? 1 : 0);
+        const img = document.createElement("img");
+        img.src = "assets/captures/" + longSrc + ".png"; img.alt = "";
+        img.style.cssText = "position:absolute;left:0;top:0;width:376px";
+        const head = document.createElement("img");
+        head.src = "assets/captures/" + viewSrc + ".png"; head.alt = "";
+        head.style.cssText = "position:absolute;left:0;top:0;width:376px;clip-path:inset(0 0 " + (814 - 65 * K) + "px 0)";
+        const nav = document.createElement("img");
+        nav.src = head.src; nav.alt = "";
+        nav.style.cssText = "position:absolute;left:0;top:0;width:376px;clip-path:inset(" + (779 * K) + "px 0 0 0)";
+        box.append(img, head, nav); vp.appendChild(box);
+        layers[name] = box; box.scroller = img; return box;
+      },
+      layer: (n) => layers[n],
+    };
+  }
+  const px = (v) => (14 + v * K) * SCALE;
+  const py = (v) => (14 + 38 + v * K) * SCALE;
+  function tap(p, box, t) {
+    const d = document.createElement("div"); d.className = "tap"; p.el.appendChild(d);
+    d.style.left = px(box.x + box.w / 2) + "px"; d.style.top = py(box.y + box.h / 2) + "px";
+    tl.fromTo(d, { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.22, ease: "power2.out", immediateRender: false }, t);
+    tl.to(d, { opacity: 0, scale: 1.7, duration: 0.45, ease: "power1.out" }, t + 0.28);
+  }
+  function mark(p, box, t, dur) {
+    const d = document.createElement("div"); d.className = "hl"; p.el.appendChild(d);
+    const pad = 6;
+    d.style.left = px(box.x) - pad + "px"; d.style.top = py(box.y) - pad + "px";
+    d.style.width = box.w * K * SCALE + 2 * pad + "px"; d.style.height = box.h * K * SCALE + 2 * pad + "px";
+    tl.fromTo(d, { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, t);
+    tl.to(d, { opacity: 0, duration: 0.3 }, t + dur);
+  }
+  // Loupe : la zone réelle (px CSS 390 de la capture) agrandie à l'échelle s, posée en (x, y).
+  function loupe(host, src, r, x, y, s, tIn, tOut, swaps) {
+    const d = document.createElement("div"); d.className = "loupe"; $(host).appendChild(d);
+    d.style.left = x + "px"; d.style.top = y + "px"; d.style.width = r.w * s + "px"; d.style.height = r.h * s + "px";
+    const add = (file, vis) => {
+      const img = document.createElement("img"); img.src = "assets/captures/" + file + ".png"; img.alt = "";
+      img.style.width = 390 * s + "px"; img.style.left = -r.x * s + "px"; img.style.top = -r.y * s + "px";
+      img.style.opacity = vis ? 1 : 0; d.appendChild(img); return img;
+    };
+    add(src, true);
+    (swaps || []).forEach(([file, t]) => { const im = add(file, false); tl.to(im, { opacity: 1, duration: 0.15, ease: "none" }, t); });
+    tl.fromTo(d, { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.35, ease: "power2.out", immediateRender: false }, tIn);
+    tl.to(d, { opacity: 0, scale: 0.96, duration: 0.3, ease: "power1.in" }, tOut);
+  }
+  const show = (p, name, t, d = 0.25) => tl.to(p.layer(name), { opacity: 1, duration: d, ease: "none" }, t);
+  const scroll = (p, name, toY, t, d) => tl.to(p.layer(name).scroller, { y: -toY * K, duration: d, ease: "power2.inOut" }, t);
+  function words(id, text, accent, breakAfter) {
+    const el = $(id);
+    el.innerHTML = text.split(" ").map((w, i) =>
+      '<span class="w' + (accent && accent.includes(w) ? " accent" : "") + '">' + w + " </span>" + (i === breakAfter ? "<br>" : "")).join("");
+    const spans = el.querySelectorAll(".w");
+    tl.set(spans, { opacity: 0 }, 0); // masqués jusqu'à leur entrée
+    return spans;
+  }
+  const rise = (els, t, ease = "power3.out") =>
+    tl.fromTo(els, { y: 50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, stagger: 0.11, ease, immediateRender: false }, t);
+  const enter = (el, t, from, ease = "power3.out", d = 0.8) =>
+    tl.fromTo(el, from, { x: 0, y: 0, opacity: 1, scale: 1, duration: d, ease, immediateRender: false }, t);
+  // Positions réelles relevées au tournage (captures.json, px CSS 390 × 844).
+  const B = {
+    laits: { x: 60, y: 285, w: 111, h: 24 },
+    record: { x: 16, y: 567, w: 358, h: 28 },
+    qty: { x: 32, y: 286, w: 326, h: 32 }, price: { x: 32, y: 376, w: 326, h: 32 }, confirm: { x: 32, y: 588, w: 326, h: 32 },
+    stockCard: { x: 209, y: 620, w: 166, h: 102 },
+    bell: { x: 305, y: 18, w: 28, h: 28 },
+    notif1: { x: 16, y: 190, w: 358, h: 58 }, notif2: { x: 16, y: 250, w: 358, h: 58 },
+    editGrace: { x: 32, y: 698, w: 93, h: 28 },
+    right: { x: 32, y: 323, w: 196, h: 16 }, save: { x: 32, y: 709, w: 326, h: 32 },
+    graceChip: { x: 168, y: 666, w: 146, h: 26 },
+    offRecord: { x: 16, y: 671, w: 358, h: 28 }, offConfirm: { x: 32, y: 612, w: 326, h: 32 }, offNote: { x: 32, y: 224, w: 326, h: 40 },
+    synced: { x: 16, y: 380, w: 358, h: 84 },
+    excel: { x: 16, y: 2140, w: 186, h: 32 },
+  };
+
+  // Garde : aucune scène ne dépasse sa durée (décalages vérifiés).
+  const PHOTOS = ["lait-karite","savon-noir","huile-argan","creme-jour","shampoing","gel-citron","lait-aloe","serum-c",
+    "huile-coco","savon-karite","creme-nuit","apres-shampoing","lait-cacao","gel-aloe","masque-argile","huile-ricin",
+    "lait-coco","savon-liquide","gommage","masque-avocat","lait-familial","huile-karite","creme-coiffante","lait-capillaire"];
+
+  // ── S1 · Accroche ───────────────────────────────────────────────────────
+  PHOTOS.concat(PHOTOS.slice(0, 8)).forEach((p) => {
+    const img = document.createElement("img"); img.src = "assets/photos/" + p + ".jpg"; img.alt = ""; $("s1-wall").appendChild(img);
+  });
+  tl.fromTo("#s1-wall", { rotation: -8, x: 0, y: 0, scale: 1.05 }, { rotation: -8, x: -220, y: -60, scale: 1.12, duration: 8.3, ease: "none" }, 0);
+  rise(words("s1-q1", "Combien en reste-t-il ?", ["reste-t-il"]), 0.35);
+  tl.fromTo(words("s1-q2", "Qui a vendu quoi ?", []), { y: -40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, stagger: 0.1, ease: "expo.out", immediateRender: false }, 2.7);
+  tl.to("#s1-flood", { clipPath: "circle(1400px at 1040px 440px)", duration: 0.9, ease: "power3.inOut" }, 4.9);
+  tl.fromTo("#s1-logo", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.7, ease: "expo.out", immediateRender: false }, 5.5);
+  // Masque de forme : le cube du logo ouvre sur le catalogue.
+  tl.to("#s1-logo", { scale: 1.08, opacity: 0, duration: 0.5, ease: "power2.in" }, 7.25);
+  tl.to("#s2-in", { clipPath: "circle(2300px at 605px 500px)", duration: 1.0, ease: "power3.in" }, 7.3);
+
+  // ── S2 · Produits ───────────────────────────────────────────────────────
+  const p2 = phone("s2-phone", 860, 100);
+  p2.shot("rayons", "p02-rayons", true);
+  p2.long("laits", "p03-rayon-laits-long", "p03-rayon-laits", false);
+  tl.set(["#s2-lap", "#s2-c1", "#s2-c2", "#s2-c3", "#s2-c4"], { opacity: 0 }, 0);
+  enter(p2.el, 7.9, { y: 120, opacity: 0 });
+  tl.fromTo(words("s2-t1", "Chaque produit, sa fiche.", ["fiche."], 1), { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, stagger: 0.1, ease: "power2.out", immediateRender: false }, 8.5);
+  tap(p2, B.laits, 9.6);
+  show(p2, "laits", 9.95);
+  scroll(p2, "laits", 1180, 10.6, 2.6);
+  [["#s2-c1", 11.0], ["#s2-c2", 11.6], ["#s2-c3", 12.2]].forEach(([el, t]) => enter(el, t, { x: -40, opacity: 0 }, "power2.out", 0.5));
+  // Recul : du téléphone au catalogue complet sur ordinateur.
+  tl.to(["#s2-c1", "#s2-c2", "#s2-c3"], { opacity: 0, duration: 0.3 }, 13.6);
+  tl.to(p2.el, { x: 600, y: 210, scale: 0.6, duration: 1.0, ease: "power3.inOut" }, 13.8);
+  tl.to("#s2-t1", { opacity: 0, duration: 0.3 }, 14.0);
+  tl.fromTo("#s2-lap", { opacity: 0, scale: 1.18, rotationY: -4, transformPerspective: 2200 }, { opacity: 1, scale: 1, rotationY: -12, transformPerspective: 2200, duration: 1.1, ease: "power3.out", immediateRender: false }, 13.9);
+  rise(words("s2-t2", "Tout est rangé par rayon.", ["rayon."], 2), 14.4, "power2.out");
+  $("s2-count").textContent = F.products + " produits · 5 rayons";
+  tl.fromTo("#s2-c4", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out", immediateRender: false }, 15.6);
+  tl.to("#s2-lap", { rotationY: -6, x: -30, transformPerspective: 2200, duration: 3.4, ease: "sine.inOut" }, 15.2);
+  // Passage à la vente.
+  tl.to("#s2-in", { scale: 1.06, opacity: 0, duration: 0.6, ease: "power2.in" }, 19.5);
+
+  // ── S3 · Vente ──────────────────────────────────────────────────────────
+  const p3 = phone("s3-phone", 760, 100);
+  p3.shot("avant", "p05-produit-avant", true);
+  p3.shot("fenetre", "p06-fenetre-vente", false);
+  p3.shot("ok", "p07-vente-enregistree", false);
+  p3.shot("apres", "p08-produit-apres", false);
+  tl.set("#s3-d2", { y: 190 }, 0);
+  tl.set(["#s3-badge", "#s3-counter"], { opacity: 0 }, 0);
+  tl.fromTo("#s3", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.out", immediateRender: false }, 19.6);
+  tl.fromTo("#s3-ghost", { x: 80 }, { x: -60, duration: 15.6, ease: "none" }, 19.6);
+  enter(p3.el, 19.7, { y: 140, opacity: 0 });
+  rise(words("s3-title", "Une vente. Le stock suit.", ["suit."], 1), 20.3);
+  tl.fromTo("#s3-counter", { x: 60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease: "power2.out", immediateRender: false }, 21.0);
+  tap(p3, B.record, 21.8); show(p3, "fenetre", 22.2);
+  mark(p3, B.qty, 22.8, 1.4); mark(p3, B.price, 23.6, 1.4);
+  loupe("s3", "p06-fenetre-vente", { x: 24, y: 255, w: 342, h: 188 }, 150, 420, 1.6, 22.5, 25.4);
+  tap(p3, B.confirm, 25.6); show(p3, "ok", 26.0);
+  tl.to("#s3-d3", { y: -190, duration: 0.6, ease: "power3.inOut" }, 26.4);
+  tl.to("#s3-d2", { y: 0, duration: 0.6, ease: "power3.inOut" }, 26.4);
+  tl.fromTo("#s3-badge", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 27.3);
+  mark(p3, B.stockCard, 27.0, 2.2);
+  show(p3, "apres", 29.6, 0.4);
+  tl.to(p3.el, { scale: 1.04, duration: 3.6, ease: "sine.inOut" }, 29.9);
+  // Report d'objet : le badge part vers la propriétaire.
+  tl.to(["#s3-lab1", "#s3-lab2", "#s3-digits"], { opacity: 0, duration: 0.4 }, 33.8);
+  tl.to("#s3-badge", { x: 160, y: -300, scale: 0.45, duration: 1.0, ease: "power3.in" }, 33.8);
+  tl.to("#s3-counter", { borderColor: "rgba(201,214,232,0)", backgroundColor: "rgba(4,28,61,0)", duration: 0.5 }, 33.8);
+
+  // ── S4 · Équipe ─────────────────────────────────────────────────────────
+  const pj = phone("s4-pj", 300, 100); pj.shot("apres", "p08-produit-apres", true);
+  const pm = phone("s4-pm", 790, 100); pm.shot("cloche", "p09-cloche", true); pm.shot("notifs", "p10-notifications", false);
+  tl.set("#s4-b", { opacity: 0 }, 0);
+  enter(pj.el, 34.9, { x: 80, opacity: 0 }, "power2.out", 0.7);
+  enter(pm.el, 35.1, { x: 160, opacity: 0 }, "expo.out", 0.8);
+  rise(words("s4-t1", "Mireille est prévenue.", ["prévenue."], 1), 35.7, "expo.out");
+  mark(pm, B.bell, 35.6, 1.0);
+  tap(pm, B.bell, 36.4); show(pm, "notifs", 36.8);
+  mark(pm, B.notif1, 37.2, 2.3); mark(pm, B.notif2, 37.6, 1.9);
+  loupe("s4", "p10-notifications", { x: 8, y: 180, w: 374, h: 135 }, 1320, 480, 1.35, 37.1, 39.3);
+  // Glissé parallaxe vers les droits (vitesses différentes par couche).
+  tl.to(pj.el, { x: -900, duration: 1.0, ease: "power2.inOut" }, 39.6);
+  tl.to(pm.el, { x: -1300, duration: 1.0, ease: "power2.inOut" }, 39.6);
+  tl.to(["#s4-k1", "#s4-t1"], { x: -2300, opacity: 0, duration: 0.9, ease: "power2.inOut" }, 39.5);
+  tl.fromTo("#s4-ghost", { x: 0 }, { x: -400, duration: 13.5, ease: "none" }, 34.9);
+  const pm2 = phone("s4-pm2", 300, 100);
+  pm2.shot("membres", "p11-membres", true); pm2.shot("droits", "p12-droits-avant", false);
+  pm2.shot("coche", "p13-droits-coches", false); pm2.shot("apres", "p14-membres-apres", false);
+  tl.fromTo("#s4-b", { x: 1400, opacity: 1 }, { x: 0, opacity: 1, duration: 1.0, ease: "power2.inOut", immediateRender: false }, 39.6);
+  rise(words("s4-t2", "Vous décidez qui fait quoi.", ["quoi."], 2), 40.5, "power2.out");
+  tl.set(["#s4-r1", "#s4-r2", "#s4-r3"], { opacity: 0 }, 0);
+  tap(pm2, B.editGrace, 41.6); show(pm2, "droits", 42.0);
+  [["#s4-r1", 43.2], ["#s4-r2", 44.0], ["#s4-r3", 44.8]].forEach(([el, t]) =>
+    tl.fromTo(el, { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease: "power2.out", immediateRender: false }, t));
+  mark(pm2, B.right, 43.2, 1.6);
+  loupe("s4-b", "p12-droits-avant", { x: 24, y: 290, w: 260, h: 60 }, 1310, 480, 1.9, 42.6, 45.3, [["p13-droits-coches", 43.9]]);
+  tap(pm2, B.right, 43.6); show(pm2, "coche", 43.9, 0.15);
+  tap(pm2, B.save, 45.0); show(pm2, "apres", 45.4);
+  mark(pm2, B.graceChip, 45.9, 1.6);
+  // Filé horizontal : « pendant ce temps, à la boutique… »
+  tl.to("#s4-b", { x: -700, filter: "blur(18px)", duration: 0.7, ease: "power2.in" }, 47.7);
+
+  // ── S5 · Hors ligne ─────────────────────────────────────────────────────
+  const p5 = phone("s5-phone", 200, 100);
+  p5.shot("prod", "p15-hors-ligne-produit", true); p5.shot("fenetre", "p16-hors-ligne-fenetre", false);
+  p5.shot("attente", "p17-hors-ligne-en-attente", false); p5.shot("synchro", "p19c-synchronisee-detail", false);
+  tl.set(["#s5-wire", "#s5-server", "#s5-cut", "#s5-packet", "#s5-once", "#s5-cond"], { opacity: 0 }, 0);
+  tl.fromTo("#s5-all", { x: 700, filter: "blur(18px)" }, { x: 0, filter: "blur(0px)", duration: 0.7, ease: "power2.out", immediateRender: false }, 47.9);
+  rise(words("s5-title", "Sans réseau, la vente continue.", ["continue."], 1), 48.6, "power3.out");
+  tl.fromTo("#s5-cond", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power2.out", immediateRender: false }, 49.3);
+  tl.to(["#s5-wire", "#s5-server"], { opacity: 1, duration: 0.6 }, 50.2);
+  tl.fromTo("#s5-cut", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.4, ease: "power2.out", immediateRender: false }, 50.7);
+  tap(p5, B.offRecord, 52.6); show(p5, "fenetre", 53.0);
+  mark(p5, B.offNote, 53.2, 1.6);
+  loupe("s5-all", "p16-hors-ligne-fenetre", { x: 24, y: 222, w: 342, h: 120 }, 150, 300, 2.0, 53.1, 54.6);
+  loupe("s5-all", "p17-hors-ligne-en-attente", { x: 16, y: 728, w: 358, h: 52 }, 150, 830, 1.9, 54.8, 56.3);
+  tap(p5, B.offConfirm, 54.2); show(p5, "attente", 54.6);
+  tl.fromTo("#s5-packet", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out", immediateRender: false }, 55.0);
+  // Réseau rétabli : le fil se referme, le paquet part une fois.
+  tl.to("#s5-cut", { opacity: 0, scale: 0.8, duration: 0.3 }, 56.4);
+  tl.to("#s5-live", { strokeDashoffset: 0, duration: 0.8, ease: "power2.inOut" }, 56.6);
+  tl.to("#s5-packet", { x: 730, duration: 1.2, ease: "power3.inOut" }, 57.2);
+  tl.to("#s5-packet", { opacity: 0, duration: 0.25 }, 58.3);
+  tl.fromTo("#s5-once", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 58.5);
+  show(p5, "synchro", 59.2, 0.4);
+  mark(p5, B.synced, 59.8, 2.0);
+  loupe("s5-all", "p19c-synchronisee-detail", { x: 16, y: 388, w: 358, h: 76 }, 150, 420, 1.9, 59.6, 62.0);
+  // Ligne d'horizon : la ligne de synchronisation devient l'horizon de l'analyse.
+  tl.fromTo("#s5-horizon", { opacity: 0, scaleX: 0.38 }, { opacity: 1, scaleX: 1, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 62.0);
+
+  // ── S6 · Activité ───────────────────────────────────────────────────────
+  tl.to("#s6-in", { clipPath: "inset(0% 0 0% 0)", duration: 0.9, ease: "power3.inOut" }, 62.6);
+  rise(words("s6-title", "Votre activité, au clair.", ["clair."], 1), 63.4, "power4.out");
+  tl.set(["#s6-lap", "#s6-k1", "#s6-k2", "#s6-k3", "#s6-rank", "#s6-file"], { opacity: 0 }, 0);
+  tl.fromTo("#s6-lap", { y: 60, opacity: 0, rotationY: -10, transformPerspective: 2200 }, { y: 0, opacity: 1, rotationY: -10, transformPerspective: 2200, duration: 1.0, ease: "power4.out", immediateRender: false }, 63.3);
+  $("s6-rev").textContent = fcfa(F.revenueXaf);
+  $("s6-tx").textContent = String(F.transactions);
+  $("s6-low").textContent = F.lowStockCount + " produit" + (F.lowStockCount > 1 ? "s" : "");
+  [["#s6-k1", 64.4], ["#s6-k2", 65.4], ["#s6-k3", 67.6]].forEach(([el, t]) =>
+    tl.fromTo(el, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out", immediateRender: false }, t));
+  tl.to("#s6-lap", { scale: 1.06, rotationY: -6, transformPerspective: 2200, duration: 2.8, ease: "sine.inOut" }, 66.2);
+  // Glissé : du bureau au téléphone (classement, puis export).
+  const p6 = phone("s6-phone", 1180, 100);
+  p6.long("ana", "p21-analyse-long", "p21-analyse", true);
+  tl.set(p6.el, { opacity: 0 }, 0);
+  tl.set(p6.layer("ana").scroller, { y: -1150 * K }, 0);
+  tl.to("#s6-lap", { x: -260, opacity: 0, duration: 0.8, ease: "power2.inOut" }, 69.4);
+  tl.to(["#s6-k1", "#s6-k2", "#s6-k3"], { opacity: 0, duration: 0.4 }, 69.4);
+  tl.fromTo(p6.el, { x: 260, opacity: 0 }, { x: 0, opacity: 1, duration: 0.8, ease: "power2.out", immediateRender: false }, 69.6);
+  scroll(p6, "ana", 1410, 70.6, 1.4);
+  tl.fromTo("#s6-rank", { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: "power2.out", immediateRender: false }, 70.8);
+  loupe("s6-in", "p21-analyse-long", { x: 16, y: 1430, w: 358, h: 290 }, 150, 470, 1.4, 71.0, 73.1);
+  scroll(p6, "ana", 1880, 72.6, 1.2);
+  loupe("s6-in", "p21-analyse-long", { x: 16, y: 2135, w: 250, h: 77 }, 150, 470, 2.0, 73.4, 76.0);
+  tap(p6, { x: B.excel.x, y: B.excel.y - 1880, w: B.excel.w, h: B.excel.h }, 74.0);
+  $("s6-file").textContent = "Historique du mois · Excel / PDF";
+  tl.fromTo("#s6-file", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out", immediateRender: false }, 74.5);
+  // Raccord de forme : la pastille orange devient l'appel à l'action.
+  tl.to([p6.el, "#s6-rank", "#s6-title"], { opacity: 0, duration: 0.35, ease: "power1.out" }, 76.0);
+  tl.to("#s6-file", { x: 300, y: 40, scale: 1.25, duration: 0.9, ease: "power3.inOut" }, 76.4);
+
+  // ── S7 · Conclusion ─────────────────────────────────────────────────────
+  tl.set(["#s7-cta", "#s7-logo", "#s7-tag", "#s7-head"], { opacity: 0 }, 0);
+  tl.fromTo("#s7-rays", { rotation: 0 }, { rotation: 10, duration: 13, ease: "none" }, 77);
+  tl.fromTo("#s7-cta", { scale: 0.7, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out", immediateRender: false }, 77.0);
+  tl.fromTo("#s7-logo", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, ease: "power2.out", immediateRender: false }, 77.4);
+  tl.fromTo("#s7-tag", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power2.out", immediateRender: false }, 78.2);
+  tl.fromTo("#s7-head", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power2.out", immediateRender: false }, 81.8);
+
+  // ── Modes : animatique (étiquette + répliques prévues) / master / master sous-titré ──
+  if (MODE !== "animatic") $("ani").style.display = "none";
+  if (window.FILM_LABEL === false) document.querySelector("#ani .ani").style.display = "none"; // étiquette retirée sur demande
+  if (MODE === "master-subtitled") {
+    (TIMING.subs || []).forEach((c) => {
+      const d = document.createElement("div");
+      d.innerHTML = c.lines.map((l) => l.replace(/&/g, "&amp;").replace(/</g, "&lt;")).join("<br>");
+      d.style.opacity = 0; $("subs").appendChild(d);
+      tlRaw.to(d, { opacity: 1, duration: 0.08, ease: "none" }, c.start);
+      tlRaw.to(d, { opacity: 0, duration: 0.08, ease: "none" }, c.end);
+    });
+  }
+  const cap = $("vocap");
+  if (MODE === "animatic") (TIMING.vo || CUES.vo).forEach((c) => {
+    const s = document.createElement("span");
+    s.innerHTML = "<em>VO PRÉVUE</em>" + (c.screen || c.text);
+    s.style.opacity = 0;
+    cap.appendChild(s);
+    tlRaw.to(s, { opacity: 1, duration: 0.15, ease: "none" }, c.start); // instants déjà réels
+    tlRaw.to(s, { opacity: 0, duration: 0.15, ease: "none" }, c.end);
+  });
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tlRaw;
+})();
+</script>
+</body>
+</html>

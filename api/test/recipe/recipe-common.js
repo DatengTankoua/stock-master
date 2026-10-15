@@ -19,19 +19,63 @@ const DIST = path.join(API_DIR, 'dist');
 const PRELOAD = path.join(__dirname, 'preload.cjs');
 
 const HOST = '127.0.0.1';
-// 1-15C : `storage` = stockage objet simulé de la recette (`storage-sim.js`).
-const PORTS = Object.freeze({
-  web: 3200,
-  api: 4200,
-  control: 4299,
-  storage: 4298,
+
+/**
+ * 1-23A — Profils de recette. `default` : recette historique (base
+ * éphémère). `motion-23a` : démonstration du film marketing (RoyalVibe
+ * Cosmétique), avec SA base, SES ports, SON répertoire d'état et une
+ * instance MongoDB PERSISTANTE sur un port fixe, hors dépôt. Toute autre
+ * valeur de `RECIPE_PROFILE` est refusée (échec fermé). Le profil est
+ * transmis à chaque processus enfant (`baseEnv`).
+ */
+const PROFILES = Object.freeze({
+  default: Object.freeze({
+    ports: { web: 3200, api: 4200, control: 4299, storage: 4298 },
+    dbName: 'stockmaster_recipe',
+    stateDirName: 'stockmaster-recipe-14d2h',
+    webCopyName: '.stockmaster-recipe-web',
+    persistent: null,
+  }),
+  'motion-23a': Object.freeze({
+    ports: { web: 3230, api: 4230, control: 4239, storage: 4238 },
+    dbName: 'stockmaster_motion_23a',
+    stateDirName: 'stockmaster-motion-23a',
+    webCopyName: '.stockmaster-motion-web',
+    // Fuseau du commerce de démonstration (analyses, bilans, exports) :
+    // variable standard `TZ` des processus API et web, aucun code modifié.
+    timeZone: 'Africa/Douala',
+    persistent: Object.freeze({
+      // Données de démonstration conservées entre deux démarrages.
+      root: path.join(
+        process.env.LOCALAPPDATA || os.homedir(),
+        'StockMasterMotion23A',
+        'demo',
+      ),
+      mongoPort: 27230,
+    }),
+  }),
 });
+const PROFILE_NAME = process.env.RECIPE_PROFILE || 'default';
+if (!Object.prototype.hasOwnProperty.call(PROFILES, PROFILE_NAME)) {
+  throw new Error(`Recette refusée : profil inconnu (${PROFILE_NAME}).`);
+}
+const PROFILE = PROFILES[PROFILE_NAME];
+const PERSISTENT = PROFILE.persistent
+  ? Object.freeze({
+      ...PROFILE.persistent,
+      dbPath: path.join(PROFILE.persistent.root, 'mongo'),
+      storageDir: path.join(PROFILE.persistent.root, 'storage'),
+    })
+  : null;
+
+// 1-15C : `storage` = stockage objet simulé de la recette (`storage-sim.js`).
+const PORTS = Object.freeze({ ...PROFILE.ports });
 const WEB_ORIGIN = `http://${HOST}:${PORTS.web}`;
 const API_URL = `http://${HOST}:${PORTS.api}`;
 const CONTROL_URL = `http://${HOST}:${PORTS.control}`;
 const STORAGE_URL = `http://${HOST}:${PORTS.storage}`;
 
-const DB_NAME = 'stockmaster_recipe';
+const DB_NAME = PROFILE.dbName;
 const MONGODB_BINARY_VERSION = '8.2.6';
 
 /** Valeurs FICTIVES, propres à la recette (jamais des secrets réels). */
@@ -51,7 +95,7 @@ const PHONE = '677123456';
 const PROVIDERS = Object.freeze(['simulated', 'campay', 'saspay']);
 
 /** Répertoire d'état de la recette en cours (un seul lanceur à la fois). */
-const STATE_DIR = path.join(os.tmpdir(), 'stockmaster-recipe-14d2h');
+const STATE_DIR = path.join(os.tmpdir(), PROFILE.stateDirName);
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 const MAIL_FILE = path.join(STATE_DIR, 'mail.jsonl');
 const GUARD_LOG = path.join(STATE_DIR, 'env-guard.jsonl');
@@ -63,7 +107,7 @@ const WORK_DIR = path.join(STATE_DIR, 'cwd');
  * Git (Tailwind exclut de son analyse les chemins ignorés). Supprimée au
  * nettoyage.
  */
-const WEB_COPY_DIR = path.join(REPO, '.stockmaster-recipe-web');
+const WEB_COPY_DIR = path.join(REPO, PROFILE.webCopyName);
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
@@ -94,6 +138,12 @@ function assertRecipeUri(uri) {
   }
   if (parsed.pathname !== `/${DB_NAME}`) {
     throw new Error(`Recette refusée : base autre que ${DB_NAME}.`);
+  }
+  // 1-23A : profil persistant → le SEUL port de son instance dédiée.
+  if (PERSISTENT && port !== PERSISTENT.mongoPort) {
+    throw new Error(
+      `Recette refusée : port MongoDB autre que ${PERSISTENT.mongoPort} (profil ${PROFILE_NAME}).`,
+    );
   }
   return uri;
 }
@@ -134,6 +184,9 @@ function baseEnv(extra = {}) {
   return {
     ...env,
     NODE_OPTIONS: nodeOptions(),
+    // 1-23A : même profil (base, ports, garde) dans chaque enfant.
+    RECIPE_PROFILE: PROFILE_NAME,
+    ...(PROFILE.timeZone ? { TZ: PROFILE.timeZone } : {}),
     RECIPE_ENV_GUARD_LOG: GUARD_LOG,
     RECIPE_PARENT_PID: String(process.pid),
     ...extra,
@@ -296,6 +349,8 @@ function dist(relative) {
 }
 
 module.exports = {
+  PROFILE_NAME,
+  PERSISTENT,
   REPO,
   API_DIR,
   WEB_DIR,
