@@ -250,6 +250,14 @@ export const HELP_PAGES = Object.freeze([
   { href: "/contact", key: "contact" },
 ] as const);
 
+// Guides pratiques : articles de méthode (bonnes pratiques générales, puis
+// usage de Stock Master), distincts du guide d'utilisation. Pages publiques
+// bilingues et indexées comme les pages d'aide ; libellés dans `public`
+// (`footer.pages.*`), contenus dans `i18n/documents/<page>/`.
+export const PRACTICAL_GUIDES = Object.freeze([
+  { href: "/guides/gestion-stock-boutique", key: "stockManagement" },
+] as const);
+
 export function legalDocument(href: string): PublicDocument {
   const doc = LEGAL_DOCUMENTS.find((d) => d.href === href);
   if (!doc) throw new Error(`Document inconnu : ${href}`);
