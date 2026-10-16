@@ -31,6 +31,7 @@ export async function DocumentPage({
   intro,
   doc,
   sections,
+  closing,
 }: {
   /** Chemin de la page sans préfixe de langue (`/guide`…). */
   path: string;
@@ -39,6 +40,11 @@ export async function DocumentPage({
   /** Absent pour les pages d'aide (pas de version juridique). */
   doc?: PublicDocument;
   sections: DocumentSection[];
+  /**
+   * Bloc final hors sommaire et hors typographie des sections (appel à
+   * l'action d'un guide pratique). Jamais utilisé par un texte juridique.
+   */
+  closing?: React.ReactNode;
 }) {
   const { t, lng } = await getServerT("legal");
   return (
@@ -74,7 +80,7 @@ export async function DocumentPage({
               })}
             </p>
           )}
-          <div className="mt-5 text-lg leading-relaxed text-pretty text-(--public-body)">
+          <div className="mt-5 text-lg leading-relaxed text-pretty text-(--public-body) [&_a]:font-medium [&_a]:text-(--brand-ink) [&_a]:underline [&_a]:underline-offset-4 [&_a]:rounded-sm [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-offset-2 [&_a:focus-visible]:outline-(--brand-ink)">
             {intro}
           </div>
         </div>
@@ -127,6 +133,7 @@ export async function DocumentPage({
                 </section>
               ))}
             </div>
+            {closing}
             <p className="mt-10 text-sm text-(--public-muted)">
               {rich(t("document.question"), {
                 contact: (chunk) => (

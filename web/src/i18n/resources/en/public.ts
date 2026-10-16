@@ -31,6 +31,7 @@ const publicEn: Translation<typeof publicFr> = {
     pages: {
       guide: "User guide",
       contact: "Contact",
+      stockManagement: "Managing a shop's stock",
     },
   },
   cta: {
@@ -46,6 +47,8 @@ const publicEn: Translation<typeof publicFr> = {
       "Screenshot of the Stock Master Sales screen for the sample shop Demo Shop: latest recorded sales, with product, seller, date, quantity and amount in FCFA.",
     caption:
       "Real screenshots of the app, English interface · Demo Shop, sample products and sales.",
+    salesCaption:
+      "<demo>Demo data</demo> Real screenshot of the Sales screen · Demo Shop, sample sales.",
   },
   // Banner shown (in English) on a device set to English.
   languageHint: {

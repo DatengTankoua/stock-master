@@ -1,4 +1,8 @@
-import { HELP_PAGES, LEGAL_DOCUMENTS } from "@/lib/legal/site-identity";
+import {
+  HELP_PAGES,
+  LEGAL_DOCUMENTS,
+  PRACTICAL_GUIDES,
+} from "@/lib/legal/site-identity";
 import type { Locale } from "@/i18n/settings";
 
 // Référencement — URL publiques bilingues. Module sans dépendance lourde :
@@ -23,10 +27,15 @@ export const CANONICAL_ORIGIN = "https://www.stock-master.app";
 
 export const EN_PREFIX = "/en";
 
-/** Pages publiques disponibles en français et en anglais. */
+/**
+ * Pages publiques disponibles en français et en anglais. Les guides
+ * pratiques n'ont pas de copie hors ligne : `public/sw.js` (BILINGUAL_PAGES)
+ * ne prépare que l'accueil, les pages d'aide et les textes juridiques.
+ */
 export const LOCALIZED_PUBLIC_PATHS: readonly string[] = Object.freeze([
   "/",
   ...HELP_PAGES.map((page) => page.href),
+  ...PRACTICAL_GUIDES.map((page) => page.href),
   ...LEGAL_DOCUMENTS.map((doc) => doc.href),
 ]);
 
