@@ -15,10 +15,19 @@ const content: DocumentContent = {
     "Sign-up, shop and members, products, stock, sales, analytics, trash, offline, subscription and notifications: the Stock Master step-by-step guide.",
   title: "User guide",
   intro: (
-    <p>
-      This guide explains, step by step, how to use {SITE.name} in your shop.
-      Button names are written as they appear in the application.
-    </p>
+    <>
+      <p>
+        This guide explains, step by step, how to use {SITE.name} in your shop.
+        Button names are written as they appear in the application.
+      </p>
+      <p className="mt-3">
+        Looking first for a method to organise your stock? Read{" "}
+        <Link href="/en/guides/gestion-stock-boutique">
+          How to manage stock in a shop
+        </Link>
+        .
+      </p>
+    </>
   ),
   sections: [
     {

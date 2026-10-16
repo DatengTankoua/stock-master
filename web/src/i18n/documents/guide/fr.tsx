@@ -20,11 +20,21 @@ const content: DocumentContent = {
     "Inscription, commerce et membres, produits, stock, ventes, analyses, corbeille, hors connexion, abonnement et notifications : le guide pas à pas de Stock Master.",
   title: "Guide d'utilisation",
   intro: (
-    <p>
-      Ce guide explique, étape par étape, comment utiliser {SITE.name} dans
-      votre commerce. Les noms des boutons sont écrits comme dans
-      l&apos;application.
-    </p>
+    <>
+      <p>
+        Ce guide explique, étape par étape, comment utiliser {SITE.name} dans
+        votre commerce. Les noms des boutons sont écrits comme dans
+        l&apos;application.
+      </p>
+      <p className="mt-3">
+        Vous cherchez d&apos;abord une méthode pour organiser votre stock ?
+        Lisez{" "}
+        <Link href="/guides/gestion-stock-boutique">
+          Comment gérer le stock d&apos;une boutique
+        </Link>
+        .
+      </p>
+    </>
   ),
   sections: [
     {

@@ -41,6 +41,7 @@ export function publicPageMetadata({
   shareDescription = description,
   imageAlt,
   index = true,
+  type = "website",
 }: {
   /** Chemin de la page sans préfixe de langue (`/`, `/guide`…). */
   path: string;
@@ -51,6 +52,8 @@ export function publicPageMetadata({
   shareDescription?: string;
   imageAlt: string;
   index?: boolean;
+  /** `article` pour les guides pratiques (aucune date ni auteur ajoutés). */
+  type?: "website" | "article";
 }): Metadata {
   const url = localizedPath(path, locale);
   const image = shareImage(locale, imageAlt);
@@ -59,7 +62,7 @@ export function publicPageMetadata({
     description,
     alternates: { canonical: url, languages: languageAlternates(path) },
     openGraph: {
-      type: "website",
+      type,
       siteName: SITE.name,
       url,
       title: shareTitle,

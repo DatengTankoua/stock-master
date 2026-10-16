@@ -2,7 +2,12 @@ import Link from "next/link";
 import { Wordmark } from "@/components/brand/wordmark";
 import { LocaleLinks } from "@/components/i18n/locale-links";
 import { LANDING_NAV } from "@/components/landing/landing-nav";
-import { HELP_PAGES, LEGAL_DOCUMENTS, SITE } from "@/lib/legal/site-identity";
+import {
+  HELP_PAGES,
+  LEGAL_DOCUMENTS,
+  PRACTICAL_GUIDES,
+  SITE,
+} from "@/lib/legal/site-identity";
 import { localizedHref, localizedPath } from "@/lib/seo/public-routes";
 import { getServerT } from "@/i18n/server";
 
@@ -69,7 +74,7 @@ export async function PublicFooter({
           ))}
         </Column>
         <Column title={t("footer.help")} id="pied-aide">
-          {HELP_PAGES.map((page) => (
+          {[...HELP_PAGES, ...PRACTICAL_GUIDES].map((page) => (
             <li key={page.href}>
               <Link href={href(page.href)} className={linkClass}>
                 {t(`footer.pages.${page.key}`)}

@@ -11,3 +11,8 @@ export interface DocumentContent {
   intro: React.ReactNode;
   sections: DocumentSection[];
 }
+
+/** Guide pratique : document suivi d'un appel final (`DocumentPage.closing`). */
+export interface ArticleContent extends DocumentContent {
+  closing: React.ReactNode;
+}

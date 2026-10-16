@@ -29,6 +29,7 @@ const publicFr = {
     pages: {
       guide: "Guide d'utilisation",
       contact: "Contact",
+      stockManagement: "Gérer le stock d'une boutique",
     },
   },
   cta: {
@@ -44,6 +45,8 @@ const publicFr = {
       "Capture de l'écran Ventes de Stock Master pour la boutique fictive Boutique Démo : dernières ventes enregistrées, avec produit, vendeur, date, quantité et montant en FCFA.",
     caption:
       "Captures réelles de l'application, interface en français · Boutique Démo, produits et ventes fictifs.",
+    salesCaption:
+      "<demo>Données de démonstration</demo> Capture réelle de l'écran Ventes · Boutique Démo, ventes fictives.",
   },
   // Bandeau affiché (en anglais) sur un appareil réglé en anglais.
   languageHint: {
