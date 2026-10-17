@@ -4,6 +4,11 @@ import {
   hasPermission,
   OrganizationRole,
 } from '../organizations/permissions';
+import {
+  customLowStockThreshold,
+  stockStatus,
+  type StockStatus,
+} from './stock-level';
 
 /**
  * 1-12H — projection UNIQUE des informations produit selon les permissions
@@ -11,7 +16,8 @@ import {
  * non autorisé est ABSENT (jamais remplacé par 0 ou une valeur inventée).
  *
  * - standard (tout membre autorisé à consulter) : nom, prix de vente cible,
- *   stock restant, statut ;
+ *   stock restant, statut, date de péremption et seuil de stock faible
+ *   personnalisé (`null` : aucune date / règle par défaut) ;
  * - `products.view_stock_details` : stock initial, unités vendues ;
  * - `products.view_financials` : prix d'achat unitaire, coût total d'achat,
  *   CA réel, bénéfice réel, marge.
@@ -37,7 +43,7 @@ export function productVisibility(context: {
   };
 }
 
-export type ProductStatus = 'in_stock' | 'low_stock' | 'out_of_stock';
+export type ProductStatus = StockStatus;
 
 /** Champs lus sur le document (Mongoose ou objet simple). */
 export interface ProductSource {
@@ -48,6 +54,8 @@ export interface ProductSource {
   salePrice: number;
   initialQuantity: number;
   remainingQuantity: number;
+  expiryDate?: string | null;
+  lowStockThreshold?: number | null;
   deletedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -66,6 +74,10 @@ export interface ProductView {
   imageUrl: string | null;
   salePrice: number;
   remainingQuantity: number;
+  /** Date civile `AAAA-MM-JJ`, `null` sans date. */
+  expiryDate: string | null;
+  /** Seuil personnalisé, `null` : règle par défaut. */
+  lowStockThreshold: number | null;
   deletedAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -97,11 +109,23 @@ function num(value: unknown): number {
 }
 
 export function computeStatus(p: ProductSource): ProductStatus {
-  const remaining = num(p.remainingQuantity);
-  const initial = num(p.initialQuantity);
-  if (remaining === 0) return 'out_of_stock';
-  if (initial > 0 && remaining / initial <= 0.2) return 'low_stock';
-  return 'in_stock';
+  // `num` garde NaN (documents malformés) : comportement inchangé.
+  return stockStatus({
+    initialQuantity: num(p.initialQuantity),
+    remainingQuantity: num(p.remainingQuantity),
+    lowStockThreshold: p.lowStockThreshold,
+  });
+}
+
+/** Seuil exposé : valeur personnalisée valide, sinon `null` (défaut). */
+function exposedThreshold(p: ProductSource): number | null {
+  return customLowStockThreshold(p.lowStockThreshold);
+}
+
+function exposedExpiryDate(p: ProductSource): string | null {
+  return typeof p.expiryDate === 'string' && p.expiryDate !== ''
+    ? p.expiryDate
+    : null;
 }
 
 export function toProductView(
@@ -116,6 +140,8 @@ export function toProductView(
     imageUrl,
     salePrice: p.salePrice,
     remainingQuantity: p.remainingQuantity,
+    expiryDate: exposedExpiryDate(p),
+    lowStockThreshold: exposedThreshold(p),
     deletedAt: p.deletedAt ?? null,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,

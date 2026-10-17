@@ -13,6 +13,9 @@ export enum AuditAction {
   DELETED = 'deleted',
   SALE_UPDATED = 'sale_updated',
   SALE_CANCELLED = 'sale_cancelled',
+  // Champs facultatifs de la fiche : `{ from, to }`, `null` = absent.
+  EXPIRY_CHANGED = 'expiry_changed',
+  THRESHOLD_CHANGED = 'threshold_changed',
 }
 
 @Schema({ timestamps: { createdAt: true, updatedAt: false } })

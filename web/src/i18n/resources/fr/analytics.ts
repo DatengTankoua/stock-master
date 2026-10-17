@@ -54,7 +54,7 @@ const analyticsFr = {
       low: {
         title: "Stock faible",
         reason:
-          "80 % du stock initial vendu ; pas assez de ventes pour estimer les jours restants.",
+          "Sous le seuil personnalisé du produit ; à défaut de seuil, 80 % du stock initial vendu sans assez de ventes pour estimer les jours restants.",
         count_one: "{{n}} produit",
         count_many: "{{n}} produits",
         count_other: "{{n}} produits",
@@ -142,13 +142,15 @@ const analyticsFr = {
     sections: {
       out: "Rupture constatée (stock à 0)",
       soon: "Risque estimé de rupture prochaine",
-      low: "Stock faible (seuil des 80 %)",
+      low: "Stock faible (seuil personnalisé ou 80 % vendus)",
       stale: "Aucune vente enregistrée récemment",
       recent: "Ajoutés récemment, pas encore vendus",
       price: "Prix à vérifier",
     },
     sectionCount: "{{title}} ({{n}})",
     remaining: "{{n}} en stock",
+    thresholdCustom: "seuil personnalisé : {{n}}",
+    thresholdDefault: "seuil par défaut (80 % vendus)",
     daysLeft: "≈ {{days}} j de stock",
     perDay: "{{avg}} vendus / jour",
     notEnough: "Pas assez de ventes pour estimer",

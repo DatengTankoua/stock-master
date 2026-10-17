@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -51,6 +52,8 @@ import {
 } from './product-projection';
 
 import { productImagePrefix } from '../storage-quota/storage-prefixes';
+import { PushOutboxService } from '../push/push-outbox.service';
+import { stockAlertFor } from './stock-level';
 import {
   PRODUCT_PAGE_SORT,
   encodeProductPageCursor,
@@ -100,6 +103,8 @@ export interface StockAdjustment {
   initialQuantity: number;
   remainingBefore: number;
   remainingAfter: number;
+  /** Seuil personnalisé au moment de l'écriture (`null` : règle par défaut). */
+  lowStockThreshold: number | null;
 }
 
 export interface ProductDetail extends ProductMetricsView {
@@ -137,7 +142,33 @@ export class ProductsService {
     private storageQuota: StorageQuotaService,
     @InjectModel(Organization.name)
     private organizationModel: Model<OrganizationDocument>,
+    // Alertes de stock à l'entrée sous un seuil modifié (même circuit que
+    // les ventes) ; absent hors processus HTTP (CLI, tests unitaires).
+    @Optional() private pushOutbox?: PushOutboxService,
   ) {}
+
+  /**
+   * Alerte de stock due pour UNE écriture (avant / après exacts), enregistrée
+   * dans sa transaction : règle centrale `stockAlertFor`, mêmes événements
+   * (`stock-depleted`, `stock-low`) et mêmes destinataires que les ventes.
+   */
+  private async recordStockAlert(
+    session: MongooseSession,
+    organizationId: string,
+    productId: string,
+    before: ProductDocument,
+    after: ProductDocument,
+    trigger: string,
+  ): Promise<void> {
+    if (!this.pushOutbox) return;
+    const alert = stockAlertFor(before, after);
+    const input = { organizationId, productId, trigger };
+    if (alert === 'depleted') {
+      await this.pushOutbox.stockDepletedInSession(session, input);
+    } else if (alert === 'low') {
+      await this.pushOutbox.stockLowInSession(session, input);
+    }
+  }
 
   /**
    * 1-15A — diffusion APRÈS l'écriture, en best effort (comme les ventes) :
@@ -457,6 +488,11 @@ export class ProductsService {
             salePrice: dto.salePrice,
             initialQuantity: dto.initialQuantity,
             remainingQuantity: dto.initialQuantity,
+            // Facultatifs : absents (et non `null`) quand non renseignés.
+            ...(dto.expiryDate != null ? { expiryDate: dto.expiryDate } : {}),
+            ...(dto.lowStockThreshold != null
+              ? { lowStockThreshold: dto.lowStockThreshold }
+              : {}),
           },
         ],
         { session },
@@ -474,6 +510,10 @@ export class ProductsService {
         purchasePrice: dto.purchasePrice,
         salePrice: dto.salePrice,
         initialQuantity: dto.initialQuantity,
+        ...(dto.expiryDate != null ? { expiryDate: dto.expiryDate } : {}),
+        ...(dto.lowStockThreshold != null
+          ? { lowStockThreshold: dto.lowStockThreshold }
+          : {}),
       },
     );
     // 1-12H — diffusion commune : champs standard uniquement (photo signée,
@@ -703,6 +743,44 @@ export class ProductsService {
       );
     }
 
+    // Date de péremption : `null` = retirée ; inchangée = aucune écriture.
+    // `undefined` sur le document produit un `$unset` (champ absent, comme
+    // sur un produit qui n'a jamais eu de date).
+    if (dto.expiryDate !== undefined) {
+      const from = product.expiryDate ?? null;
+      const to = dto.expiryDate ?? null;
+      if (from !== to) {
+        product.expiryDate = to ?? undefined;
+        await this.auditService.log(
+          organizationId,
+          id,
+          AuditAction.EXPIRY_CHANGED,
+          actorId,
+          { expiryDate: { from, to } },
+        );
+      }
+    }
+
+    // Seuil de stock faible : `null` = retour à la règle par défaut ; `0`
+    // reste une valeur explicite. Un changement réévalue l'état de stock
+    // dans la transaction d'écriture (alerte à l'entrée seulement).
+    let thresholdChanged = false;
+    if (dto.lowStockThreshold !== undefined) {
+      const from = product.lowStockThreshold ?? null;
+      const to = dto.lowStockThreshold ?? null;
+      if (from !== to) {
+        thresholdChanged = true;
+        product.lowStockThreshold = to ?? undefined;
+        await this.auditService.log(
+          organizationId,
+          id,
+          AuditAction.THRESHOLD_CHANGED,
+          actorId,
+          { lowStockThreshold: { from, to } },
+        );
+      }
+    }
+
     if (dto.sectionId) {
       const newId = new Types.ObjectId(dto.sectionId);
       if (!product.sectionId.equals(newId)) {
@@ -750,6 +828,48 @@ export class ProductsService {
         : {}),
     };
     const filter = { _id: product._id, organizationId: product.organizationId };
+    // Seuil modifié : écriture ET réévaluation dans la MÊME transaction,
+    // valeurs avant / après lues de l'écriture atomique elle-même (une vente
+    // concurrente n'est jamais ignorée). Alerte à l'ENTRÉE dans l'état de
+    // stock faible seulement, clé stable de CETTE modification : aucune
+    // répétition tant que le produit reste sous le seuil.
+    const operationId = new Types.ObjectId().toHexString();
+    const write = async (
+      writeFilter: Record<string, unknown>,
+      session?: MongooseSession,
+    ): Promise<ProductDocument | null> => {
+      if (!thresholdChanged || !session) {
+        return this.productModel
+          .findOneAndUpdate(writeFilter, update, {
+            returnDocument: 'after',
+            runValidators: true,
+            ...(session ? { session } : {}),
+          })
+          .exec();
+      }
+      const before = await this.productModel
+        .findOneAndUpdate(writeFilter, update, {
+          returnDocument: 'before',
+          runValidators: true,
+          session,
+        })
+        .exec();
+      if (!before) return null;
+      const after = await this.productModel
+        .findOne(filter, null, { session })
+        .exec();
+      if (after) {
+        await this.recordStockAlert(
+          session,
+          organizationId,
+          id,
+          before,
+          after,
+          `product-update:${operationId}`,
+        );
+      }
+      return after;
+    };
     let saved: ProductDocument | null;
     if (newImage) {
       // 1-17B — remplacement de photo : écriture conditionnée à la photo LUE
@@ -757,13 +877,10 @@ export class ProductsService {
       // orphelin non suivi), rattachement de la nouvelle et détachement de
       // l'ancienne dans la MÊME transaction. Aucun appel au stockage ici.
       saved = await this.inTransaction(async (session) => {
-        const written = await this.productModel
-          .findOneAndUpdate(
-            { ...filter, imageKey: previousImage.imageKey ?? null },
-            update,
-            { returnDocument: 'after', runValidators: true, session },
-          )
-          .exec();
+        const written = await write(
+          { ...filter, imageKey: previousImage.imageKey ?? null },
+          session,
+        );
         if (!written) return null;
         await this.storageQuota.attach(newImage, session);
         await this.storageQuota.detach(
@@ -774,16 +891,12 @@ export class ProductsService {
         return written;
       });
       if (!saved) await this.assertImageUnchanged(filter);
+    } else if (Object.keys(update).length === 0) {
+      saved = product;
+    } else if (thresholdChanged) {
+      saved = await this.inTransaction((session) => write(filter, session));
     } else {
-      saved =
-        Object.keys(update).length === 0
-          ? product
-          : await this.productModel
-              .findOneAndUpdate(filter, update, {
-                returnDocument: 'after',
-                runValidators: true,
-              })
-              .exec();
+      saved = await write(filter);
     }
     if (!saved) throw new NotFoundException(`Product ${id} not found`);
     // Ancienne photo supprimée SEULEMENT après succès de la mutation ; son
@@ -1066,6 +1179,7 @@ export class ProductsService {
       initialQuantity: product.initialQuantity,
       remainingBefore,
       remainingAfter: product.remainingQuantity,
+      lowStockThreshold: product.lowStockThreshold ?? null,
     };
   }
 

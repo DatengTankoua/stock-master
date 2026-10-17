@@ -25,6 +25,7 @@
     "migrate:invitation-account-token-index": "node dist/migrations/create-invitation-account-token-index.js",
     "migrate:purge-terminated-invitations": "node dist/migrations/purge-terminated-invitations.js",
     "migrate:sales-notifications-permission": "node dist/migrations/sales-notifications-permission.js",
+    "migrate:product-field-permissions": "node dist/migrations/product-field-permissions.js",
     "migrate:rate-limit-indexes": "node dist/migrations/create-rate-limit-indexes.js",
     "migrate:sale-history-indexes": "node dist/migrations/create-sale-history-indexes.js",
     "migrate:product-page-indexes": "node dist/migrations/create-product-page-indexes.js",

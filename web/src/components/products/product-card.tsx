@@ -47,6 +47,7 @@ const STATUS_CONFIG = {
 const CARD_KEYS: readonly ProductInfoKey[] = [
   "salePrice",
   "stock",
+  "expiryDate",
   "initialQuantity",
   "unitsSold",
   "purchasePrice",
@@ -74,7 +75,7 @@ export function ProductCard({
   onEdit,
 }: ProductCardProps) {
   const { t } = useT("catalog");
-  const { fcfa } = useFormat();
+  const { fcfa, civilDate } = useFormat();
   const status = STATUS_CONFIG[product.status] ? product.status : "in_stock";
   const cfg = STATUS_CONFIG[status];
   const StatusIcon = cfg.icon;
@@ -133,7 +134,7 @@ export function ProductCard({
 
         <CardContent className="space-y-2 text-sm">
           <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-            {productInfoItems(product, indicative, { t, fcfa })
+            {productInfoItems(product, indicative, { t, fcfa, civilDate })
               .filter((item) => CARD_KEYS.includes(item.key))
               .map((item) => (
                 <Fragment key={item.key}>

@@ -44,6 +44,8 @@ const organizationFr = {
     "members.manage": "Gérer les membres",
     "support.contact": "Contacter le service client",
     "sales.notifications": "Recevoir les notifications de ventes",
+    "products.manage_expiry": "Gérer les dates de péremption",
+    "stock.manage_thresholds": "Personnaliser les seuils de stock",
   },
   memberStatus: {
     active: "Active",

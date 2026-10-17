@@ -309,6 +309,12 @@ const content: ArticleContent = {
               Create one product per variant (250 ml and 500 ml, for example),
               as in step 1.
             </li>
+            <li>
+              An optional expiry date can be entered on the product; a passed
+              date is flagged on the product page, without blocking sales. It
+              applies to the whole product: if two deliveries have different
+              dates, batches are not tracked separately.
+            </li>
           </ul>
 
           <h3>Opening stock</h3>
@@ -345,15 +351,16 @@ const content: ArticleContent = {
           <h3>Products to watch</h3>
           <ul>
             <li>
-              Each product shows “In stock”, “Low stock” or “Out of stock”. “Low
-              stock” appears when 20% or less of the total quantity entered
-              (initial quantity plus additions) is left. This threshold is the
-              same for every product: keep your own reorder points (step 4) for
-              important products.
+              Each product shows “In stock”, “Low stock” or “Out of stock”. You
+              can set a low-stock threshold per product (your reorder point from
+              step 4): the product shows “Low stock” as soon as the remaining
+              quantity is below it. Without a threshold, the default rule
+              applies: 20% or less of the total quantity entered (initial
+              quantity plus additions).
             </li>
             <li>
-              Members with the “See stock details” right are notified when a
-              product is almost or completely out of stock.
+              Members with the “See stock details” right are notified once when
+              a product falls below its threshold, then when it runs out.
             </li>
             <li>
               The <strong>Analytics</strong> page (“View analytics” right)
@@ -374,7 +381,9 @@ const content: ArticleContent = {
             </li>
             <li>
               You add other rights one by one, for example “Adjust stock” only
-              for the person who receives deliveries.
+              for the person who receives deliveries. Changing a product&apos;s
+              expiry date or threshold also requires “Manage expiry dates” or
+              “Customise stock thresholds”.
             </li>
             <li>
               The owner is notified when another member edits a product (adding
@@ -419,7 +428,10 @@ const content: ArticleContent = {
             <li>
               Losses: damaged or expired products, opened testers, theft found.
             </li>
-            <li>Expiry dates and the results of your counts.</li>
+            <li>
+              Batches with different expiry dates, and the results of your
+              counts.
+            </li>
           </ul>
           <p>
             The stock shown only goes down through a sale: in the example above,

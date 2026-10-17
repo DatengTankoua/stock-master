@@ -148,11 +148,33 @@ const content: DocumentContent = {
             Open a category, then add a product: name, photo, purchase price,
             sale price and initial quantity (in FCFA). The photo is required.
           </p>
+          <p>Two fields are optional, depending on your rights:</p>
+          <ul>
+            <li>
+              <strong>Expiry date</strong> (“Manage expiry dates” right): one
+              date for the whole product, batches are not tracked. A date that
+              has already passed is accepted with a warning; the product page
+              then shows it as “passed”. Sales are not blocked and no expiry
+              notification is sent.
+            </li>
+            <li>
+              <strong>Low-stock threshold</strong> (“Customise stock thresholds”
+              right): the product shows “Low stock” when the remaining quantity
+              is below this threshold. Empty: default rule (20% or less of the
+              initial stock, additions included). 0: only out of stock is
+              reported.
+            </li>
+          </ul>
+          <p>
+            In “Edit”, “Remove the date” and “Use the default rule” clear these
+            values.
+          </p>
           <h3>Track and top up stock</h3>
           <ul>
             <li>
               Each sale lowers the product&apos;s stock. The product page shows
-              “In stock”, “Low stock” or “Out of stock”.
+              “In stock”, “Low stock” or “Out of stock”, and the threshold
+              applied (custom or default).
             </li>
             <li>
               To add goods, choose “Edit” on the product and enter the quantity

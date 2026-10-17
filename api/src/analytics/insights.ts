@@ -1,4 +1,8 @@
-import { stockLowReached } from '../push/stock-thresholds';
+import {
+  customLowStockThreshold,
+  isLowStock,
+  type StockLevel,
+} from '../products/stock-level';
 import { monthBounds } from './month-range';
 import {
   INSIGHT_THRESHOLDS,
@@ -167,24 +171,33 @@ export type StockSignal = 'out' | 'soon' | 'low';
  * - `out` : rupture constatée (stock actuel nul) ;
  * - `soon` : risque estimé de rupture prochaine (≤ `soonStockoutDays`
  *   jours estimés, valeur non arrondie) ;
- * - `low` : stock faible selon le seuil existant (80 % du stock initial
- *   consommé, 1-16A.1), UNIQUEMENT lorsque l'estimation manque.
+ * - `low` : stock faible.
+ *   - Seuil PERSONNALISÉ (choix explicite du commerçant) : restant
+ *     strictement inférieur au seuil, que l'estimation existe ou non
+ *     (`soon` reste prioritaire).
+ *   - Règle par défaut (80 % du stock initial consommé, 1-16A.1) :
+ *     UNIQUEMENT lorsque l'estimation manque (comportement inchangé).
  */
 export function classifyStock(
-  product: { remainingQuantity: number; initialQuantity: number },
+  product: StockLevel,
   estimate: SalesRateEstimate,
   thresholds: InsightThresholds = INSIGHT_THRESHOLDS,
 ): StockSignal | null {
   const remaining = product.remainingQuantity;
   if (!Number.isFinite(remaining) || remaining < 0) return null;
   if (remaining === 0) return 'out';
-  if (estimate.estimable) {
-    return estimate.daysLeft !== null &&
-      estimate.daysLeft <= thresholds.soonStockoutDays
-      ? 'soon'
-      : null;
+  if (
+    estimate.estimable &&
+    estimate.daysLeft !== null &&
+    estimate.daysLeft <= thresholds.soonStockoutDays
+  ) {
+    return 'soon';
   }
-  return stockLowReached(product.initialQuantity, remaining) ? 'low' : null;
+  if (customLowStockThreshold(product.lowStockThreshold) !== null) {
+    return isLowStock(product) ? 'low' : null;
+  }
+  if (estimate.estimable) return null;
+  return isLowStock(product) ? 'low' : null;
 }
 
 /**

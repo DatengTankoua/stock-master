@@ -7,7 +7,11 @@ import { toast } from "sonner";
 import { useT } from "next-i18next/client";
 import { useFormat } from "@/i18n/use-format";
 import { rich } from "@/i18n/rich";
-import { getApiErrorMessage } from "@/lib/api";
+import { getApiErrorMessage, type CreateProductPayload } from "@/lib/api";
+import {
+  ProductOptionalFields,
+  parseThresholdInput,
+} from "@/components/products/product-optional-fields";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,18 +30,17 @@ import {
 
 interface CreateProductDialogProps {
   sectionId: string;
-  onCreated: (payload: {
-    sectionId: string;
-    name: string;
-    purchasePrice: number;
-    salePrice: number;
-    initialQuantity: number;
-    image: File;
-  }) => Promise<void>;
+  // `products.manage` + droit propre (calculés par la page) : champs
+  // facultatifs affichés seulement avec le droit, l'API revérifie.
+  canManageExpiry?: boolean;
+  canManageThreshold?: boolean;
+  onCreated: (payload: CreateProductPayload) => Promise<void>;
 }
 
 export function CreateProductDialog({
   sectionId,
+  canManageExpiry = false,
+  canManageThreshold = false,
   onCreated,
 }: CreateProductDialogProps) {
   const { t } = useT("catalog");
@@ -48,6 +51,8 @@ export function CreateProductDialog({
   const [purchasePrice, setPurchasePrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [threshold, setThreshold] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [duplicate, setDuplicate] = useState<DuplicateItem | null>(null);
@@ -57,6 +62,8 @@ export function CreateProductDialog({
     setPurchasePrice("");
     setSalePrice("");
     setQuantity("");
+    setExpiryDate("");
+    setThreshold("");
     setImage(null);
   };
 
@@ -66,6 +73,10 @@ export function CreateProductDialog({
       toast.error(t("product.photoRequired"));
       return;
     }
+    // Champs facultatifs envoyés seulement s'ils sont renseignés ET permis.
+    const lowStockThreshold = canManageThreshold
+      ? parseThresholdInput(threshold)
+      : null;
     setLoading(true);
     try {
       await onCreated({
@@ -75,6 +86,8 @@ export function CreateProductDialog({
         salePrice: parseFloat(salePrice),
         initialQuantity: parseInt(quantity, 10),
         image,
+        ...(canManageExpiry && expiryDate !== "" ? { expiryDate } : {}),
+        ...(lowStockThreshold !== null ? { lowStockThreshold } : {}),
       });
       toast.success(t("product.added"));
       setOpen(false);
@@ -104,7 +117,7 @@ export function CreateProductDialog({
         {t("product.add")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               {t("product.newTitle")}
@@ -181,6 +194,16 @@ export function CreateProductDialog({
                 required
               />
             </div>
+            <ProductOptionalFields
+              idPrefix="p"
+              showExpiry={canManageExpiry}
+              showThreshold={canManageThreshold}
+              expiryDate={expiryDate}
+              onExpiryDateChange={setExpiryDate}
+              threshold={threshold}
+              onThresholdChange={setThreshold}
+              disabled={loading}
+            />
             <div className="space-y-2">
               <Label htmlFor="p-img">{t("product.photo")}</Label>
               <Input

@@ -27,6 +27,10 @@ import {
   notifyStorageChanged,
   productPhotoProblem,
 } from "@/lib/storage-usage";
+import {
+  ProductOptionalFields,
+  parseThresholdInput,
+} from "@/components/products/product-optional-fields";
 
 interface UpdateProductDialogProps {
   product: ApiProduct | null;
@@ -37,6 +41,9 @@ interface UpdateProductDialogProps {
   canManageDescription: boolean;
   // `stock.adjust` : prix d'achat/vente + stock additionnel.
   canAdjustStock: boolean;
+  // `products.manage` + droit propre : date de péremption / seuil.
+  canManageExpiry?: boolean;
+  canManageThreshold?: boolean;
   onUpdated: (
     id: string,
     payload: UpdateProductPayload,
@@ -49,6 +56,8 @@ export function UpdateProductDialog({
   onOpenChange,
   canManageDescription,
   canAdjustStock,
+  canManageExpiry = false,
+  canManageThreshold = false,
   onUpdated,
 }: UpdateProductDialogProps) {
   const { t } = useT("catalog");
@@ -58,6 +67,8 @@ export function UpdateProductDialog({
   const [purchasePrice, setPurchasePrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [additionalStock, setAdditionalStock] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [threshold, setThreshold] = useState("");
   const [loading, setLoading] = useState(false);
   // 1-17B — photo choisie (jamais envoyée avant « Enregistrer »), aperçu
   // local et erreur propre au champ. L'ancienne photo reste affichée et en
@@ -67,6 +78,16 @@ export function UpdateProductDialog({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const canEditAnything = canManageDescription || canAdjustStock;
+  // Champs proposés seulement si l'API les fournit (`undefined` : API
+  // antérieure) ET avec le droit propre en plus de `products.manage`.
+  const showExpiry =
+    canManageDescription &&
+    canManageExpiry &&
+    product?.expiryDate !== undefined;
+  const showThreshold =
+    canManageDescription &&
+    canManageThreshold &&
+    product?.lowStockThreshold !== undefined;
   // 1-12H : le prix d'achat n'est proposé que s'il est visible
   // (`products.view_financials`) — jamais saisi « à l'aveugle » ni prérempli
   // par une valeur inventée.
@@ -89,6 +110,13 @@ export function UpdateProductDialog({
       );
       setSalePrice(String(product.salePrice));
       setAdditionalStock("");
+      setExpiryDate(product.expiryDate ?? "");
+      setThreshold(
+        product.lowStockThreshold === null ||
+          product.lowStockThreshold === undefined
+          ? ""
+          : String(product.lowStockThreshold),
+      );
     }
     // Autre cible : aucune photo choisie n'est conservée.
     setPhoto(null);
@@ -136,6 +164,18 @@ export function UpdateProductDialog({
       const qty = parseInt(additionalStock, 10);
       if (!isNaN(qty) && qty > 0) {
         payload.additionalStock = qty;
+      }
+    }
+    // Envoyés seulement en cas de changement : sans le droit, ou sans
+    // modification, la valeur actuelle n'est jamais touchée.
+    if (showExpiry) {
+      const next = expiryDate === "" ? null : expiryDate;
+      if (next !== (product.expiryDate ?? null)) payload.expiryDate = next;
+    }
+    if (showThreshold) {
+      const next = parseThresholdInput(threshold);
+      if (next !== (product.lowStockThreshold ?? null)) {
+        payload.lowStockThreshold = next;
       }
     }
     const sendsPhoto = canManageDescription && photo !== null;
@@ -361,6 +401,17 @@ export function UpdateProductDialog({
                 </div>
               </>
             )}
+            <ProductOptionalFields
+              idPrefix="u"
+              showExpiry={showExpiry}
+              showThreshold={showThreshold}
+              expiryDate={expiryDate}
+              onExpiryDateChange={setExpiryDate}
+              threshold={threshold}
+              onThresholdChange={setThreshold}
+              clearable
+              disabled={loading}
+            />
             <Button
               type="submit"
               className="w-full"
