@@ -15,7 +15,7 @@ const notificationsFr = {
     },
     stockLow: {
       label: "Stock presque épuisé",
-      help: "Quand 80 % du stock initial d'un produit est consommé.",
+      help: "Quand un produit passe sous son seuil personnalisé ou, sans seuil, quand 80 % de son stock initial est consommé.",
     },
     saleCreated: {
       label: "Nouvelle vente",
@@ -66,6 +66,8 @@ const notificationsFr = {
     product: "Produit",
     inTrash: "(corbeille)",
     remainingStock: "Stock restant",
+    threshold: "Seuil de stock faible",
+    thresholdDefault: "Par défaut (80 % du stock initial consommés)",
     saleCancelled: "Cette vente a été annulée depuis.",
     quantity: "Quantité",
     amount: "Montant",

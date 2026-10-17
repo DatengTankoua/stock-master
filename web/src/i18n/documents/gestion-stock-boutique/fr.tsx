@@ -9,10 +9,11 @@ import { REORDER_EXAMPLE, STOCK_EXAMPLE } from "./example";
 
 // Guide pratique « gérer le stock d'une boutique ». Sections 1 à 6 : bonnes
 // pratiques GÉNÉRALES, valables sans logiciel. Section 8 : opérations de
-// Stock Master VÉRIFIÉES dans le code (produits, ajout de stock, ventes,
-// correction des erreurs de saisie, statuts et alertes de stock, Analyse,
-// droits), puis un seul bloc « À noter à part » pour ce qui ne s'y
-// enregistre pas (retours, pertes, péremption, comptages). Essai : attribué
+// Stock Master VÉRIFIÉES dans le code (produits, date de péremption et
+// seuil de stock faible facultatifs, ajout de stock, ventes, correction des
+// erreurs de saisie, statuts et alertes de stock, Analyse, droits), puis un
+// seul bloc « À noter à part » pour ce qui ne s'y enregistre pas (retours,
+// pertes, lots, comptages). Essai : attribué
 // à la création du commerce, donc à l'inscription d'un nouveau compte
 // (`OrganizationsService.createOwnerOrganization`), jamais à un membre
 // invité. Les noms de boutons sont ceux de l'interface française.
@@ -338,6 +339,13 @@ const content: ArticleContent = {
               Créez un produit par variante (250 ml et 500 ml, par exemple),
               comme à l&apos;étape 1.
             </li>
+            <li>
+              Une date de péremption facultative peut être indiquée sur la fiche
+              ; une date dépassée est signalée sur la fiche, sans bloquer les
+              ventes. Elle vaut pour toute la fiche : si deux arrivages
+              n&apos;ont pas la même date, les lots ne sont pas suivis
+              séparément.
+            </li>
           </ul>
 
           <h3>Stock de départ</h3>
@@ -377,14 +385,16 @@ const content: ArticleContent = {
           <ul>
             <li>
               Chaque produit affiche « En stock », « Stock faible » ou « Épuisé
-              ». « Stock faible » apparaît quand il reste 20 % ou moins de la
-              quantité totale entrée (quantité initiale et ajouts). Ce seuil est
-              le même pour tous les produits : gardez vos propres seuils de
-              commande (étape 4) pour les produits importants.
+              ». Vous pouvez fixer un seuil de stock faible par produit (votre
+              seuil de commande de l&apos;étape 4) : le produit passe en « Stock
+              faible » dès que la quantité restante est en dessous. Sans seuil,
+              la règle par défaut s&apos;applique : 20 % ou moins de la quantité
+              totale entrée (quantité initiale et ajouts).
             </li>
             <li>
               Les membres qui ont le droit « Voir le détail du stock » sont
-              prévenus quand un produit est presque épuisé ou épuisé.
+              prévenus une fois quand un produit passe sous son seuil, puis
+              quand il est épuisé.
             </li>
             <li>
               La page <strong>Analyse</strong> (droit « Voir les analyses »)
@@ -406,6 +416,9 @@ const content: ArticleContent = {
             <li>
               Vous ajoutez d&apos;autres droits un par un, par exemple « Ajuster
               le stock » à la seule personne qui réceptionne les livraisons.
+              Modifier la date de péremption ou le seuil d&apos;une fiche
+              demande en plus « Gérer les dates de péremption » ou «
+              Personnaliser les seuils de stock ».
             </li>
             <li>
               Le propriétaire est prévenu quand un autre membre modifie un
@@ -452,7 +465,10 @@ const content: ArticleContent = {
               Les pertes : produits abîmés, périmés, testeurs ouverts, vols
               constatés.
             </li>
-            <li>Les dates de péremption et les résultats de vos comptages.</li>
+            <li>
+              Les lots ayant des dates de péremption différentes et les
+              résultats de vos comptages.
+            </li>
           </ul>
           <p>
             Le stock affiché ne baisse que par une vente : dans l&apos;exemple

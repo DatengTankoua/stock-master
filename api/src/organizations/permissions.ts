@@ -81,9 +81,25 @@ export const DELEGABLE_PERMISSIONS = Object.freeze([
   // défaut au propriétaire et à l'administrateur, jamais au vendeur sans
   // ajout explicite. Aucune migration.
   'sales.notifications',
+  // Date de péremption et seuil de stock faible : droits de MODIFICATION de
+  // ces seuls champs. Ils COMPLÈTENT `products.manage` (création ou
+  // modification de la fiche), sans jamais le remplacer, et n'ouvrent aucun
+  // autre champ (stock, prix…). La lecture suit la projection standard ;
+  // les destinataires des alertes de stock ne changent pas. Accordés par
+  // défaut au propriétaire et à l'administrateur (toutes les délégables),
+  // jamais au vendeur sans ajout explicite (refus par défaut). Aucune
+  // migration.
+  'products.manage_expiry',
+  'stock.manage_thresholds',
 ] as const);
 
 export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
+
+/** Permissions ajoutées après le catalogue 2 (web antérieur à ce lot). */
+const PRODUCT_FIELD_PERMISSIONS: readonly DelegablePermission[] = [
+  'products.manage_expiry',
+  'stock.manage_thresholds',
+];
 
 /**
  * 1-19A — Catalogues de permissions CONNUS d'un client (formulaire de
@@ -93,17 +109,24 @@ export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
  * catalogue qu'il connaît (`?permissionsCatalog=<n>`, paramètre ignoré par
  * une API antérieure) ; sans déclaration, c'est le catalogue 1 (web
  * antérieur à 1-19A) et les permissions hors catalogue sont conservées.
+ * Catalogue 3 : dates de péremption et seuils de stock.
  */
 export const PERMISSION_CATALOGS: Readonly<
   Record<number, readonly DelegablePermission[]>
 > = Object.freeze({
   1: Object.freeze(
-    DELEGABLE_PERMISSIONS.filter((p) => p !== 'sales.notifications'),
+    DELEGABLE_PERMISSIONS.filter(
+      (p) =>
+        p !== 'sales.notifications' && !PRODUCT_FIELD_PERMISSIONS.includes(p),
+    ),
   ),
-  2: DELEGABLE_PERMISSIONS,
+  2: Object.freeze(
+    DELEGABLE_PERMISSIONS.filter((p) => !PRODUCT_FIELD_PERMISSIONS.includes(p)),
+  ),
+  3: DELEGABLE_PERMISSIONS,
 });
 
-export const CURRENT_PERMISSION_CATALOG = 2;
+export const CURRENT_PERMISSION_CATALOG = 3;
 
 /** Version déclarée valide, sinon catalogue 1 (client le plus ancien). */
 export function parsePermissionCatalog(value: unknown): number {

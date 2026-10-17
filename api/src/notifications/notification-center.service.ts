@@ -52,6 +52,7 @@ import { NOTIFICATION_TITLE, notificationBody } from '../push/push-messages';
 import type { AppLocale } from '../common/i18n/locale';
 import type { PushJob } from '../push/schemas/push-job.schema';
 import { Product, ProductDocument } from '../products/schemas/product.schema';
+import { customLowStockThreshold } from '../products/stock-level';
 import { Sale, SaleDocument } from '../sales/schemas/sale.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import {
@@ -514,12 +515,14 @@ export class NotificationCenterService {
             name: 1,
             remainingQuantity: 1,
             initialQuantity: 1,
+            lowStockThreshold: 1,
             deletedAt: 1,
           })
           .lean<{
             name: string;
             remainingQuantity: number;
             initialQuantity: number;
+            lowStockThreshold?: number | null;
             deletedAt: Date | null;
           }>()
           .exec();
@@ -530,6 +533,10 @@ export class NotificationCenterService {
               productName: product.name,
               remainingQuantity: product.remainingQuantity,
               initialQuantity: product.initialQuantity,
+              // Seuil personnalisé actuel ; `null` : règle par défaut.
+              lowStockThreshold: customLowStockThreshold(
+                product.lowStockThreshold,
+              ),
               inTrash: Boolean(product.deletedAt),
             }
           : { kind: 'stock', productId: null, removed: true };

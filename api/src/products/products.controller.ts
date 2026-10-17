@@ -46,8 +46,18 @@ import {
 // Matrice audit 1A §3 : stock+prix ⇒ `stock.adjust`, catalogue/images ⇒
 // `products.manage`. Un PATCH ne portant AUCUN champ reconnu retombe sur
 // `products.manage` (jamais une route sans permission requise).
+// Date de péremption et seuil de stock faible : champs de la FICHE
+// (`products.manage`) qui exigent EN PLUS leur permission propre. Toute
+// présence du champ (valeur, changement ou effacement) est une tentative de
+// modification : sans le droit, la requête entière est refusée (403) et
+// rien n'est écrit.
 const STOCK_FIELDS = ['purchasePrice', 'salePrice', 'additionalStock'] as const;
-const BUSINESS_FIELDS = ['sectionId', 'name'] as const;
+const BUSINESS_FIELDS = [
+  'sectionId',
+  'name',
+  'expiryDate',
+  'lowStockThreshold',
+] as const;
 
 function requiredPermissionsForUpdate(
   dto: UpdateProductDto,
@@ -59,6 +69,24 @@ function requiredPermissionsForUpdate(
   const required: DelegablePermission[] = [];
   if (touchesBusiness || !touchesStock) required.push('products.manage');
   if (touchesStock) required.push('stock.adjust');
+  if (dto.expiryDate !== undefined) required.push('products.manage_expiry');
+  if (dto.lowStockThreshold !== undefined) {
+    required.push('stock.manage_thresholds');
+  }
+  return required;
+}
+
+/** Création : droits propres aux champs facultatifs renseignés. */
+function requiredPermissionsForCreate(
+  dto: CreateProductDto,
+): DelegablePermission[] {
+  const required: DelegablePermission[] = ['products.manage'];
+  if (dto.expiryDate !== undefined && dto.expiryDate !== null) {
+    required.push('products.manage_expiry');
+  }
+  if (dto.lowStockThreshold !== undefined && dto.lowStockThreshold !== null) {
+    required.push('stock.manage_thresholds');
+  }
   return required;
 }
 
@@ -150,6 +178,14 @@ export class ProductsController {
     @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
   ) {
     if (!file) throw new BadRequestException('Image file is required');
+    // Droits des champs facultatifs vérifiés AVANT tout envoi de photo.
+    if (
+      !requiredPermissionsForCreate(dto).every((p) =>
+        hasPermission(organizationContext, p),
+      )
+    ) {
+      throw new ForbiddenException(PERMISSION_DENIED_RESPONSE);
+    }
     const organizationId = organizationContext.organizationId;
     // 1-21D : capacité incluse vérifiée AVANT l'envoi de la photo (aucun
     // envoi inutile) ; la décision reste prise dans la transaction.

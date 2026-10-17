@@ -597,6 +597,16 @@ export function SellsSection({ insights }: { insights: AnalyticsInsights }) {
   );
 }
 
+/**
+ * Seuil appliqué à un produit « stock faible » : personnalisé (valeur) ou
+ * règle par défaut (80 % vendus). Absent (API antérieure) : règle par défaut.
+ */
+function thresholdText(a: AnalyticsFormat, item: InsightStockItem): string {
+  return typeof item.lowStockThreshold === "number"
+    ? a.t("stock.thresholdCustom", { n: a.number(item.lowStockThreshold) })
+    : a.t("stock.thresholdDefault");
+}
+
 function estimateText(a: AnalyticsFormat, item: InsightStockItem): string {
   const e = item.estimate;
   if (!e.estimable) {
@@ -709,7 +719,9 @@ function StockList({
                   ? t("stock.recentLabel")
                   : kind === "out"
                     ? null
-                    : estimateText(a, item as InsightStockItem);
+                    : kind === "low"
+                      ? `${thresholdText(a, item as InsightStockItem)} · ${estimateText(a, item as InsightStockItem)}`
+                      : estimateText(a, item as InsightStockItem);
             const canEdit =
               rights.canAdjustStock && kind !== "stale" && kind !== "recent";
             return (

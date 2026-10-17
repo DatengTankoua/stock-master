@@ -29,7 +29,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/schemas/audit-log.schema';
 import { subscriptionInactiveException } from '../subscriptions/subscription-access';
 import { PushOutboxService } from '../push/push-outbox.service';
-import { stockLowCrossed } from '../push/stock-thresholds';
+import { stockAlertFor } from '../products/stock-level';
 import {
   decodeSalesHistoryCursor,
   encodeSalesHistoryCursor,
@@ -262,6 +262,7 @@ export class SalesService {
             initialQuantity: product.initialQuantity,
             remainingBefore: product.remainingQuantity + input.quantity,
             remainingAfter: product.remainingQuantity,
+            lowStockThreshold: product.lowStockThreshold ?? null,
           },
           `sale:${saleId.toHexString()}`,
         );
@@ -518,8 +519,10 @@ export class SalesService {
 
   /**
    * 1-16A / 1-16A.1 — événements de stock d'UNE écriture : rupture (passage
-   * réel d'un stock positif à zéro) OU, sinon, franchissement de 80 %
-   * consommé. Enregistrés dans la session de la transaction appelante.
+   * réel d'un stock positif à zéro) OU, sinon, entrée dans l'état de stock
+   * faible (seuil personnalisé du produit, sinon 80 % consommé). Règle
+   * centrale `stockAlertFor`. Enregistrés dans la session de la transaction
+   * appelante.
    */
   private async recordStockThresholds(
     session: Parameters<PushOutboxService['stockDepletedInSession']>[0],
@@ -529,24 +532,23 @@ export class SalesService {
       initialQuantity: number;
       remainingBefore: number;
       remainingAfter: number;
+      lowStockThreshold: number | null;
     },
     trigger: string,
   ): Promise<void> {
     if (!this.pushOutbox) return;
     const input = { organizationId, productId, trigger };
-    if (stock.remainingBefore > 0 && stock.remainingAfter === 0) {
+    const level = {
+      initialQuantity: stock.initialQuantity,
+      lowStockThreshold: stock.lowStockThreshold,
+    };
+    const alert = stockAlertFor(
+      { ...level, remainingQuantity: stock.remainingBefore },
+      { ...level, remainingQuantity: stock.remainingAfter },
+    );
+    if (alert === 'depleted') {
       await this.pushOutbox.stockDepletedInSession(session, input);
-      return;
-    }
-    if (
-      stock.remainingAfter > 0 &&
-      stockLowCrossed(
-        stock.initialQuantity,
-        stock.remainingBefore,
-        stock.initialQuantity,
-        stock.remainingAfter,
-      )
-    ) {
+    } else if (alert === 'low') {
       await this.pushOutbox.stockLowInSession(session, input);
     }
   }

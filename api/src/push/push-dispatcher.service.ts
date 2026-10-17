@@ -33,7 +33,7 @@ import { buildPushMessage, pushTopic } from './push-messages';
 import { recipientLocale } from '../common/i18n/locale';
 import type { PushSendResult } from './push-transport';
 import { completePreferences } from './push-subscriptions.service';
-import { stockLowReached } from './stock-thresholds';
+import { isLowStock } from '../products/stock-level';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import {
   Organization,
@@ -1119,10 +1119,16 @@ export class PushDispatcherService implements OnApplicationShutdown {
       case PushCategory.STOCK_LOW: {
         const product = await this.productModel
           .findOne({ _id: job.productId, organizationId: job.organizationId })
-          .select({ remainingQuantity: 1, initialQuantity: 1, deletedAt: 1 })
+          .select({
+            remainingQuantity: 1,
+            initialQuantity: 1,
+            lowStockThreshold: 1,
+            deletedAt: 1,
+          })
           .lean<{
             remainingQuantity: number;
             initialQuantity: number;
+            lowStockThreshold?: number | null;
             deletedAt: Date | null;
           }>()
           .exec();
@@ -1132,9 +1138,9 @@ export class PushDispatcherService implements OnApplicationShutdown {
         } else {
           // Épuisé entre-temps : l'alerte de rupture prend le relais.
           if (product.remainingQuantity <= 0) return 'depleted';
-          if (
-            !stockLowReached(product.initialQuantity, product.remainingQuantity)
-          ) {
+          // Seuil actuel (personnalisé ou par défaut) : sorti de l'état
+          // faible entre-temps (réapprovisionnement, seuil abaissé).
+          if (!isLowStock(product)) {
             return 'restocked';
           }
         }

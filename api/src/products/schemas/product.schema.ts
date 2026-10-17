@@ -60,6 +60,21 @@ export class Product {
   @Prop({ required: true, min: 0 })
   remainingQuantity: number;
 
+  /**
+   * Date de péremption CIVILE `AAAA-MM-JJ` (aucune heure ni fuseau), sur la
+   * fiche entière (pas de lots). Facultative : absente sur les produits
+   * existants, sans migration.
+   */
+  @Prop({ type: String, required: false, match: /^\d{4}-\d{2}-\d{2}$/ })
+  expiryDate?: string | null;
+
+  /**
+   * Seuil de stock faible personnalisé (≥ 0, `0` explicite). Absent : règle
+   * par défaut existante (`products/stock-level.ts`). Sans migration.
+   */
+  @Prop({ type: Number, required: false, min: 0 })
+  lowStockThreshold?: number | null;
+
   @Prop({ type: Date, default: null })
   deletedAt: Date | null;
 }

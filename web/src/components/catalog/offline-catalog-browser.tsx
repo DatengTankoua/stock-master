@@ -268,7 +268,7 @@ function OfflineProductInfo({
   loadedAt?: number;
 }) {
   const { t } = useT("catalog");
-  const { fcfa } = useFormat();
+  const { fcfa, civilDate } = useFormat();
   const indicative = useIndicativeStock(
     product._id,
     product.remainingQuantity,
@@ -276,12 +276,14 @@ function OfflineProductInfo({
   );
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-      {productInfoItems(product, indicative, { t, fcfa }).map((item) => (
-        <Fragment key={item.key}>
-          <span className="text-muted-foreground">{item.label}</span>
-          <span className="text-right font-medium">{item.value}</span>
-        </Fragment>
-      ))}
+      {productInfoItems(product, indicative, { t, fcfa, civilDate }).map(
+        (item) => (
+          <Fragment key={item.key}>
+            <span className="text-muted-foreground">{item.label}</span>
+            <span className="text-right font-medium">{item.value}</span>
+          </Fragment>
+        ),
+      )}
     </div>
   );
 }

@@ -46,6 +46,12 @@ export interface ApiProduct {
   imageUrl: string | null;
   salePrice: number;
   remainingQuantity: number;
+  // Standard (tout membre). `null` : aucune date / règle par défaut ;
+  // `undefined` : API antérieure (champs ni affichés ni modifiables).
+  /** Date civile `AAAA-MM-JJ`, sans heure ni fuseau. */
+  expiryDate?: string | null;
+  /** Seuil de stock faible personnalisé (`0` explicite). */
+  lowStockThreshold?: number | null;
   createdAt: string;
   updatedAt: string;
   status: "in_stock" | "low_stock" | "out_of_stock";
@@ -170,6 +176,8 @@ export interface InsightStockItem {
   name: string;
   sectionId: string;
   remainingQuantity: number;
+  /** Seuil personnalisé ; `null` : règle par défaut (absent : API antérieure). */
+  lowStockThreshold?: number | null;
   estimate: SalesRateEstimate;
 }
 
@@ -1029,20 +1037,34 @@ export async function fetchProductCapacity(): Promise<ProductCapacity> {
   return data;
 }
 
-export async function createProduct(payload: {
+export interface CreateProductPayload {
   sectionId: string;
   name: string;
   purchasePrice: number;
   salePrice: number;
   initialQuantity: number;
   image: File;
-}): Promise<ApiProduct> {
+  // Facultatifs : envoyés seulement s'ils sont renseignés (droits propres
+  // `products.manage_expiry` / `stock.manage_thresholds`, contrôlés par l'API).
+  expiryDate?: string;
+  lowStockThreshold?: number;
+}
+
+export async function createProduct(
+  payload: CreateProductPayload,
+): Promise<ApiProduct> {
   const form = new FormData();
   form.append("sectionId", payload.sectionId);
   form.append("name", payload.name);
   form.append("purchasePrice", String(payload.purchasePrice));
   form.append("salePrice", String(payload.salePrice));
   form.append("initialQuantity", String(payload.initialQuantity));
+  if (payload.expiryDate !== undefined) {
+    form.append("expiryDate", payload.expiryDate);
+  }
+  if (payload.lowStockThreshold !== undefined) {
+    form.append("lowStockThreshold", String(payload.lowStockThreshold));
+  }
   form.append("image", payload.image);
   // Réponse : produit projeté plat, sans métriques (statut non calculé ici).
   const { data } = await apiClient.post<Omit<ApiProduct, "status">>(
@@ -1058,6 +1080,10 @@ export interface UpdateProductPayload {
   salePrice?: number;
   additionalStock?: number;
   sectionId?: string;
+  // `null` : date retirée / retour à la règle par défaut. Envoyés seulement
+  // en cas de changement (droits propres contrôlés par l'API).
+  expiryDate?: string | null;
+  lowStockThreshold?: number | null;
   // 1-17B : ajout ou remplacement de la photo (`products.manage`, contrôlé
   // côté API) ; envoi multipart, jamais hors connexion.
   image?: File;
@@ -1072,7 +1098,9 @@ export async function updateProduct(
   if (image) {
     const form = new FormData();
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) form.append(key, String(value));
+      // Multipart : chaîne vide = effacement (jamais le texte « null »).
+      if (value === null) form.append(key, "");
+      else if (value !== undefined) form.append(key, String(value));
     }
     form.append("image", image);
     body = form;
