@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import {
   COMMON_VISIBILITY,
+  computeStatus,
   toProductMetricsView,
   toProductView,
 } from './product-projection';
@@ -31,7 +32,9 @@ const STANDARD_PRODUCT_KEYS = [
   '_id',
   'createdAt',
   'deletedAt',
+  'expiryDate',
   'imageUrl',
+  'lowStockThreshold',
   'name',
   'remainingQuantity',
   'salePrice',
@@ -120,5 +123,59 @@ describe('projection produit (1-12H)', () => {
       0,
     );
     expect(view.margin).toBeNull();
+  });
+
+  it('produit existant sans date ni seuil : `null` exposés, statut par défaut inchangé', () => {
+    const view = toProductMetricsView(SOURCE, COMMON_VISIBILITY, SIGNED);
+    expect(view.product.expiryDate).toBeNull();
+    expect(view.product.lowStockThreshold).toBeNull();
+    expect(view.status).toBe('in_stock'); // 5 / 10 restants
+  });
+
+  it('date civile et seuil `0` exposés tels quels (standard), jamais convertis', () => {
+    const view = toProductView(
+      { ...SOURCE, expiryDate: '2026-02-28', lowStockThreshold: 0 },
+      COMMON_VISIBILITY,
+      SIGNED,
+    );
+    expect(view.expiryDate).toBe('2026-02-28');
+    expect(view.lowStockThreshold).toBe(0);
+  });
+});
+
+describe('statut de stock (règle centrale)', () => {
+  const status = (
+    initialQuantity: number,
+    remainingQuantity: number,
+    lowStockThreshold?: number | null,
+  ) =>
+    computeStatus({
+      ...SOURCE,
+      initialQuantity,
+      remainingQuantity,
+      lowStockThreshold,
+    });
+
+  it('règle par défaut inchangée : restant ≤ 20 % de la quantité initiale', () => {
+    expect(status(100, 21)).toBe('in_stock');
+    expect(status(100, 20)).toBe('low_stock');
+    expect(status(7, 2)).toBe('in_stock');
+    expect(status(7, 1)).toBe('low_stock');
+    expect(status(100, 0)).toBe('out_of_stock');
+    expect(status(100, 20, null)).toBe('low_stock');
+  });
+
+  it('seuil personnalisé : faible strictement en dessous, jamais au seuil', () => {
+    expect(status(100, 11, 10)).toBe('in_stock');
+    expect(status(100, 10, 10)).toBe('in_stock');
+    expect(status(100, 9, 10)).toBe('low_stock');
+    // Remplace la règle par défaut dans les deux sens.
+    expect(status(100, 20, 5)).toBe('in_stock');
+    expect(status(100, 50, 60)).toBe('low_stock');
+  });
+
+  it('seuil 0 : jamais faible, seule la rupture est signalée', () => {
+    expect(status(100, 1, 0)).toBe('in_stock');
+    expect(status(100, 0, 0)).toBe('out_of_stock');
   });
 });

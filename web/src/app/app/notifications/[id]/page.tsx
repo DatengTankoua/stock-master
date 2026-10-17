@@ -132,6 +132,16 @@ function Details({
           <dd>
             {details.remainingQuantity} / {details.initialQuantity}
           </dd>
+          {details.lowStockThreshold !== undefined && (
+            <>
+              <dt className="text-muted-foreground">{t("detail.threshold")}</dt>
+              <dd>
+                {details.lowStockThreshold === null
+                  ? t("detail.thresholdDefault")
+                  : details.lowStockThreshold}
+              </dd>
+            </>
+          )}
         </dl>
       );
     case "sale":

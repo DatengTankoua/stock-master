@@ -44,6 +44,8 @@ const organizationEn: Translation<typeof organizationFr> = {
     "members.manage": "Manage members",
     "support.contact": "Contact customer support",
     "sales.notifications": "Receive sale notifications",
+    "products.manage_expiry": "Manage expiry dates",
+    "stock.manage_thresholds": "Customise stock thresholds",
   },
   memberStatus: {
     active: "Active",

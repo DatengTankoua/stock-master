@@ -21,6 +21,10 @@ export const DELEGABLE_PERMISSIONS = [
   "support.contact",
   // 1-19A : recevoir les notifications de ventes (distincte de les consulter).
   "sales.notifications",
+  // Modifier la date de péremption / le seuil de stock faible d'une fiche :
+  // complètent `products.manage`, n'ouvrent aucun autre champ.
+  "products.manage_expiry",
+  "stock.manage_thresholds",
 ] as const;
 
 export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
@@ -28,7 +32,8 @@ export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
 // 1-19A — version du catalogue ci-dessus (miroir de
 // CURRENT_PERMISSION_CATALOG côté API), déclarée à chaque modification de
 // membre : le serveur conserve les permissions que ce web ne connaît pas.
-export const PERMISSION_CATALOG = 2;
+// 3 : dates de péremption et seuils de stock.
+export const PERMISSION_CATALOG = 3;
 
 // 1-12H — miroir de STANDARD_MEMBER_PERMISSIONS (backend) : droits de tout
 // membre actif, ajoutés par le calcul serveur, jamais proposés ni retirables

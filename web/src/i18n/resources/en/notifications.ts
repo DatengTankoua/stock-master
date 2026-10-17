@@ -15,7 +15,7 @@ const notificationsEn: Translation<typeof notificationsFr> = {
     },
     stockLow: {
       label: "Running low",
-      help: "When 80% of a product's initial stock has been used.",
+      help: "When a product falls below its custom threshold or, without a threshold, when 80% of its initial stock has been used.",
     },
     saleCreated: {
       label: "New sale",
@@ -65,6 +65,8 @@ const notificationsEn: Translation<typeof notificationsFr> = {
     product: "Product",
     inTrash: "(trash)",
     remainingStock: "Remaining stock",
+    threshold: "Low-stock threshold",
+    thresholdDefault: "Default (80% of the initial stock used)",
     saleCancelled: "This sale has since been cancelled.",
     quantity: "Quantity",
     amount: "Amount",

@@ -155,6 +155,44 @@ describe('1-16E — rythme des ventes et jours estimés', () => {
     ).toBeNull();
   });
 
+  it('seuil personnalisé : appliqué même avec une estimation (« bientôt épuisé » prioritaire), 0 = jamais faible', () => {
+    const estimable = estimateSalesRate({
+      remainingQuantity: 4,
+      window: WINDOW,
+      productCreatedAt: old,
+      days: rows([-1, 5], [-2, 5], [-3, 5]),
+    }); // ≈ 7,47 jours : pas « bientôt épuisé »
+    const level = (remainingQuantity: number, lowStockThreshold: number) => ({
+      remainingQuantity,
+      initialQuantity: 100,
+      lowStockThreshold,
+    });
+    expect(classifyStock(level(4, 5), estimable)).toBe('low');
+    expect(classifyStock(level(4, 4), estimable)).toBeNull(); // au seuil
+    expect(classifyStock(level(4, 0), estimable)).toBeNull();
+    // Sans estimation : le seuil personnalisé remplace les 80 %.
+    const none = estimateSalesRate({
+      remainingQuantity: 2,
+      window: WINDOW,
+      productCreatedAt: old,
+      days: rows([-1, 40], [-2, 40]),
+    });
+    expect(
+      classifyStock(
+        { remainingQuantity: 2, initialQuantity: 10, lowStockThreshold: 1 },
+        none,
+      ),
+    ).toBeNull();
+    expect(
+      classifyStock(
+        { remainingQuantity: 5, initialQuantity: 10, lowStockThreshold: 6 },
+        none,
+      ),
+    ).toBe('low');
+    // Rupture inchangée, quel que soit le seuil.
+    expect(classifyStock(level(0, 0), estimable)).toBe('out');
+  });
+
   it('aucune vente : pas d’estimation (moyenne nulle)', () => {
     const e = estimateSalesRate({
       remainingQuantity: 5,

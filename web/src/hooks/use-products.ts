@@ -12,6 +12,7 @@ import {
   isNetworkError,
   PRODUCTS_PAGE_SIZE,
   type ApiProduct,
+  type CreateProductPayload,
   type UpdateProductPayload,
 } from "@/lib/api";
 import { useSocket } from "@/contexts/socket-context";
@@ -371,14 +372,7 @@ export function useProducts(
   }, [socket, sectionId, requestFull, update, belongsAtHead, insertAtHead]);
 
   const addProduct = useCallback(
-    async (payload: {
-      sectionId: string;
-      name: string;
-      purchasePrice: number;
-      salePrice: number;
-      initialQuantity: number;
-      image: File;
-    }) => {
+    async (payload: CreateProductPayload) => {
       const p = await createProduct(payload);
       // 1-17B : photo comptée dans le quota → occupation relue si affichée.
       notifyStorageChanged();

@@ -45,7 +45,7 @@ export function OfflineProductCard({
   onSell?: () => void;
 }) {
   const { t } = useT("catalog");
-  const { fcfa } = useFormat();
+  const { fcfa, civilDate } = useFormat();
   const status = STATUS_CONFIG[product.status] ? product.status : "in_stock";
   const cfg = STATUS_CONFIG[status];
   const StatusIcon = cfg.icon;
@@ -85,12 +85,14 @@ export function OfflineProductCard({
         {/* 1-12H : informations standard uniquement (même source que la
             fiche en ligne). */}
         <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-          {productInfoItems(product, indicative, { t, fcfa }).map((item) => (
-            <Fragment key={item.key}>
-              <span className="text-muted-foreground">{item.label}</span>
-              <span className="text-right font-medium">{item.value}</span>
-            </Fragment>
-          ))}
+          {productInfoItems(product, indicative, { t, fcfa, civilDate }).map(
+            (item) => (
+              <Fragment key={item.key}>
+                <span className="text-muted-foreground">{item.label}</span>
+                <span className="text-right font-medium">{item.value}</span>
+              </Fragment>
+            ),
+          )}
         </div>
         {onSell && (
           <Button

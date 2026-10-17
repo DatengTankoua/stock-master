@@ -169,11 +169,34 @@ const content: DocumentContent = {
             d&apos;achat, prix de vente et quantité initiale (en FCFA). La photo
             est obligatoire.
           </p>
+          <p>Deux champs sont facultatifs, selon vos droits :</p>
+          <ul>
+            <li>
+              <strong>Date de péremption</strong> (droit « Gérer les dates de
+              péremption ») : une seule date pour toute la fiche, les lots ne
+              sont pas gérés. Une date déjà passée est acceptée avec un
+              avertissement ; la fiche indique alors « dépassée ». Les ventes ne
+              sont pas bloquées et aucune notification de péremption n&apos;est
+              envoyée.
+            </li>
+            <li>
+              <strong>Seuil de stock faible</strong> (droit « Personnaliser les
+              seuils de stock ») : le produit passe en « Stock faible » quand la
+              quantité restante est en dessous de ce seuil. Vide : règle par
+              défaut (20 % ou moins du stock initial, ajouts compris). 0 : seule
+              la rupture est signalée.
+            </li>
+          </ul>
+          <p>
+            Dans « Modifier », « Retirer la date » et « Revenir à la règle par
+            défaut » effacent ces valeurs.
+          </p>
           <h3>Suivre et compléter le stock</h3>
           <ul>
             <li>
               Chaque vente fait baisser le stock du produit. La fiche produit
-              indique « En stock », « Stock faible » ou « Épuisé ».
+              indique « En stock », « Stock faible » ou « Épuisé », ainsi que le
+              seuil appliqué (personnalisé ou par défaut).
             </li>
             <li>
               Pour ajouter des marchandises, choisissez « Modifier » sur le

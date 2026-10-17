@@ -95,6 +95,11 @@ export default function CatalogSectionPage() {
   const canManageProducts = hasPermission(authContext, "products.manage");
   const canAdjustStock = hasPermission(authContext, "stock.adjust");
   const canEditProduct = canManageProducts || canAdjustStock;
+  // Droits propres EN PLUS de `products.manage` (l'API applique la même règle).
+  const canManageExpiry =
+    canManageProducts && hasPermission(authContext, "products.manage_expiry");
+  const canManageThreshold =
+    canManageProducts && hasPermission(authContext, "stock.manage_thresholds");
   // 1-21D : capacité incluse relue après une création depuis cet onglet.
   const [capacityKey, setCapacityKey] = useState(0);
 
@@ -468,6 +473,8 @@ export default function CatalogSectionPage() {
           {canManageProducts && (mode === "products" || mode === "empty") && (
             <CreateProductDialog
               sectionId={params.id}
+              canManageExpiry={canManageExpiry}
+              canManageThreshold={canManageThreshold}
               onCreated={async (payload) => {
                 await addProduct(payload);
                 setCapacityKey((key) => key + 1);
@@ -642,6 +649,8 @@ export default function CatalogSectionPage() {
         onOpenChange={setEditOpen}
         canManageDescription={canManageProducts}
         canAdjustStock={canAdjustStock}
+        canManageExpiry={canManageExpiry}
+        canManageThreshold={canManageThreshold}
         onUpdated={(id, payload) => editProduct(id, payload)}
       />
     </div>

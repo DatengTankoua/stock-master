@@ -49,7 +49,7 @@ const analyticsEn: Translation<typeof analyticsFr> = {
       low: {
         title: "Low stock",
         reason:
-          "80% of the initial stock sold; not enough sales to estimate the days left.",
+          "Below the product's custom threshold; without a threshold, 80% of the initial stock sold and not enough sales to estimate the days left.",
         count_one: "{{n}} product",
         count_other: "{{n}} products",
       },
@@ -130,13 +130,15 @@ const analyticsEn: Translation<typeof analyticsFr> = {
     sections: {
       out: "Stock-out observed (stock at 0)",
       soon: "Estimated risk of running out soon",
-      low: "Low stock (80% threshold)",
+      low: "Low stock (custom threshold or 80% sold)",
       stale: "No sales recorded recently",
       recent: "Recently added, not sold yet",
       price: "Price to check",
     },
     sectionCount: "{{title}} ({{n}})",
     remaining: "{{n}} in stock",
+    thresholdCustom: "custom threshold: {{n}}",
+    thresholdDefault: "default threshold (80% sold)",
     daysLeft: "≈ {{days}} days of stock",
     perDay: "{{avg}} sold / day",
     notEnough: "Not enough sales to estimate",

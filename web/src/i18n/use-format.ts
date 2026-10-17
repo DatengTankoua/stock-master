@@ -10,6 +10,8 @@ import {
   formatNumber,
 } from "@/i18n/format";
 import { useLocale } from "@/i18n/locale-provider";
+import { intlLocale } from "@/i18n/settings";
+import { formatCivilDate } from "@/lib/product-expiry";
 
 /** Formats d'affichage liés à la langue courante (composants client). */
 export function useFormat() {
@@ -29,6 +31,8 @@ export function useFormat() {
         value: string | number | Date,
         options: Intl.DateTimeFormatOptions,
       ) => dateFormat(locale, options).format(new Date(value)),
+      /** Date civile `AAAA-MM-JJ` (péremption), sans décalage de fuseau. */
+      civilDate: (value: string) => formatCivilDate(value, intlLocale(locale)),
     }),
     [locale],
   );

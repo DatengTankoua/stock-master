@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { isExpiryPast } from "@/lib/product-expiry";
 
 // 1-12H — source UNIQUE des informations produit affichées (fiche, cartes,
 // modal du catalogue, hors ligne). Ne décide rien : l'API a déjà projeté le
@@ -8,6 +9,8 @@ import type { TFunction } from "i18next";
 export type ProductInfoKey =
   | "salePrice"
   | "stock"
+  | "expiryDate"
+  | "lowStockThreshold"
   | "initialQuantity"
   | "unitsSold"
   | "purchasePrice"
@@ -21,6 +24,8 @@ export type ProductInfoKey =
 export interface ProductInfoFormat {
   t: TFunction<"catalog">;
   fcfa: (amount: number) => string;
+  /** Date civile `AAAA-MM-JJ` localisée, sans décalage de fuseau. */
+  civilDate: (value: string) => string;
 }
 
 export interface ProductInfoItem {
@@ -34,6 +39,8 @@ export interface ProductInfoItem {
 export interface ProductInfoSource {
   salePrice: number;
   remainingQuantity: number;
+  expiryDate?: string | null;
+  lowStockThreshold?: number | null;
   initialQuantity?: number;
   unitsSold?: number;
   purchasePrice?: number;
@@ -77,6 +84,31 @@ export function productInfoItems(
           : String(stock.value),
     },
   ];
+  // Date de péremption : seulement si renseignée ; « dépassée » au plus tôt
+  // le lendemain de la date (jour civil de l'appareil).
+  if (product.expiryDate) {
+    const past = isExpiryPast(product.expiryDate);
+    items.push({
+      key: "expiryDate",
+      label: t("info.expiryDate"),
+      value: past
+        ? t("info.expiryPast", { date: format.civilDate(product.expiryDate) })
+        : format.civilDate(product.expiryDate),
+      ...(past ? { tone: "negative" as const } : {}),
+    });
+  }
+  // Seuil : personnalisé (valeur, `0` compris) ou règle par défaut ; absent
+  // (API antérieure) : rien n'est affiché.
+  if (product.lowStockThreshold !== undefined) {
+    items.push({
+      key: "lowStockThreshold",
+      label: t("info.lowStockThreshold"),
+      value:
+        product.lowStockThreshold === null
+          ? t("info.thresholdDefault")
+          : t("info.thresholdCustom", { count: product.lowStockThreshold }),
+    });
+  }
   if (product.initialQuantity !== undefined) {
     items.push({
       key: "initialQuantity",

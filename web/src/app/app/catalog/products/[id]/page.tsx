@@ -49,6 +49,8 @@ const AUDIT_ACTIONS = [
   "deleted",
   "sale_updated",
   "sale_cancelled",
+  "expiry_changed",
+  "threshold_changed",
 ] as const;
 
 function auditLabel(action: string, t: TFunction<"catalog">): string {
@@ -107,6 +109,39 @@ function AuditEntry({ log }: { log: ApiAuditLog }) {
             })}
           </p>
         )}
+        {log.action === "expiry_changed" && log.details?.expiryDate ? (
+          <p className="text-xs mt-0.5">
+            {(() => {
+              const change = log.details.expiryDate as {
+                from: string | null;
+                to: string | null;
+              };
+              const show = (v: string | null) =>
+                v ? format.civilDate(v) : t("audit.noExpiry");
+              return t("audit.valueChange", {
+                from: show(change.from),
+                to: show(change.to),
+              });
+            })()}
+          </p>
+        ) : null}
+        {log.action === "threshold_changed" &&
+        log.details?.lowStockThreshold ? (
+          <p className="text-xs mt-0.5">
+            {(() => {
+              const change = log.details.lowStockThreshold as {
+                from: number | null;
+                to: number | null;
+              };
+              const show = (v: number | null) =>
+                v === null ? t("audit.defaultThreshold") : String(v);
+              return t("audit.valueChange", {
+                from: show(change.from),
+                to: show(change.to),
+              });
+            })()}
+          </p>
+        ) : null}
         {log.action === "sale_updated" && log.details && (
           <p className="text-xs mt-0.5">
             {log.details.quantity
@@ -358,7 +393,7 @@ export default function ProductDetailPage() {
             {productInfoItems(
               detail,
               indicative,
-              { t, fcfa: fmt },
+              { t, fcfa: fmt, civilDate: format.civilDate },
               { showServerStock: true },
             ).map((m) => (
               <Card key={m.key}>

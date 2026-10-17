@@ -18,6 +18,7 @@ import {
   saleRangeMatch,
 } from './month-range';
 import { INSIGHT_THRESHOLDS } from './insight-thresholds';
+import { customLowStockThreshold, isLowStock } from '../products/stock-level';
 import {
   addLocalDays,
   assignPrimaryPriority,
@@ -90,6 +91,8 @@ export interface InsightStockItem {
   name: string;
   sectionId: string;
   remainingQuantity: number;
+  /** Seuil personnalisé (`null` : règle par défaut). */
+  lowStockThreshold: number | null;
   estimate: SalesRateEstimate;
 }
 
@@ -100,6 +103,7 @@ interface InsightProductSource {
   sectionId: Types.ObjectId;
   remainingQuantity: number;
   initialQuantity: number;
+  lowStockThreshold?: number | null;
   purchasePrice: number;
   createdAt?: Date;
 }
@@ -191,10 +195,10 @@ export class AnalyticsService {
       unitsSold,
       totalTransactions: transactions,
       productsCount: products.length,
+      // Même règle que le statut des produits (seuil personnalisé ou par
+      // défaut), rupture exclue.
       lowStockCount: products.filter(
-        (p) =>
-          p.remainingQuantity > 0 &&
-          p.remainingQuantity / p.initialQuantity <= 0.2,
+        (p) => p.remainingQuantity > 0 && isLowStock(p),
       ).length,
       outOfStockCount: products.filter((p) => p.remainingQuantity === 0).length,
     };
@@ -809,6 +813,7 @@ export class AnalyticsService {
         sectionId: 1,
         remainingQuantity: 1,
         initialQuantity: 1,
+        lowStockThreshold: 1,
         purchasePrice: 1,
         createdAt: 1,
       })
@@ -919,6 +924,7 @@ export class AnalyticsService {
         name: p.name,
         sectionId: String(p.sectionId),
         remainingQuantity: p.remainingQuantity,
+        lowStockThreshold: customLowStockThreshold(p.lowStockThreshold),
         estimate,
       };
       const signal = classifyStock(p, estimate);
@@ -960,6 +966,7 @@ export class AnalyticsService {
         name: r.name,
         sectionId: r.sectionId,
         remainingQuantity: r.remainingQuantity,
+        lowStockThreshold: r.lowStockThreshold,
         estimate: r.estimate,
       })),
     };

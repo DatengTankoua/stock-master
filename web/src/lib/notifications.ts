@@ -65,6 +65,8 @@ export type NotificationDetails =
       productName?: string;
       remainingQuantity?: number;
       initialQuantity?: number;
+      /** Seuil personnalisé actuel ; `null` : règle par défaut. */
+      lowStockThreshold?: number | null;
       inTrash?: boolean;
       removed?: boolean;
     }

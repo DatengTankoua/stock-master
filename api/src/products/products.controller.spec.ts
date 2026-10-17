@@ -9,6 +9,7 @@ import { ResolvedOrganizationContext } from '../organizations/organizations.serv
 import { OrganizationRole } from '../organizations/permissions';
 import type { User } from '../users/schemas/user.schema';
 import { PushOutboxService } from '../push/push-outbox.service';
+import type { UpdateProductDto } from './dto/update-product.dto';
 
 const ORG_A = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const PRODUCT_ID = '223344556677889900112233';
@@ -722,6 +723,160 @@ describe('ProductsController — transmission du tenant (1-4B)', () => {
       expect((thrown as ForbiddenException).getResponse()).toEqual({
         code: 'PERMISSION_DENIED',
         message: 'Permission insuffisante.',
+      });
+    });
+
+    describe('date de péremption et seuil : droit propre EN PLUS de products.manage', () => {
+      const expiryOnly = makeContext(ORG_A, OrganizationRole.SELLER, [
+        'products.manage_expiry',
+      ]);
+      const manageExpiry = makeContext(ORG_A, OrganizationRole.SELLER, [
+        'products.manage',
+        'products.manage_expiry',
+      ]);
+      const manageThreshold = makeContext(ORG_A, OrganizationRole.SELLER, [
+        'products.manage',
+        'stock.manage_thresholds',
+      ]);
+      const thresholdAndStock = makeContext(ORG_A, OrganizationRole.SELLER, [
+        'stock.adjust',
+        'stock.manage_thresholds',
+      ]);
+
+      it.each([
+        ['renseigner', { expiryDate: '2026-12-31' }],
+        ['effacer', { expiryDate: null }],
+      ])(
+        'date (%s) : refusée avec products.manage seul, ou avec le droit propre seul',
+        async (_label, dto) => {
+          for (const ctx of [productsManageOnly, expiryOnly]) {
+            await expect(
+              controller.update(PRODUCT_ID, dto, undefined, user, ctx),
+            ).rejects.toThrow(ForbiddenException);
+          }
+          expect(serviceStub.update).not.toHaveBeenCalled();
+          await controller.update(
+            PRODUCT_ID,
+            dto,
+            undefined,
+            user,
+            manageExpiry,
+          );
+          expect(serviceStub.update).toHaveBeenCalledTimes(1);
+        },
+      );
+
+      it.each([
+        ['renseigner', { lowStockThreshold: 5 }],
+        ['0 explicite', { lowStockThreshold: 0 }],
+        ['revenir au défaut', { lowStockThreshold: null }],
+      ])(
+        'seuil (%s) : exige products.manage ET stock.manage_thresholds',
+        async (_label, dto) => {
+          for (const ctx of [
+            productsManageOnly,
+            thresholdAndStock,
+            manageExpiry,
+          ]) {
+            await expect(
+              controller.update(PRODUCT_ID, dto, undefined, user, ctx),
+            ).rejects.toThrow(ForbiddenException);
+          }
+          expect(serviceStub.update).not.toHaveBeenCalled();
+          await controller.update(
+            PRODUCT_ID,
+            dto,
+            undefined,
+            user,
+            manageThreshold,
+          );
+          expect(serviceStub.update).toHaveBeenCalledTimes(1);
+        },
+      );
+
+      it('n’ouvrent aucun autre champ : prix ou stock toujours refusés sans stock.adjust', async () => {
+        for (const dto of [
+          { lowStockThreshold: 5, additionalStock: 3 },
+          { expiryDate: '2026-12-31', salePrice: 10 },
+        ]) {
+          await expect(
+            controller.update(PRODUCT_ID, dto, undefined, user, {
+              ...manageExpiry,
+              permissions: [
+                'products.manage',
+                'products.manage_expiry',
+                'stock.manage_thresholds',
+              ],
+            }),
+          ).rejects.toThrow(ForbiddenException);
+        }
+        expect(serviceStub.update).not.toHaveBeenCalled();
+      });
+
+      it('requête refusée en entier : aucun champ autorisé n’est écrit à côté', async () => {
+        await expect(
+          controller.update(
+            PRODUCT_ID,
+            { name: 'N2', expiryDate: '2026-12-31' },
+            undefined,
+            user,
+            productsManageOnly,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+        expect(serviceStub.update).not.toHaveBeenCalled();
+      });
+
+      it('autres champs permis sans les nouveaux droits : transmis tels quels, champs protégés absents du DTO', async () => {
+        await controller.update(
+          PRODUCT_ID,
+          { name: 'N2' },
+          undefined,
+          user,
+          productsManageOnly,
+        );
+        const dto = serviceStub.update.mock.calls[0][2] as UpdateProductDto;
+        expect(dto).toEqual({ name: 'N2' });
+      });
+
+      it('création : champ renseigné sans le droit → 403 avant tout envoi de photo ni écriture', async () => {
+        const base = {
+          sectionId: SECTION_QUERY,
+          name: 'N',
+          purchasePrice: 5,
+          salePrice: 10,
+          initialQuantity: 7,
+        };
+        for (const [extra, ctx] of [
+          [{ expiryDate: '2026-12-31' }, productsManageOnly],
+          [{ lowStockThreshold: 0 }, manageExpiry],
+        ] as const) {
+          await expect(
+            controller.create({ ...base, ...extra }, imageFile(), user, ctx),
+          ).rejects.toThrow(ForbiddenException);
+        }
+        expect(s3Stub.uploadValidatedImage).not.toHaveBeenCalled();
+        expect(serviceStub.create).not.toHaveBeenCalled();
+
+        await controller.create(
+          { ...base, lowStockThreshold: 0 },
+          imageFile(),
+          user,
+          manageThreshold,
+        );
+        expect(serviceStub.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('propriétaire et administrateur : droits complets par défaut', async () => {
+        for (const role of [OrganizationRole.OWNER, OrganizationRole.ADMIN]) {
+          await controller.update(
+            PRODUCT_ID,
+            { expiryDate: '2026-12-31', lowStockThreshold: 3 },
+            undefined,
+            user,
+            makeContext(ORG_A, role, []),
+          );
+        }
+        expect(serviceStub.update).toHaveBeenCalledTimes(2);
       });
     });
   });
