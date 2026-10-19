@@ -69,6 +69,27 @@ peut se tromper.
   réserve l'espace du bouton, pour ne masquer ni les liens de langue ni un
   appel à l'action. Le site n'a pas de bandeau de consentement aux cookies.
 
+### Pages de l'application (`/app`)
+
+- **Bouton flottant.** C'est le même composant, en variante `app`. Il est
+  monté par le shell `/app/layout.tsx`.
+- **Conditions d'affichage.** Il n'apparaît que si toutes ces conditions
+  sont remplies :
+  - session applicative avec un contexte à jour ;
+  - aucun blocage commercial ;
+  - droit `support.contact`, comme pour l'Assistance ;
+  - page autre que l'Assistance, qui a déjà sa propre carte.
+- **Placement.** Sur mobile, le bouton (48 px, icône seule) se place
+  au-dessus de la barre de navigation fixe, et plus haut quand cette barre
+  s'agrandit hors connexion. Sur ordinateur, il est dans le coin bas droit.
+  La marge basse du `<main>` est agrandie (`pb-36`, `pb-40` hors connexion,
+  `md:pb-24`) pour que le bouton ne masque jamais la fin d'une page.
+- **Contenu de la fenêtre.** Les sujets sont les catégories de l'Assistance
+  (utilisation, abonnement, problème technique, autre). Une ligne rappelle
+  que la conversation n'est pas synchronisée et qu'aucune information du
+  compte n'est ajoutée. L'alternative e-mail renvoie vers le formulaire
+  d'Assistance existant et ferme la fenêtre.
+
 ### Organisation → Assistance
 
 - **Ordre.** La carte « Sur WhatsApp (recommandé) » vient en premier, puis
@@ -100,7 +121,8 @@ peut se tromper.
 | `web/src/lib/whatsapp-contact.ts` | Sujets publics, limites, `composeContactText`, `whatsappHref`, `mailtoHref` |
 | `web/src/components/contact/whatsapp-continue.tsx` | Fin commune : aperçu, avertissement, hors ligne, lien, après-clic, alternative e-mail |
 | `web/src/components/contact/whatsapp-icon.tsx` | Pictogramme local (tracés lucide), aucune ressource Meta |
-| `web/src/components/public/whatsapp-widget.tsx` | Bouton flottant et fenêtre publique |
+| `web/src/components/contact/whatsapp-widget.tsx` | Bouton flottant et fenêtre, variantes `public` et `app` |
+| `web/src/app/app/layout.tsx` | Montage dans l'application (conditions d'accès), marge basse |
 | `web/src/components/public/public-footer.tsx` | Coordonnées WhatsApp, montage du bouton, espace réservé |
 | `web/src/components/organization/whatsapp-support-card.tsx` | Carte WhatsApp de l'Assistance |
 | `web/src/app/app/organization/support/page.tsx` | WhatsApp en premier, formulaire e-mail inchangé |
@@ -113,7 +135,7 @@ peut se tromper.
 
 | Contrôle | Résultat |
 |---|---|
-| `test:whatsapp-contact` (nouveau, 12 tests) | 12/12. Couvre le numéro, les liens, l'encodage (accents, `«»`, `&`, `#`, `?`, `+`, `%`, emoji, CRLF → `%0A`, ligne vide après le sujet), le texte transmis sans ajout et le `mailto` en `%20`. Garde-fous statiques : numéro jamais recopié hors de `site-identity.ts` ; aucun stockage, `fetch`, axios, script, iframe ou Meta ; aucun appel à l'envoi d'assistance ; bouton monté sur les pages publiques et jamais ouvert d'office ; WhatsApp avant le formulaire e-mail |
+| `test:whatsapp-contact` (nouveau, 14 tests) | 14/14. Côté application : sujets identiques aux catégories de l'Assistance ; bouton réservé au droit `support.contact`, hors blocage commercial et hors page Assistance. Couvre le numéro, les liens, l'encodage (accents, `«»`, `&`, `#`, `?`, `+`, `%`, emoji, CRLF → `%0A`, ligne vide après le sujet), le texte transmis sans ajout et le `mailto` en `%20`. Garde-fous statiques : numéro jamais recopié hors de `site-identity.ts` ; aucun stockage, `fetch`, axios, script, iframe ou Meta ; aucun appel à l'envoi d'assistance ; bouton monté sur les pages publiques et jamais ouvert d'office ; WhatsApp avant le formulaire e-mail |
 | `tsc --noEmit` | OK |
 | ESLint (fichiers modifiés) | OK |
 | `check-i18n` | OK, 0 problème (mêmes clés, variables et balises FR/EN) |
@@ -144,6 +166,13 @@ peut se tromper.
 - **Conversations non synchronisées.** Aucune conversation n'est reliée à
   Stock Master. Une demande traitée sur WhatsApp n'a pas de référence
   d'assistance.
+- **Écran de blocage commercial.** Quand l'abonnement est expiré,
+  l'application affiche un écran de blocage, sans le bouton WhatsApp. Ces
+  utilisateurs passent par la page Contact publique. L'ajouter à cet écran
+  reste une décision produit.
+- **Notifications temporaires.** Sur ordinateur, les notifications
+  temporaires (Sonner, en bas à droite) peuvent recouvrir le bouton quelques
+  secondes.
 - **Copie hors ligne.** La copie hors ligne des pages publiques
   (`public/sw.js`) contiendra le bouton. Ouvert hors ligne, il affiche le
   message « nécessite une connexion ».

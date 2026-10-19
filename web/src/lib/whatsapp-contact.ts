@@ -16,6 +16,18 @@ export const WHATSAPP_TOPICS = [
 
 export type WhatsAppTopic = (typeof WHATSAPP_TOPICS)[number];
 
+/**
+ * Sujets proposés dans l'application : mêmes clés que les catégories de
+ * l'Assistance (`SUPPORT_CATEGORIES`, libellés `support.categories.*`),
+ * recopiées pour ne pas charger le client API dans les pages publiques.
+ */
+export const WHATSAPP_APP_TOPICS = [
+  "usage",
+  "subscription",
+  "technical",
+  "other",
+] as const;
+
 /** Limite du message : garde le lien `wa.me` de taille raisonnable. */
 export const WHATSAPP_MESSAGE_MAX_LENGTH = 1000;
 

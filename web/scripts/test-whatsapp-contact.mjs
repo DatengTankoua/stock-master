@@ -154,7 +154,7 @@ const WHATSAPP_FILES = [
   "lib/whatsapp-contact.ts",
   "components/contact/whatsapp-continue.tsx",
   "components/contact/whatsapp-icon.tsx",
-  "components/public/whatsapp-widget.tsx",
+  "components/contact/whatsapp-widget.tsx",
   "components/organization/whatsapp-support-card.tsx",
 ];
 
@@ -182,7 +182,7 @@ test("le parcours WhatsApp n'utilise pas l'envoi d'assistance", () => {
 test("bouton flottant monté sur les pages publiques, jamais ouvert d'office", () => {
   const footer = read("components/public/public-footer.tsx");
   assert.match(footer, /<WhatsAppWidget \/>/);
-  const widget = read("components/public/whatsapp-widget.tsx");
+  const widget = read("components/contact/whatsapp-widget.tsx");
   assert.doesNotMatch(widget, /defaultOpen|open=\{true\}/);
   // Pages publiques : accueil et gabarit des pages d'aide/juridiques.
   assert.match(read("app/page.tsx"), /<PublicFooter /);
@@ -196,4 +196,31 @@ test("WhatsApp présenté avant le formulaire e-mail de l'Assistance", () => {
   assert.ok(card > 0 && form > card);
   // Parcours e-mail conservé.
   assert.match(page, /submitSupportRequest\(/);
+});
+
+test("application : sujets = catégories de l'Assistance", () => {
+  const { WHATSAPP_APP_TOPICS } = load("whatsapp-contact.ts");
+  const support = read("lib/support.ts");
+  const declared = support.match(/SUPPORT_CATEGORIES = \[([^\]]*)\]/)[1];
+  assert.deepEqual(
+    [...WHATSAPP_APP_TOPICS],
+    [...declared.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]),
+  );
+});
+
+test("application : bouton réservé au droit support.contact, hors Assistance", () => {
+  const layout = read("app/app/layout.tsx");
+  const mount = layout.indexOf('<WhatsAppWidget variant="app"');
+  assert.ok(mount > 0);
+  const guard = layout.slice(
+    layout.lastIndexOf("{contextIsCurrent", mount),
+    mount,
+  );
+  assert.match(guard, /effectivePermissions\.includes\("support\.contact"\)/);
+  assert.match(guard, /hasApplicationAccess\(authContext\)/);
+  assert.match(guard, /!commercialBlock/);
+  assert.match(
+    guard,
+    /!pathname\.startsWith\("\/app\/organization\/support"\)/,
+  );
 });
