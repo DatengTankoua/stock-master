@@ -28,7 +28,7 @@ import {
 } from "@/lib/subscription-offers";
 import { offerPitch } from "@/lib/subscription-offer-pitch";
 import { PRODUCT_CAPACITY } from "@/lib/product-capacity";
-import { CONTACT_EMAILS, SITE } from "@/lib/legal/site-identity";
+import { CONTACT_EMAILS, SITE, WHATSAPP } from "@/lib/legal/site-identity";
 import { publicPageMetadata } from "@/lib/seo/metadata";
 import {
   CANONICAL_ORIGIN,
@@ -534,6 +534,7 @@ function structuredData(
           height: 512,
         },
         email: CONTACT_EMAILS.contact,
+        telephone: WHATSAPP.e164,
         areaServed: { "@type": "Country", name: "Cameroon" },
       },
       {

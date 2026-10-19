@@ -54,6 +54,29 @@ const publicFr = {
     link: "Voir la version anglaise",
     dismiss: "Fermer",
   },
+  // Contact WhatsApp : pied de page et fenêtre flottante. Aucune promesse
+  // de réponse immédiate ni de présence permanente.
+  whatsapp: {
+    lead: "Écrivez-nous sur WhatsApp à toute heure.",
+    linkLabel: "WhatsApp : {{number}}",
+    open: "Écrire à Stock Master sur WhatsApp",
+    short: "WhatsApp",
+    title: "Écrire à Stock Master",
+    greeting:
+      "Bonjour ! Préparez votre question ici, puis continuez sur WhatsApp pour l'envoyer à l'équipe Stock Master. Elle vous répondra dès que possible.",
+    topic: "Sujet (facultatif)",
+    noTopic: "Aucun sujet précis",
+    topics: {
+      discovery: "Découvrir Stock Master",
+      subscription: "Abonnement",
+      technical: "Aide technique",
+      other: "Autre",
+    },
+    message: "Votre question",
+    emailLead: "Vous préférez l'e-mail ? Écrivez à",
+    emailSubject: "Question depuis le site Stock Master",
+    emailSubjectTopic: "{{topic}} : question depuis le site Stock Master",
+  },
   landing: {
     meta: {
       title:

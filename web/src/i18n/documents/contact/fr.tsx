@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MailLink } from "@/components/legal/mail-link";
-import { LOCATIONS, SITE } from "@/lib/legal/site-identity";
+import { LOCATIONS, SITE, WHATSAPP } from "@/lib/legal/site-identity";
 
 // 1-16C / 1-16C.1 — Contact public par liens e-mail (aucun formulaire
 // public). Reste la voie pour toute personne qui ne peut pas accéder à son
@@ -17,11 +17,50 @@ const content: DocumentContent = {
   title: "Contacter Stock Master",
   intro: (
     <p>
-      Choisissez l&apos;adresse qui correspond à votre demande : elle arrive
-      directement à la bonne personne.
+      Le plus simple : écrivez-nous sur WhatsApp. Pour une demande écrite,
+      choisissez l&apos;adresse qui correspond : elle arrive directement à la
+      bonne personne.
     </p>
   ),
   sections: [
+    // Contact WhatsApp : canal prioritaire. Aucune promesse de réponse
+    // immédiate ni de présence humaine permanente.
+    {
+      id: "whatsapp",
+      title: "WhatsApp",
+      content: (
+        <>
+          <p>
+            <strong>Écrivez-nous sur WhatsApp à toute heure.</strong> Nous vous
+            répondons dès que possible.
+          </p>
+          <ul>
+            <li>
+              WhatsApp :{" "}
+              <a
+                href={WHATSAPP.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                translate="no"
+              >
+                {WHATSAPP.display}
+              </a>
+            </li>
+            <li>
+              Téléphone :{" "}
+              <a href={WHATSAPP.tel} translate="no">
+                {WHATSAPP.display}
+              </a>
+            </li>
+          </ul>
+          <p>
+            La conversation a lieu dans WhatsApp, en dehors de {SITE.name}. Ne
+            partagez jamais votre mot de passe ni un code reçu par SMS ou par
+            e-mail.
+          </p>
+        </>
+      ),
+    },
     {
       id: "assistance",
       title: "Assistance",
@@ -104,7 +143,7 @@ const content: DocumentContent = {
               <li key={location}>{location}</li>
             ))}
           </ul>
-          {/* À AJOUTER : téléphone (annoncé ultérieurement). */}
+          {/* Téléphone et WhatsApp : section « WhatsApp » ci-dessus. */}
           <p>
             Les e-mails automatiques (confirmation d&apos;adresse,
             réinitialisation du mot de passe) sont envoyés depuis une adresse du

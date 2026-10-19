@@ -181,6 +181,20 @@ const organizationFr = {
     title: "Contacter le service client",
     intro:
       "Décrivez votre question ou votre problème. La réponse arrivera par e-mail.",
+    channels:
+      "Écrivez-nous sur WhatsApp, le moyen le plus direct, ou envoyez votre demande par e-mail avec le formulaire ci-dessous.",
+    emailTitle: "Par e-mail",
+    whatsapp: {
+      title: "Sur WhatsApp (recommandé)",
+      intro:
+        "Écrivez-nous sur WhatsApp à toute heure. Préparez un sujet et un message ici, puis continuez dans WhatsApp pour les envoyer.",
+      notSynced:
+        "La conversation se poursuit dans WhatsApp : ses messages et ses réponses ne sont ni enregistrés ni synchronisés dans Stock Master, et ne créent pas de demande d'assistance. Seul le texte affiché est transmis, sans aucune information de votre compte ou de votre commerce. N'y partagez jamais votre mot de passe.",
+      subject: "Sujet (facultatif)",
+      message: "Message",
+      emailAlternative:
+        "Vous préférez l'e-mail ? Utilisez le <form>formulaire « Par e-mail »</form> ci-dessous : la réponse arrivera à votre adresse e-mail.",
+    },
     forbidden:
       "Votre rôle ne permet pas de contacter le service client depuis ce commerce. Demandez ce droit au propriétaire ou à un administrateur, ou utilisez les coordonnées de la page <contact>Contact</contact>.",
     sentTitle: "Message transmis",

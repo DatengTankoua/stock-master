@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MailLink } from "@/components/legal/mail-link";
-import { LOCATIONS, SITE } from "@/lib/legal/site-identity";
+import { LOCATIONS, SITE, WHATSAPP } from "@/lib/legal/site-identity";
 import type { DocumentContent } from "@/i18n/documents/types";
 
 // 1-16G — Page Contact en anglais (mêmes adresses, aucune ajoutée).
@@ -11,11 +11,46 @@ const content: DocumentContent = {
   title: "Contact Stock Master",
   intro: (
     <p>
-      Choose the address that matches your request: it goes straight to the
-      right person.
+      The easiest way: message us on WhatsApp. For a written request, choose the
+      address that matches it: it goes straight to the right person.
     </p>
   ),
   sections: [
+    {
+      id: "whatsapp",
+      title: "WhatsApp",
+      content: (
+        <>
+          <p>
+            <strong>Message us on WhatsApp at any time.</strong> We reply as
+            soon as we can.
+          </p>
+          <ul>
+            <li>
+              WhatsApp:{" "}
+              <a
+                href={WHATSAPP.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                translate="no"
+              >
+                {WHATSAPP.display}
+              </a>
+            </li>
+            <li>
+              Phone:{" "}
+              <a href={WHATSAPP.tel} translate="no">
+                {WHATSAPP.display}
+              </a>
+            </li>
+          </ul>
+          <p>
+            The conversation takes place in WhatsApp, outside {SITE.name}. Never
+            share your password or a code received by text message or email.
+          </p>
+        </>
+      ),
+    },
     {
       id: "assistance",
       title: "Support",

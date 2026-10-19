@@ -16,6 +16,7 @@
     "test:i18n": "node scripts/check-i18n.mjs",
     "test:batch-sale": "node scripts/test-batch-sale.mjs",
     "test:push-reconnect": "node scripts/test-push-reconnect.mjs",
+    "test:whatsapp-contact": "node scripts/test-whatsapp-contact.mjs",
     "i18n:coverage": "node scripts/i18n-coverage.mjs --fail"
   },
   "dependencies": {

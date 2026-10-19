@@ -56,6 +56,27 @@ const publicEn: Translation<typeof publicFr> = {
     link: "View in English",
     dismiss: "Dismiss",
   },
+  whatsapp: {
+    lead: "Message us on WhatsApp at any time.",
+    linkLabel: "WhatsApp: {{number}}",
+    open: "Message Stock Master on WhatsApp",
+    short: "WhatsApp",
+    title: "Message Stock Master",
+    greeting:
+      "Hello! Prepare your question here, then continue on WhatsApp to send it to the Stock Master team. They will reply as soon as they can.",
+    topic: "Subject (optional)",
+    noTopic: "No specific subject",
+    topics: {
+      discovery: "Discovering Stock Master",
+      subscription: "Subscription",
+      technical: "Technical help",
+      other: "Other",
+    },
+    message: "Your question",
+    emailLead: "Prefer email? Write to",
+    emailSubject: "Question from the Stock Master website",
+    emailSubjectTopic: "{{topic}}: question from the Stock Master website",
+  },
   landing: {
     meta: {
       title: "Stock and sales management software in Cameroon | Stock Master",

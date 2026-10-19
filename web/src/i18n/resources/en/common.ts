@@ -43,6 +43,18 @@ const commonEn: Translation<typeof commonFr> = {
     text: "The prices and terms shown may have changed since. Signing up, logging in and payment need an Internet connection.",
     refresh: "Refresh",
   },
+  whatsapp: {
+    subjectLine: "Subject: {{subject}}",
+    charCount: "{{length}} / {{count}} characters",
+    previewLabel: "Text prefilled in WhatsApp (you can edit it before sending)",
+    notice: "WhatsApp will open. Send your message to start the conversation.",
+    continue: "Continue on WhatsApp",
+    newWindow: "(opens WhatsApp or a new tab)",
+    afterOpen:
+      "Stock Master does not send anything for you: send the message from WhatsApp. If WhatsApp did not open, your text is still here; try again or email us.",
+    offline:
+      "No connection: both WhatsApp and email need the Internet. Your text stays on this screen; nothing will be sent automatically.",
+  },
   actions: {
     retry: "Try again",
     cancel: "Cancel",

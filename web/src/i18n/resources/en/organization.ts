@@ -171,6 +171,20 @@ const organizationEn: Translation<typeof organizationFr> = {
     title: "Contact customer support",
     intro:
       "Describe your question or your problem. The reply will arrive by email.",
+    channels:
+      "Message us on WhatsApp, the most direct way, or send your request by email with the form below.",
+    emailTitle: "By email",
+    whatsapp: {
+      title: "On WhatsApp (recommended)",
+      intro:
+        "Message us on WhatsApp at any time. Prepare a subject and a message here, then continue in WhatsApp to send them.",
+      notSynced:
+        "The conversation continues in WhatsApp: its messages and replies are neither saved nor synchronised in Stock Master, and they do not create a support request. Only the text shown is passed on, without any information about your account or your shop. Never share your password there.",
+      subject: "Subject (optional)",
+      message: "Message",
+      emailAlternative:
+        "Prefer email? Use the <form>“By email” form</form> below: the reply will arrive at your email address.",
+    },
     forbidden:
       "Your role does not allow you to contact customer support from this shop. Ask the owner or an administrator for this right, or use the details on the <contact>Contact</contact> page.",
     sentTitle: "Message sent",
