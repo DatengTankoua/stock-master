@@ -41,6 +41,72 @@ export interface OfflineCatalogProduct {
   salePrice: number;
   remainingQuantity: number;
   status: "in_stock" | "low_stock" | "out_of_stock";
+  // Facultatif (même schemaVersion, ignoré par une version antérieure) :
+  // produit suivi par lots. Un instantané antérieur à l'activation l'ignore :
+  // l'API refuse alors la vente sans lots (409, conflit visible de l'outbox).
+  stockTracking?: "batches";
+  // Lot B (facultatif, même schemaVersion) : identité des lots vendables à
+  // l'écriture du snapshot — JAMAIS leurs quantités (détail du stock, non
+  // vérifiable hors ligne, comme le prix d'achat en v3). La validité des
+  // dates est recalculée à l'usage (jour courant ≥ `businessDate`).
+  batchSale?: OfflineBatchSale;
+}
+
+export interface OfflineBatchSale {
+  businessDate: string;
+  timeZone: string;
+  batches: {
+    _id: string;
+    reference: string;
+    expiryDate: string | null;
+    manufacturerLot: string | null;
+  }[];
+}
+
+const CIVIL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const OBJECT_ID = /^[0-9a-f]{24}$/i;
+
+/** Copie défensive et validée ; invalide → absente (vente par lots fermée). */
+function toOfflineBatchSale(value: unknown): OfflineBatchSale | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Partial<OfflineBatchSale>;
+  if (
+    typeof v.businessDate !== "string" ||
+    !CIVIL_DATE.test(v.businessDate) ||
+    typeof v.timeZone !== "string" ||
+    !Array.isArray(v.batches) ||
+    v.batches.length > 200
+  ) {
+    return undefined;
+  }
+  const batches: OfflineBatchSale["batches"] = [];
+  for (const b of v.batches) {
+    if (
+      !b ||
+      typeof b._id !== "string" ||
+      !OBJECT_ID.test(b._id) ||
+      typeof b.reference !== "string" ||
+      b.reference.length > 32 ||
+      !(
+        b.expiryDate === null ||
+        (typeof b.expiryDate === "string" && CIVIL_DATE.test(b.expiryDate))
+      ) ||
+      !(
+        b.manufacturerLot === null ||
+        (typeof b.manufacturerLot === "string" &&
+          b.manufacturerLot.length <= 64)
+      )
+    ) {
+      return undefined;
+    }
+    batches.push({
+      _id: b._id,
+      reference: b.reference,
+      expiryDate: b.expiryDate,
+      manufacturerLot: b.manufacturerLot,
+    });
+  }
+  return { businessDate: v.businessDate, timeZone: v.timeZone, batches };
 }
 
 /**
@@ -49,8 +115,13 @@ export interface OfflineCatalogProduct {
  * persistés dans IndexedDB.
  */
 export function toOfflineCatalogProduct(
-  p: OfflineCatalogProduct,
+  p: Omit<OfflineCatalogProduct, "stockTracking" | "batchSale"> & {
+    stockTracking?: string | null;
+    batchSale?: unknown;
+  },
 ): OfflineCatalogProduct {
+  const batchSale =
+    p.stockTracking === "batches" ? toOfflineBatchSale(p.batchSale) : undefined;
   return {
     _id: p._id,
     sectionId: p.sectionId,
@@ -58,6 +129,10 @@ export function toOfflineCatalogProduct(
     salePrice: p.salePrice,
     remainingQuantity: p.remainingQuantity,
     status: p.status,
+    ...(p.stockTracking === "batches"
+      ? { stockTracking: "batches" as const }
+      : {}),
+    ...(batchSale ? { batchSale } : {}),
   };
 }
 

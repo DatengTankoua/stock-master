@@ -23,6 +23,10 @@ export const NOTIFICATION_RETENTION_AFTER_READ_MS: Readonly<
   // 1-19A.
   [PushCategory.MEMBER_JOINED]: 7 * DAY,
   [PushCategory.MEMBER_ACTIVITY]: 7 * DAY,
+  // Lot C.
+  [PushCategory.EXPIRY_SOON]: 7 * DAY,
+  [PushCategory.EXPIRY_EXPIRED]: 30 * DAY,
+  [PushCategory.REGULARIZATION_REQUESTED]: 7 * DAY,
 });
 
 export function expiresAfterRead(category: PushCategory, readAt: Date): Date {

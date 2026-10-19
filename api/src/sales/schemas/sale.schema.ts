@@ -3,6 +3,132 @@ import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type SaleDocument = HydratedDocument<Sale>;
 
+/**
+ * Lot B — unités d'UN lot affectées à une vente. Instantané figé à
+ * l'écriture (référence, dates, numéro fabricant) : jamais recalculé depuis
+ * l'état courant des lots.
+ */
+@Schema({ _id: false })
+export class SaleBatchAllocation {
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true })
+  batchId: Types.ObjectId;
+
+  @Prop({ type: String, required: true })
+  reference: string;
+
+  @Prop({ type: String, default: null })
+  expiryDate: string | null;
+
+  @Prop({ type: String, default: null })
+  manufacturerLot: string | null;
+
+  @Prop({ type: Number, required: true, min: 1 })
+  quantity: number;
+}
+export const SaleBatchAllocationSchema =
+  SchemaFactory.createForClass(SaleBatchAllocation);
+
+/**
+ * Lot B — restitution d'unités d'une vente ANTÉRIEURE à l'activation (lot
+ * d'origine inconnu, jamais inventé) vers un lot DE DESTINATION choisi
+ * explicitement. Distincte d'une affectation d'origine.
+ */
+@Schema({ _id: false })
+export class SaleBatchRestitution {
+  @Prop({ type: MongooseSchema.Types.ObjectId, required: true })
+  batchId: Types.ObjectId;
+
+  @Prop({ type: String, required: true })
+  reference: string;
+
+  @Prop({ type: Number, required: true, min: 1 })
+  quantity: number;
+
+  /** Destination « lot historique, date inconnue » créée pour l'occasion. */
+  @Prop({ type: Boolean, default: false })
+  historical: boolean;
+}
+export const SaleBatchRestitutionSchema =
+  SchemaFactory.createForClass(SaleBatchRestitution);
+
+/** Lot B — une correction (avant / après), jamais effacée. */
+@Schema({ _id: false })
+export class SaleBatchHistoryEntry {
+  @Prop({ type: Date, required: true })
+  at: Date;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+  actorId: Types.ObjectId;
+
+  @Prop({ type: Number, required: true })
+  quantityBefore: number;
+
+  @Prop({ type: Number, required: true })
+  quantityAfter: number;
+
+  @Prop({ type: [SaleBatchAllocationSchema], default: [] })
+  allocationsBefore: SaleBatchAllocation[];
+
+  @Prop({ type: [SaleBatchAllocationSchema], default: [] })
+  allocationsAfter: SaleBatchAllocation[];
+
+  /** Unités rendues aux lots d'origine. */
+  @Prop({ type: [SaleBatchAllocationSchema], default: [] })
+  returned: SaleBatchAllocation[];
+
+  /** Unités supplémentaires affectées. */
+  @Prop({ type: [SaleBatchAllocationSchema], default: [] })
+  added: SaleBatchAllocation[];
+
+  /** Unités d'origine inconnue restituées vers des lots de destination. */
+  @Prop({ type: [SaleBatchRestitutionSchema], default: [] })
+  restitutions: SaleBatchRestitution[];
+
+  @Prop({ type: String, default: null })
+  reason: string | null;
+}
+export const SaleBatchHistoryEntrySchema = SchemaFactory.createForClass(
+  SaleBatchHistoryEntry,
+);
+
+/** Lot B — vente hors ligne d'un lot dépassé à la réception, régularisée. */
+@Schema({ _id: false })
+export class SaleExpiredBatchRegularization {
+  @Prop({ type: String, required: true })
+  reason: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+  actorId: Types.ObjectId;
+
+  @Prop({ type: Date, required: true })
+  at: Date;
+
+  /** Jour du commerce à la réception par le serveur. */
+  @Prop({ type: String, required: true })
+  businessDate: string;
+
+  @Prop({ type: [String], default: [] })
+  references: string[];
+
+  // Régularisation APPROUVÉE sur demande du vendeur (lot B) : `actorId` est
+  // alors le responsable approbateur, `requestedBy` le vendeur d'origine.
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  requestId?: Types.ObjectId | null;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
+  requestedBy?: Types.ObjectId | null;
+
+  /** Heure DÉCLARÉE par l'appareil (non vérifiée indépendamment). */
+  @Prop({ type: Date, default: null })
+  declaredOccurredAt?: Date | null;
+
+  /** Réception de la demande par le serveur. */
+  @Prop({ type: Date, default: null })
+  receivedAt?: Date | null;
+}
+export const SaleExpiredBatchRegularizationSchema =
+  SchemaFactory.createForClass(SaleExpiredBatchRegularization);
+
 @Schema({ timestamps: { createdAt: true, updatedAt: false } })
 export class Sale {
   /**
@@ -84,6 +210,25 @@ export class Sale {
    */
   @Prop({ type: Date, required: false })
   occurredAt?: Date;
+
+  /**
+   * Lot B — affectation COURANTE aux lots (somme = unités dont le lot est
+   * connu). Absente : vente d'un produit sans lots, ou vente antérieure à
+   * l'activation (lot d'origine inconnu, jamais attribué rétroactivement).
+   */
+  @Prop({ type: [SaleBatchAllocationSchema], default: undefined })
+  batchAllocations?: SaleBatchAllocation[];
+
+  /** Lot B — affectation à la création, conservée telle quelle. */
+  @Prop({ type: [SaleBatchAllocationSchema], default: undefined })
+  originalBatchAllocations?: SaleBatchAllocation[];
+
+  /** Lot B — corrections successives (avant / après), jamais effacées. */
+  @Prop({ type: [SaleBatchHistoryEntrySchema], default: undefined })
+  batchHistory?: SaleBatchHistoryEntry[];
+
+  @Prop({ type: SaleExpiredBatchRegularizationSchema, required: false })
+  expiredBatchRegularization?: SaleExpiredBatchRegularization;
 }
 
 export const SaleSchema = SchemaFactory.createForClass(Sale);

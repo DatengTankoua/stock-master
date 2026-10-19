@@ -78,11 +78,14 @@ export function UpdateProductDialog({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const canEditAnything = canManageDescription || canAdjustStock;
+  // Suivi par lots : stock reçu et dates gérés dans la section « Lots ».
+  const batchTracked = product?.stockTracking === "batches";
   // Champs proposés seulement si l'API les fournit (`undefined` : API
   // antérieure) ET avec le droit propre en plus de `products.manage`.
   const showExpiry =
     canManageDescription &&
     canManageExpiry &&
+    !batchTracked &&
     product?.expiryDate !== undefined;
   const showThreshold =
     canManageDescription &&
@@ -162,7 +165,7 @@ export function UpdateProductDialog({
         payload.salePrice = parseFloat(salePrice);
       }
       const qty = parseInt(additionalStock, 10);
-      if (!isNaN(qty) && qty > 0) {
+      if (!batchTracked && !isNaN(qty) && qty > 0) {
         payload.additionalStock = qty;
       }
     }
@@ -378,27 +381,33 @@ export function UpdateProductDialog({
                     </p>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="u-stock">
-                    {t("product.additionalStock")}
-                  </Label>
-                  <Input
-                    id="u-stock"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={additionalStock}
-                    onChange={(e) => setAdditionalStock(e.target.value)}
-                    placeholder="0"
-                  />
+                {batchTracked ? (
                   <p className="text-xs text-muted-foreground">
-                    {t("product.remaining", {
-                      count: product.remainingQuantity,
-                    })}
-                    {product.unitsSold !== undefined &&
-                      ` · ${t("product.sold", { count: product.unitsSold })}`}
+                    {t("batches.stockInBatches")}
                   </p>
-                </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="u-stock">
+                      {t("product.additionalStock")}
+                    </Label>
+                    <Input
+                      id="u-stock"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={additionalStock}
+                      onChange={(e) => setAdditionalStock(e.target.value)}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {t("product.remaining", {
+                        count: product.remainingQuantity,
+                      })}
+                      {product.unitsSold !== undefined &&
+                        ` · ${t("product.sold", { count: product.unitsSold })}`}
+                    </p>
+                  </div>
+                )}
               </>
             )}
             <ProductOptionalFields

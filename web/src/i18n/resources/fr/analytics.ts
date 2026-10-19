@@ -261,6 +261,39 @@ const analyticsFr = {
         "Le serveur n'a pas pu préparer le fichier. Réessayez dans quelques instants.",
     },
   },
+  stockHealth: {
+    title: "Péremption et pertes",
+    subtitle:
+      "Délai d'alerte : {{days}} jours · jour du commerce : {{date}}. Stock physique, lots mis à l'écart compris.",
+    soon_one: "Expire bientôt ({{count}})",
+    soon_many: "Expire bientôt ({{count}})",
+    soon_other: "Expire bientôt ({{count}})",
+    expired_one: "Périmés ({{count}})",
+    expired_many: "Périmés ({{count}})",
+    expired_other: "Périmés ({{count}})",
+    noneSoon: "Aucun produit en stock n'arrive à échéance dans le délai.",
+    noneExpired: "Aucun produit en stock n'a dépassé sa date.",
+    batch: "Lot {{reference}}",
+    expiry: "Péremption : {{date}}",
+    physical_one: "{{count}} unité",
+    physical_many: "{{count}} unités",
+    physical_other: "{{count}} unités",
+    status: { quarantined: "À l'écart", withdrawn: "Retiré" },
+    leadLabel: "Délai d'alerte (jours)",
+    leadSave: "Enregistrer",
+    leadSaved: "Délai d'alerte enregistré.",
+    leadInvalid: "Saisissez un nombre entier de 0 à 365.",
+    leadHelp:
+      "0 : alerte le jour même de l'échéance. Les alertes déjà envoyées ne sont pas renvoyées.",
+    lossesTitle: "Pertes du mois",
+    lostUnits_one: "{{count}} unité perdue (nette des corrections)",
+    lostUnits_many: "{{count}} unités perdues (nettes des corrections)",
+    lostUnits_other: "{{count}} unités perdues (nettes des corrections)",
+    lossValue:
+      "valeur estimée au coût d'achat de chaque mouvement : {{amount}}",
+    lossesNote:
+      "Les pertes ne sont ni des ventes ni du chiffre d'affaires ; le bénéfice estimé est une marge sur ventes et ne les déduit pas.",
+  },
 } as const;
 
 export default analyticsFr;

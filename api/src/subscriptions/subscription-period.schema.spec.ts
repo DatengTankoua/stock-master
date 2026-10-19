@@ -119,6 +119,8 @@ describe('SubscriptionPeriod schema (1-14B)', () => {
         'brandColor',
         'createdAt',
         'currency',
+        // Lot C : délai des alertes de péremption (réglage du commerce).
+        'expiryAlertLeadDays',
         'logoKey',
         'logoStorage',
         'name',

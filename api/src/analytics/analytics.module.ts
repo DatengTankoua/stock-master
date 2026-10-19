@@ -1,3 +1,13 @@
+import {
+  ProductBatch,
+  ProductBatchSchema,
+} from '../products/batches/schemas/product-batch.schema';
+import {
+  StockLoss,
+  StockLossSchema,
+} from '../products/batches/schemas/stock-loss.schema';
+import { StockHealthService } from './stock-health.service';
+import { StockHealthController } from './stock-health.controller';
 import { Module } from '@nestjs/common';
 import {
   PurgedStockAdjustment,
@@ -25,10 +35,13 @@ import { AnalyticsController } from './analytics.controller';
       },
       // 1-16E : date de création du commerce (début d'observation).
       { name: Organization.name, schema: OrganizationSchema },
+      // Lot C : péremption des lots et pertes.
+      { name: ProductBatch.name, schema: ProductBatchSchema },
+      { name: StockLoss.name, schema: StockLossSchema },
     ]),
   ],
-  providers: [AnalyticsService],
-  controllers: [AnalyticsController],
+  providers: [AnalyticsService, StockHealthService],
+  controllers: [AnalyticsController, StockHealthController],
   // 1-16A.1 : bilan mensuel calculé avec les MÊMES règles et bornes.
   exports: [AnalyticsService],
 })

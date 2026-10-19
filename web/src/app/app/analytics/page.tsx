@@ -25,6 +25,8 @@ import {
   WatchSection,
 } from "@/components/analytics/insights-sections";
 import { AnalyticsDetails } from "@/components/analytics/analytics-details";
+import { StockHealthSection } from "@/components/analytics/stock-health-section";
+import { productBatchesEnabled } from "@/lib/api";
 
 // 1-15A : toute vente (création, modification, suppression) et tout
 // changement de produit modifient les indicateurs — relecture silencieuse.
@@ -216,6 +218,17 @@ export default function AnalyticsPage() {
             rights={{ canAdjustStock }}
             onSeeAll={seeAll}
           />
+          {/* Lot C : péremption et pertes (fonctionnalités activées). */}
+          {(productBatchesEnabled(authContext) ||
+            authContext?.features?.expiryAlerts === true) && (
+            <StockHealthSection
+              month={insights.period.month}
+              canConfigure={hasPermission(
+                authContext,
+                "products.manage_expiry_alerts",
+              )}
+            />
+          )}
           <SalesSection insights={insights} />
           <SellsSection insights={insights} />
           {/* 1-16D : historique mensuel exportable (propriétaire, administrateur). */}

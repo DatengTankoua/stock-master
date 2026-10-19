@@ -189,7 +189,11 @@ export function OfflineCatalogBrowser({
                 rememberFocus();
                 setProductId(p._id);
               }}
-              onSell={canRecordSales ? () => openSale(p._id, false) : undefined}
+              onSell={
+                canRecordSales && (p.stockTracking !== "batches" || p.batchSale)
+                  ? () => openSale(p._id, false)
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -223,14 +227,23 @@ export function OfflineCatalogBrowser({
                 product={openProduct}
                 loadedAt={loadedAtOf(openProduct._id)}
               />
-              {canRecordSales && (
-                <OfflineSaleButton
-                  productId={openProduct._id}
-                  remaining={openProduct.remainingQuantity}
-                  loadedAt={loadedAtOf(openProduct._id)}
-                  onClick={() => openSale(openProduct._id, true)}
-                />
-              )}
+              {canRecordSales &&
+                openProduct.stockTracking === "batches" &&
+                !openProduct.batchSale && (
+                  <p className="text-sm text-muted-foreground">
+                    {t("batches.saleUnavailable")}
+                  </p>
+                )}
+              {canRecordSales &&
+                (openProduct.stockTracking !== "batches" ||
+                  openProduct.batchSale) && (
+                  <OfflineSaleButton
+                    productId={openProduct._id}
+                    remaining={openProduct.remainingQuantity}
+                    loadedAt={loadedAtOf(openProduct._id)}
+                    onClick={() => openSale(openProduct._id, true)}
+                  />
+                )}
               <p className="text-xs text-muted-foreground">
                 {t("offline.productNote")}
               </p>
@@ -252,6 +265,8 @@ export function OfflineCatalogBrowser({
           targetPrice={saleProduct.salePrice}
           remainingStock={saleProduct.remainingQuantity}
           serverLoadedAt={loadedAtOf(saleProduct._id)}
+          batchTracked={saleProduct.stockTracking === "batches"}
+          batchSale={saleProduct.batchSale}
         />
       )}
     </div>

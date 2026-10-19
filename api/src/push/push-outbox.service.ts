@@ -80,6 +80,24 @@ export class PushOutboxService {
   }
 
   /**
+   * Lot C — nouvelle demande de régularisation (lot B), dans la transaction
+   * de la demande : clé `regularization-requested:<demande>` (aucun doublon,
+   * même en cas de reprise). Destinataires : ceux qui peuvent la traiter.
+   */
+  async regularizationRequestedInSession(
+    session: MongooseSession,
+    input: { organizationId: string; productId: string; requestId: string },
+  ): Promise<void> {
+    await this.record(session, {
+      eventKey: `regularization-requested:${input.requestId}`,
+      category: PushCategory.REGULARIZATION_REQUESTED,
+      organizationId: new Types.ObjectId(input.organizationId),
+      productId: new Types.ObjectId(input.productId),
+      regularizationId: new Types.ObjectId(input.requestId),
+    });
+  }
+
+  /**
    * 1-16A.1 — Création de vente validée (jamais une modification ni une
    * annulation). Clé `sale-created:<vente>` : un rejeu idempotent (aucune
    * transaction) ou une reprise du callback n'en crée pas d'autre.
@@ -197,6 +215,7 @@ export class PushOutboxService {
       paymentId?: Types.ObjectId;
       saleId?: Types.ObjectId;
       actorId?: Types.ObjectId;
+      regularizationId?: Types.ObjectId;
       activity?: {
         entity: MemberActivityEntity;
         action: MemberActivityAction;

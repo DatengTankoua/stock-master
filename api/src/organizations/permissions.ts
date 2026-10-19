@@ -91,6 +91,24 @@ export const DELEGABLE_PERMISSIONS = Object.freeze([
   // migration.
   'products.manage_expiry',
   'stock.manage_thresholds',
+  // Suivi par lots (lot A) : ACTIVER le suivi d'une fiche et RÉPARTIR son
+  // stock existant entre lots (reprise). Opération structurante, distincte
+  // de `stock.adjust` (réceptions) et de `products.manage` (identité des
+  // lots), qu'elle ne remplace jamais. Accordée par défaut au propriétaire
+  // et à l'administrateur, jamais au vendeur sans ajout explicite. Aucune
+  // migration.
+  'stock.manage_batches',
+  // Lot C (lots) : METTRE À L'ÉCART un lot entier et le REMETTRE à
+  // disposition. Aucun mouvement de quantité. Distincte des dates
+  // (`products.manage_expiry`) et des pertes.
+  'stock.quarantine_batches',
+  // Lot C (lots) : ENREGISTRER une perte (sortie définitive de stock) et la
+  // CORRIGER par contre-mouvement. Le droit de modifier une date ne donne
+  // jamais celui-ci.
+  'stock.record_losses',
+  // Lot C : CONFIGURER le délai d'anticipation des alertes de péremption
+  // du commerce (réception des alertes : `products.view_stock_details`).
+  'products.manage_expiry_alerts',
 ] as const);
 
 export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
@@ -99,6 +117,27 @@ export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
 const PRODUCT_FIELD_PERMISSIONS: readonly DelegablePermission[] = [
   'products.manage_expiry',
   'stock.manage_thresholds',
+];
+
+/** Permission ajoutée après le catalogue 3 (suivi par lots). */
+const BATCH_PERMISSIONS: readonly DelegablePermission[] = [
+  'stock.manage_batches',
+];
+
+/** Lot C : opérations sur les lots (mise à l'écart, pertes). */
+const BATCH_OPERATION_PERMISSIONS: readonly DelegablePermission[] = [
+  'stock.quarantine_batches',
+  'stock.record_losses',
+];
+
+/** Lot C : réglage des alertes de péremption. */
+const EXPIRY_ALERT_PERMISSIONS: readonly DelegablePermission[] = [
+  'products.manage_expiry_alerts',
+];
+
+const LOT_C_PERMISSIONS: readonly DelegablePermission[] = [
+  ...BATCH_OPERATION_PERMISSIONS,
+  ...EXPIRY_ALERT_PERMISSIONS,
 ];
 
 /**
@@ -110,6 +149,12 @@ const PRODUCT_FIELD_PERMISSIONS: readonly DelegablePermission[] = [
  * une API antérieure) ; sans déclaration, c'est le catalogue 1 (web
  * antérieur à 1-19A) et les permissions hors catalogue sont conservées.
  * Catalogue 3 : dates de péremption et seuils de stock.
+ * Catalogue 4 : suivi par lots. Un web qui n'AFFICHE pas cette permission
+ * (fonctionnalité désactivée) déclare le catalogue 3 : elle est conservée.
+ * Lot C : un catalogue par COMBINAISON de fonctionnalités affichées (les
+ * activations sont indépendantes) — 5 : catalogue 3 + alertes de
+ * péremption ; 6 : catalogue 3 + lots (suivi, mise à l'écart, pertes) ;
+ * 7 : tout. Une permission non affichée est toujours conservée.
  */
 export const PERMISSION_CATALOGS: Readonly<
   Record<number, readonly DelegablePermission[]>
@@ -117,16 +162,42 @@ export const PERMISSION_CATALOGS: Readonly<
   1: Object.freeze(
     DELEGABLE_PERMISSIONS.filter(
       (p) =>
-        p !== 'sales.notifications' && !PRODUCT_FIELD_PERMISSIONS.includes(p),
+        p !== 'sales.notifications' &&
+        !PRODUCT_FIELD_PERMISSIONS.includes(p) &&
+        !BATCH_PERMISSIONS.includes(p) &&
+        !LOT_C_PERMISSIONS.includes(p),
     ),
   ),
   2: Object.freeze(
-    DELEGABLE_PERMISSIONS.filter((p) => !PRODUCT_FIELD_PERMISSIONS.includes(p)),
+    DELEGABLE_PERMISSIONS.filter(
+      (p) =>
+        !PRODUCT_FIELD_PERMISSIONS.includes(p) &&
+        !BATCH_PERMISSIONS.includes(p) &&
+        !LOT_C_PERMISSIONS.includes(p),
+    ),
   ),
-  3: DELEGABLE_PERMISSIONS,
+  3: Object.freeze(
+    DELEGABLE_PERMISSIONS.filter(
+      (p) => !BATCH_PERMISSIONS.includes(p) && !LOT_C_PERMISSIONS.includes(p),
+    ),
+  ),
+  4: Object.freeze(
+    DELEGABLE_PERMISSIONS.filter((p) => !LOT_C_PERMISSIONS.includes(p)),
+  ),
+  5: Object.freeze(
+    DELEGABLE_PERMISSIONS.filter(
+      (p) =>
+        !BATCH_PERMISSIONS.includes(p) &&
+        !BATCH_OPERATION_PERMISSIONS.includes(p),
+    ),
+  ),
+  6: Object.freeze(
+    DELEGABLE_PERMISSIONS.filter((p) => !EXPIRY_ALERT_PERMISSIONS.includes(p)),
+  ),
+  7: DELEGABLE_PERMISSIONS,
 });
 
-export const CURRENT_PERMISSION_CATALOG = 3;
+export const CURRENT_PERMISSION_CATALOG = 7;
 
 /** Version déclarée valide, sinon catalogue 1 (client le plus ancien). */
 export function parsePermissionCatalog(value: unknown): number {

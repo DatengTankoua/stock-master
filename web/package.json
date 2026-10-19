@@ -14,6 +14,7 @@
     "test:tenant-brand": "node scripts/test-tenant-brand.mjs",
     "test:security-headers": "node scripts/test-security-headers.mjs",
     "test:i18n": "node scripts/check-i18n.mjs",
+    "test:batch-sale": "node scripts/test-batch-sale.mjs",
     "i18n:coverage": "node scripts/i18n-coverage.mjs --fail"
   },
   "dependencies": {

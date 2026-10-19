@@ -15,12 +15,14 @@ import { Label } from "@/components/ui/label";
 import { PermissionCheckboxes } from "@/components/organization/permission-checkboxes";
 import {
   ASSIGNABLE_MEMBER_ROLES,
+  permissionCatalogFor,
   roleGrantsAllPermissions,
   supplementaryOnly,
   type DelegablePermission,
 } from "@/lib/organization-permissions";
 import { describeOrganizationError } from "@/lib/organization-errors";
 import { updateMember, type ApiMember } from "@/lib/api";
+import { useOrganizationShell } from "@/contexts/organization-shell-context";
 
 interface EditMemberDialogProps {
   member: ApiMember;
@@ -40,6 +42,7 @@ export function EditMemberDialog({
   onUpdated,
 }: EditMemberDialogProps) {
   const { t } = useT("organization");
+  const { authContext } = useOrganizationShell();
   const [role, setRole] = useState<(typeof ASSIGNABLE_MEMBER_ROLES)[number]>(
     member.role === "owner" ? "admin" : member.role,
   );
@@ -61,12 +64,18 @@ export function EditMemberDialog({
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateMember(member.membershipId, {
-        role,
-        // 1-12H : administrateur → droits complets par le rôle.
-        permissions: allGranted ? [] : permissions,
-        status,
-      });
+      const updated = await updateMember(
+        member.membershipId,
+        {
+          role,
+          // 1-12H : administrateur → droits complets par le rôle.
+          permissions: allGranted ? [] : permissions,
+          status,
+        },
+        // Catalogue des cases réellement affichées : une permission masquée
+        // (fonctionnalité désactivée) est conservée par le serveur.
+        permissionCatalogFor(authContext?.features),
+      );
       onUpdated(updated);
       toast.success(t("members.updated"));
       onClose();

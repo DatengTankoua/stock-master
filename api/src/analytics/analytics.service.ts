@@ -216,6 +216,7 @@ export class AnalyticsService {
       purchasePrice: number;
       initialQuantity: number;
       remainingQuantity: number;
+      lossTracking?: { netQuantity?: number } | null;
     }>,
     purged: { cost: number; unknownCostUnits: number },
     stockAdjustment: number,
@@ -223,7 +224,11 @@ export class AnalyticsService {
   ): { netProfit: number | null; avgMargin: number | null } {
     const totalCOGS =
       products.reduce((s, p) => {
-        const sold = p.initialQuantity - p.remainingQuantity;
+        // Lot C : pertes nettes exclues (jamais un coût des ventes).
+        const sold =
+          p.initialQuantity -
+          p.remainingQuantity -
+          (p.lossTracking?.netQuantity ?? 0);
         return s + p.purchasePrice * sold;
       }, 0) +
       purged.cost +

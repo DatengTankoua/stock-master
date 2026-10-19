@@ -55,10 +55,28 @@ export type SaleSyncDecision =
   // Passe annulée localement (token changé, stop) : rien n'est consommé.
   | { action: "aborted" };
 
-const TERMINAL_BUSINESS_CODES = new Set([
+// Lot B — codes métier des ventes par lots (conflit terminal, éditable).
+export const BATCH_BUSINESS_CODES = [
+  "SALE_BATCH_ALLOCATION_REQUIRED",
+  "BATCH_INSUFFICIENT",
+  "BATCH_UNAVAILABLE",
+  "BATCH_EXPIRED",
+  "BATCH_EXPIRED_AT_SYNC",
+  "BATCH_EXPIRY_UNCONFIRMED",
+  "BATCH_ALLOCATION_MISMATCH",
+  "BATCH_TRACKING_NOT_ENABLED",
+  "PRODUCT_BATCHES_DISABLED",
+] as const;
+
+const TERMINAL_BUSINESS_CODES = new Set<string>([
   "INSUFFICIENT_STOCK",
   "SALE_DATE_OUT_OF_RANGE",
   "PRODUCT_NOT_FOUND",
+  // Produit suivi par lots (lot A, API antérieure) : 409, jamais réessayée.
+  "PRODUCT_BATCH_TRACKED",
+  // Lot B : refus d'un lot (409/400), jamais réessayés ni réaffectés à un
+  // autre lot : conflit visible, corrigé ou régularisé explicitement.
+  ...BATCH_BUSINESS_CODES,
 ]);
 
 export function classifySaleSyncOutcome(
@@ -188,6 +206,7 @@ export interface StockReservationInput {
   status: OutboxStatus;
   attempts: number;
   lastError?: OutboxLastError;
+  regularization?: { status: "requested" | "approved" | "rejected" };
   updatedAt: number;
   payload: { productId: string; quantity: number };
 }
@@ -264,6 +283,8 @@ const DEFINITIVE_BUSINESS_REFUSALS = new Set([
   "INSUFFICIENT_STOCK",
   "SALE_DATE_OUT_OF_RANGE",
   "PRODUCT_NOT_FOUND",
+  "PRODUCT_BATCH_TRACKED",
+  ...BATCH_BUSINESS_CODES,
   "VALIDATION_FAILED",
 ]);
 
@@ -280,6 +301,7 @@ export function allowedOperationActions(op: {
   status: OutboxStatus;
   attempts: number;
   lastError?: OutboxLastError;
+  regularization?: { status: "requested" | "approved" | "rejected" };
 }): AllowedOperationActions {
   const none: AllowedOperationActions = {
     syncNow: false,
@@ -291,6 +313,12 @@ export function allowedOperationActions(op: {
   };
   if (op.status === "pending") return { ...none, syncNow: true };
   if (op.status !== "conflict") return none;
+  // Lot B : demande de régularisation en attente d'un responsable — la
+  // vente PEUT être créée sous cette clé : ni correction (doublon) ni
+  // abandon, stock réservé jusqu'à la décision.
+  if (op.regularization?.status === "requested") {
+    return { ...none, mayBeRecorded: true };
+  }
   const error = op.lastError;
   if (error?.kind === "corruption") {
     return { ...none, removeCorrupted: true, mayBeRecorded: true };
@@ -318,6 +346,15 @@ export function allowedOperationActions(op: {
 export type OperationErrorKey =
   | "insufficientStock"
   | "productNotFound"
+  | "batchTracked"
+  | "batchAllocationRequired"
+  | "batchInsufficient"
+  | "batchUnavailable"
+  | "batchExpired"
+  | "batchExpiredAtSync"
+  | "batchExpiryUnconfirmed"
+  | "batchMismatch"
+  | "batchesDisabled"
   | "dateOutOfRange"
   | "validationFailed"
   | "expired"
@@ -343,6 +380,25 @@ export function describeOperationError(
       return "insufficientStock";
     case "PRODUCT_NOT_FOUND":
       return "productNotFound";
+    case "PRODUCT_BATCH_TRACKED":
+      return "batchTracked";
+    case "SALE_BATCH_ALLOCATION_REQUIRED":
+      return "batchAllocationRequired";
+    case "BATCH_INSUFFICIENT":
+      return "batchInsufficient";
+    case "BATCH_UNAVAILABLE":
+    case "BATCH_TRACKING_NOT_ENABLED":
+      return "batchUnavailable";
+    case "BATCH_EXPIRED":
+      return "batchExpired";
+    case "BATCH_EXPIRED_AT_SYNC":
+      return "batchExpiredAtSync";
+    case "BATCH_EXPIRY_UNCONFIRMED":
+      return "batchExpiryUnconfirmed";
+    case "BATCH_ALLOCATION_MISMATCH":
+      return "batchMismatch";
+    case "PRODUCT_BATCHES_DISABLED":
+      return "batchesDisabled";
     case "SALE_DATE_OUT_OF_RANGE":
       return "dateOutOfRange";
     case "VALIDATION_FAILED":

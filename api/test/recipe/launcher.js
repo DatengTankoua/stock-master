@@ -521,6 +521,18 @@ async function start(options) {
       ...(options.legalPrompt
         ? { LEGAL_ACCEPTANCE_PROMPT_ENABLED: 'true' }
         : {}),
+      // Lots de produits : `start --product-batches` (recette uniquement).
+      // Portée explicite `all` : tous les commerces de la recette.
+      ...(options.productBatches
+        ? {
+            PRODUCT_BATCHES_ENABLED: 'true',
+            PRODUCT_BATCHES_ORGANIZATIONS: 'all',
+          }
+        : {}),
+      // Lot C : `start --expiry-alerts` (recette uniquement).
+      ...(options.expiryAlerts
+        ? { EXPIRY_ALERTS_ENABLED: 'true', EXPIRY_ALERTS_ORGANIZATIONS: 'all' }
+        : {}),
     });
     stack.api = startChild(
       'api',
@@ -623,6 +635,29 @@ async function start(options) {
           cwd: C.WORK_DIR,
           env: C.apiEnv(stack.uri),
         },
+      );
+    }
+    if (options.expiryAlerts) {
+      say('migration expiry-alerts.js --apply');
+      await run(
+        'migration-expiry-alerts',
+        process.execPath,
+        [path.join(C.DIST, 'migrations', 'expiry-alerts.js'), '--apply'],
+        { cwd: C.WORK_DIR, env: C.apiEnv(stack.uri) },
+      );
+    }
+    if (options.productBatches) {
+      // Prérequis de l'activation : validateur des produits et index des lots.
+      say('migration product-batches.js --install --apply');
+      await run(
+        'migration-product-batches',
+        process.execPath,
+        [
+          path.join(C.DIST, 'migrations', 'product-batches.js'),
+          '--install',
+          '--apply',
+        ],
+        { cwd: C.WORK_DIR, env: C.apiEnv(stack.uri) },
       );
     }
 

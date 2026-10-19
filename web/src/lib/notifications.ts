@@ -59,6 +59,21 @@ export interface UnsoldPage {
 }
 
 export type NotificationDetails =
+  // Lot C : échéance ANNONCÉE et état ACTUEL de la cible.
+  | {
+      kind: "expiry";
+      stage?: "soon" | "expired";
+      productId: string | null;
+      productName?: string;
+      removed?: boolean;
+      batchRemoved?: boolean;
+      reference?: string;
+      announcedExpiryDate?: string | null;
+      currentExpiryDate?: string | null;
+      remainingQuantity?: number;
+      status?: string;
+      inTrash?: boolean;
+    }
   | {
       kind: "stock";
       productId: string | null;
@@ -220,4 +235,7 @@ export const CATEGORY_KEYS: Record<PushCategory, keyof PushPreferences> = {
   "monthly-report": "monthlyReport",
   "member-joined": "memberJoined",
   "member-activity": "memberActivity",
+  "expiry-soon": "expirySoon",
+  "expiry-expired": "expiryExpired",
+  "regularization-requested": "regularizationRequested",
 };

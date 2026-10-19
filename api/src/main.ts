@@ -22,6 +22,29 @@ import { startStorageRecovery } from './storage-quota/storage-recovery';
 import { startPaymentReconciliationSweep } from './subscriptions/payments/payment-reconciliation-sweep';
 import { resolveTurnstileConfig } from './anti-bot/turnstile-config';
 import { resolveAntiAbuseConfig } from './common/rate-limit/anti-abuse-config';
+import {
+  expiryAlertsEnabled,
+  expiryAlertsFlagInvalid,
+  expiryAlertsScope,
+} from './products/expiry/expiry-alerts-config';
+import type { OrganizationScope } from './common/organization-scope';
+
+/** Portée annoncée au démarrage (jamais les identifiants eux-mêmes). */
+function describeScope(scope: OrganizationScope): string {
+  if (scope.kind === 'all') return 'TOUS les commerces (activation globale)';
+  if (scope.kind === 'none') {
+    return 'AUCUN commerce (liste de commerces absente : indiquer des identifiants ou all)';
+  }
+  if (scope.kind === 'invalid') {
+    return 'AUCUN commerce (liste de commerces invalide)';
+  }
+  return `${scope.ids.size} commerce(s) pilote(s)`;
+}
+import {
+  productBatchesEnabled,
+  productBatchesFlagInvalid,
+  productBatchesScope,
+} from './products/batches/product-batches-config';
 
 async function bootstrap() {
   // 1-16D : fuseau des mois (Analyse, historique exportable, bilan
@@ -83,6 +106,29 @@ async function bootstrap() {
   // Web Push (1-16A) : désactivé par défaut ; `WEB_PUSH_ENABLED=true` avec
   // une configuration VAPID invalide → erreur fatale au démarrage.
   const webPush = resolveWebPushConfig(process.env);
+
+  // Suivi par lots (lot A) : désactivé par défaut ; valeur inconnue signalée
+  // et traitée comme désactivée.
+  if (productBatchesFlagInvalid(process.env)) {
+    new Logger('Bootstrap').warn(
+      'PRODUCT_BATCHES_ENABLED doit valoir true ou false : suivi par lots désactivé.',
+    );
+  } else if (productBatchesEnabled(process.env)) {
+    new Logger('Bootstrap').warn(
+      `Suivi par lots ACTIVÉ : ${describeScope(productBatchesScope(process.env))}.`,
+    );
+  }
+
+  // Lot C : alertes de péremption, activation distincte.
+  if (expiryAlertsFlagInvalid(process.env)) {
+    new Logger('Bootstrap').warn(
+      'EXPIRY_ALERTS_ENABLED doit valoir true ou false : alertes de péremption désactivées.',
+    );
+  } else if (expiryAlertsEnabled(process.env)) {
+    new Logger('Bootstrap').warn(
+      `Alertes de péremption ACTIVÉES : ${describeScope(expiryAlertsScope(process.env))}.`,
+    );
+  }
 
   const app = await NestFactory.create(AppModule, API_APPLICATION_OPTIONS);
 

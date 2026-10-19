@@ -46,6 +46,10 @@ const organizationEn: Translation<typeof organizationFr> = {
     "sales.notifications": "Receive sale notifications",
     "products.manage_expiry": "Manage expiry dates",
     "stock.manage_thresholds": "Customise stock thresholds",
+    "stock.manage_batches": "Enable batch tracking and split existing stock",
+    "stock.quarantine_batches": "Set a batch aside and make it available again",
+    "stock.record_losses": "Record and correct stock losses",
+    "products.manage_expiry_alerts": "Set the expiry alert lead time",
   },
   memberStatus: {
     active: "Active",

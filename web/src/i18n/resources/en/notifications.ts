@@ -41,6 +41,18 @@ const notificationsEn: Translation<typeof notificationsFr> = {
       label: "Team activity",
       help: "Items created, changed or deleted by other members (grouped by minute).",
     },
+    expirySoon: {
+      label: "Expiry approaching",
+      help: "When a batch or product in stock enters the alert period before its expiry date.",
+    },
+    expiryExpired: {
+      label: "Expired products",
+      help: "When a batch or product still in stock passes its expiry date.",
+    },
+    regularizationRequested: {
+      label: "Regularisations to review",
+      help: "When a seller sends an offline sale to be regularised.",
+    },
   },
   bell: {
     noneUnread: "Notifications, none unread",
@@ -59,6 +71,11 @@ const notificationsEn: Translation<typeof notificationsFr> = {
     emptyUnread: "No unread notifications.",
   },
   detail: {
+    batch: "Batch",
+    batchStatus: { quarantined: "set aside", withdrawn: "withdrawn" },
+    expiryDate: "Expiry",
+    physicalStock: "Physical stock",
+    batchRemoved: "This batch no longer exists.",
     missing: "Notification not found or no longer available.",
     open: "Open",
     productRemoved: "This product has been permanently deleted.",

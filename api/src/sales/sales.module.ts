@@ -8,6 +8,10 @@ import {
 import { SalesService } from './sales.service';
 import { SalesController } from './sales.controller';
 import { SaleOperationIndexCheck } from './sale-operation-index';
+import {
+  SaleRegularizationRequest,
+  SaleRegularizationRequestSchema,
+} from './schemas/sale-regularization-request.schema';
 import { ProductsModule } from '../products/products.module';
 import { EventsModule } from '../events/events.module';
 import { AuditModule } from '../audit/audit.module';
@@ -19,6 +23,11 @@ import { PushModule } from '../push/push.module';
       { name: Sale.name, schema: SaleSchema },
       // 1-11C.1 : trace idempotente des créations de vente.
       { name: SaleOperation.name, schema: SaleOperationSchema },
+      // Lot B : demandes de régularisation des ventes hors ligne.
+      {
+        name: SaleRegularizationRequest.name,
+        schema: SaleRegularizationRequestSchema,
+      },
     ]),
     ProductsModule,
     EventsModule,

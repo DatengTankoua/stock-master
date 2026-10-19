@@ -18,7 +18,7 @@ const A = require('./actions');
 const HELP = `Recette locale des paiements (1-14D.2H) — tout est fictif, aucun appel CamPay réel.
 
 Stack (terminal 1, reste au premier plan ; Ctrl+C nettoie) :
-  start [--provider=simulated|campay|saspay] [--keep-logs] [--anti-bot=simulated]
+  start [--provider=simulated|campay|saspay] [--keep-logs] [--anti-bot=simulated] [--product-batches] [--expiry-alerts]
         (--anti-bot=simulated : inscription et défi de connexion simulés ;
          API en NODE_ENV=development, la simulation étant refusée en production)
 
@@ -265,6 +265,12 @@ async function main(argv) {
         keepLogs: Boolean(flags['keep-logs']),
         // 1-16C.2 : invite des comptes existants, pour la recette SEULEMENT.
         legalPrompt: Boolean(flags['legal-prompt']),
+        // Lots de produits (lot A) : fonctionnalité et garde MongoDB activées
+        // pour la recette SEULEMENT (désactivées par défaut, comme en
+        // production).
+        productBatches: Boolean(flags['product-batches']),
+        // Lot C : alertes de péremption (recette seulement).
+        expiryAlerts: Boolean(flags['expiry-alerts']),
       });
       return new Promise(() => {}); // premier plan jusqu'à l'arrêt
     case 'stop':

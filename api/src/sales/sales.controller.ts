@@ -22,9 +22,56 @@ import { ParseObjectIdPipe } from '../common/pipes/parse-object-id.pipe';
 import { User } from '../users/schemas/user.schema';
 import type { ResolvedOrganizationContext } from '../organizations/organizations.service';
 import {
+  DelegablePermission,
   hasPermission,
   PERMISSION_DENIED_RESPONSE,
 } from '../organizations/permissions';
+import {
+  BatchReasonDto,
+  CancelSaleDto,
+  LegacyRestitutionFields,
+} from '../products/batches/dto/product-batch.dto';
+import { SaleRegularizationQueryDto } from './dto/sale-regularization.dto';
+
+/**
+ * Lot B — responsable d'une régularisation : ajuste le stock ET voit les
+ * ventes de tout le commerce (la vente est créée au nom d'un collègue).
+ */
+const REGULARIZATION_MANAGER: DelegablePermission[] = [
+  'stock.adjust',
+  'sales.view_all',
+];
+
+/**
+ * Lot B — droits ADDITIONNELS (en plus de `sales.record`) :
+ * - restitution d'unités d'origine inconnue (vente antérieure à
+ *   l'activation) vers des lots choisis : `stock.adjust` ;
+ * - destination « lot historique, date inconnue » créée pour l'occasion :
+ *   `stock.adjust` + `products.manage` (identité d'un lot) ;
+ * - régularisation d'une vente hors ligne d'un lot dépassé à la réception :
+ *   `stock.adjust`.
+ * Vendre, rendre aux lots d'origine ou ajouter des unités ne demandent que
+ * les droits de vente actuels.
+ */
+function restitutionPermissions(
+  dto: LegacyRestitutionFields,
+): DelegablePermission[] {
+  const needed: DelegablePermission[] = [];
+  if (dto.restitutions?.length || dto.historicalRestitution) {
+    needed.push('stock.adjust');
+  }
+  if (dto.historicalRestitution) needed.push('products.manage');
+  return needed;
+}
+
+function requireAll(
+  context: ResolvedOrganizationContext,
+  permissions: DelegablePermission[],
+): void {
+  if (!permissions.every((p) => hasPermission(context, p))) {
+    throw new ForbiddenException(PERMISSION_DENIED_RESPONSE);
+  }
+}
 import {
   AllowInactiveSubscription,
   CurrentSubscriptionAccess,
@@ -77,6 +124,9 @@ export class SalesController {
     @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
     @CurrentSubscriptionAccess() access: SubscriptionAccessDecision | undefined,
   ) {
+    if (dto.expiredBatchRegularization) {
+      requireAll(organizationContext, ['stock.adjust']);
+    }
     return this.salesService.create(
       organizationContext.organizationId,
       dto,
@@ -143,6 +193,77 @@ export class SalesController {
     throw new ForbiddenException(PERMISSION_DENIED_RESPONSE);
   }
 
+  /**
+   * Lot B — demande de régularisation d'une vente hors ligne refusée
+   * `BATCH_EXPIRED_AT_SYNC`, par son vendeur (droits de vente). Corps =
+   * l'opération en attente telle quelle (même `clientOperationId`).
+   */
+  @Post('regularizations')
+  @RequirePermissions('sales.record')
+  requestRegularization(
+    @Body() dto: CreateSaleDto,
+    @CurrentUser() user: User,
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+  ) {
+    return this.salesService.requestRegularization(
+      organizationContext.organizationId,
+      dto,
+      user._id.toString(),
+    );
+  }
+
+  /** Responsable : tout le commerce ; sinon : ses propres demandes. */
+  @Get('regularizations')
+  @RequirePermissions('sales.record')
+  listRegularizations(
+    @Query() query: SaleRegularizationQueryDto,
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+  ) {
+    const manager = REGULARIZATION_MANAGER.every((p) =>
+      hasPermission(organizationContext, p),
+    );
+    return this.salesService.listRegularizations(
+      organizationContext.organizationId,
+      {
+        ...(manager ? {} : { scopeSellerId: organizationContext.userId }),
+        clientOperationIds: query.clientOperationIds,
+        status: query.status,
+      },
+    );
+  }
+
+  @Post('regularizations/:id/approve')
+  approveRegularization(
+    @Param('id', ParseObjectIdPipe) id: string,
+    @Body() dto: BatchReasonDto,
+    @CurrentUser() user: User,
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+  ) {
+    requireAll(organizationContext, REGULARIZATION_MANAGER);
+    return this.salesService.approveRegularization(
+      organizationContext.organizationId,
+      id,
+      user._id.toString(),
+      dto.reason,
+    );
+  }
+
+  @Post('regularizations/:id/reject')
+  rejectRegularization(
+    @Param('id', ParseObjectIdPipe) id: string,
+    @Body() dto: BatchReasonDto,
+    @CurrentUser() user: User,
+    @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+  ) {
+    requireAll(organizationContext, REGULARIZATION_MANAGER);
+    return this.salesService.rejectRegularization(
+      organizationContext.organizationId,
+      id,
+      user._id.toString(),
+      dto.reason,
+    );
+  }
+
   @Patch(':id')
   @RequirePermissions('sales.record')
   async update(
@@ -151,6 +272,7 @@ export class SalesController {
     @CurrentUser() user: User,
     @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
   ) {
+    requireAll(organizationContext, restitutionPermissions(dto));
     const actorId = user._id.toString();
     // sans `sales.view_all` : uniquement ses propres ventes (404 sinon,
     // indistinguable d'une vente absente — jamais de fuite d'existence).
@@ -184,19 +306,26 @@ export class SalesController {
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser() user: User,
     @CurrentOrganization() organizationContext: ResolvedOrganizationContext,
+    // Lot B : corps facultatif (restitution d'une vente antérieure aux
+    // lots) ; un client antérieur n'envoie rien.
+    @Body() cancel: CancelSaleDto = {},
   ): Promise<void> {
+    requireAll(organizationContext, restitutionPermissions(cancel ?? {}));
     const actorId = user._id.toString();
     const removed = hasPermission(organizationContext, 'sales.view_all')
       ? await this.salesService.remove(
           organizationContext.organizationId,
           id,
           actorId,
+          undefined,
+          cancel ?? {},
         )
       : await this.salesService.remove(
           organizationContext.organizationId,
           id,
           actorId,
           organizationContext.userId,
+          cancel ?? {},
         );
     // Une vente n'est annulée qu'une fois : clé stable.
     await this.activity(

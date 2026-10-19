@@ -73,6 +73,13 @@ export function notificationBody(
       return 'Un nouveau membre a rejoint votre entreprise.';
     case PushCategory.MEMBER_ACTIVITY:
       return 'Un collaborateur a modifié les données de votre entreprise.';
+    // Lot C : génériques (ni produit, ni lot, ni quantité).
+    case PushCategory.EXPIRY_SOON:
+      return 'Un produit approche de sa date de péremption.';
+    case PushCategory.EXPIRY_EXPIRED:
+      return 'Un produit en stock a dépassé sa date de péremption.';
+    case PushCategory.REGULARIZATION_REQUESTED:
+      return 'Une vente hors ligne attend une régularisation.';
   }
 }
 
@@ -101,6 +108,12 @@ function notificationBodyEn(
       return 'A new member joined your business.';
     case PushCategory.MEMBER_ACTIVITY:
       return 'A team member changed your business data.';
+    case PushCategory.EXPIRY_SOON:
+      return 'A product is approaching its expiry date.';
+    case PushCategory.EXPIRY_EXPIRED:
+      return 'A product in stock is past its expiry date.';
+    case PushCategory.REGULARIZATION_REQUESTED:
+      return 'An offline sale is waiting to be regularised.';
   }
 }
 
@@ -121,6 +134,11 @@ export function pushUrl(subject: PushMessageSubject): string {
       return '/app/notifications';
     case PushCategory.MEMBER_JOINED:
       return '/app/organization/members';
+    case PushCategory.EXPIRY_SOON:
+    case PushCategory.EXPIRY_EXPIRED:
+      return `/app/catalog/products/${subject.productId}`;
+    case PushCategory.REGULARIZATION_REQUESTED:
+      return '/app/sales';
   }
 }
 
@@ -142,9 +160,13 @@ function pushTag(subject: PushMessageSubject): string {
       return `payment-succeeded:${subject.paymentId}`;
     case PushCategory.MONTHLY_REPORT:
       return `monthly-report:${subject.reportId}`;
-    // 1-19A : clé de l'événement (adhésion) ou du regroupement (activité).
+    // 1-19A : clé de l'événement (adhésion) ou du regroupement (activité) ;
+    // lot C : clé de l'événement (cible + échéance + étape ; demande).
     case PushCategory.MEMBER_JOINED:
     case PushCategory.MEMBER_ACTIVITY:
+    case PushCategory.EXPIRY_SOON:
+    case PushCategory.EXPIRY_EXPIRED:
+    case PushCategory.REGULARIZATION_REQUESTED:
       return subject.eventKey ?? subject.category;
   }
 }

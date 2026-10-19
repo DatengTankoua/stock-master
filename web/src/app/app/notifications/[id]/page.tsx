@@ -207,6 +207,54 @@ function Details({
       return <MemberJoined details={details} />;
     case "member-activity":
       return <MemberActivity details={details} />;
+    case "expiry":
+      return details.removed ? (
+        <p className="text-sm text-muted-foreground">
+          {t("detail.productRemoved")}
+        </p>
+      ) : (
+        <dl className="grid grid-cols-2 gap-2 text-sm">
+          <dt className="text-muted-foreground">{t("detail.product")}</dt>
+          <dd>
+            {details.productName}
+            {details.inTrash ? ` ${t("detail.inTrash")}` : ""}
+          </dd>
+          {details.reference && (
+            <>
+              <dt className="text-muted-foreground">{t("detail.batch")}</dt>
+              <dd>
+                {details.reference}
+                {details.status && details.status !== "available"
+                  ? ` (${t(`detail.batchStatus.${details.status as "quarantined" | "withdrawn"}`)})`
+                  : ""}
+              </dd>
+            </>
+          )}
+          <dt className="text-muted-foreground">{t("detail.expiryDate")}</dt>
+          <dd>
+            {details.announcedExpiryDate
+              ? f.civilDate(details.announcedExpiryDate)
+              : "—"}
+            {details.currentExpiryDate !== undefined &&
+            details.currentExpiryDate !== details.announcedExpiryDate
+              ? ` → ${details.currentExpiryDate ? f.civilDate(details.currentExpiryDate) : "—"}`
+              : ""}
+          </dd>
+          {details.remainingQuantity !== undefined && (
+            <>
+              <dt className="text-muted-foreground">
+                {t("detail.physicalStock")}
+              </dt>
+              <dd>{details.remainingQuantity}</dd>
+            </>
+          )}
+          {details.batchRemoved && (
+            <dd className="col-span-2 text-xs text-muted-foreground">
+              {t("detail.batchRemoved")}
+            </dd>
+          )}
+        </dl>
+      );
   }
 }
 

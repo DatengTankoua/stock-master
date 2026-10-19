@@ -16,6 +16,22 @@ export enum AuditAction {
   // Champs facultatifs de la fiche : `{ from, to }`, `null` = absent.
   EXPIRY_CHANGED = 'expiry_changed',
   THRESHOLD_CHANGED = 'threshold_changed',
+  // Lots : reprise du stock existant (répartition, aucune entrée de stock),
+  // réception (nouveau lot ou lot existant) et modification d'identité
+  // (jamais une quantité).
+  BATCH_TRACKING_ENABLED = 'batch_tracking_enabled',
+  BATCH_RECEIVED = 'batch_received',
+  BATCH_UPDATED = 'batch_updated',
+  // Lot B : demande de régularisation d'une vente hors ligne (vendeur),
+  // approbation ou rejet motivé (responsable). Jamais effacée.
+  SALE_REGULARIZATION_REQUESTED = 'sale_regularization_requested',
+  SALE_REGULARIZATION_APPROVED = 'sale_regularization_approved',
+  SALE_REGULARIZATION_REJECTED = 'sale_regularization_rejected',
+  // Lot C : statut d'un lot (mise à l'écart, remise à disposition), perte
+  // et sa correction (contre-mouvement lié). Jamais effacés.
+  BATCH_STATUS_CHANGED = 'batch_status_changed',
+  BATCH_LOSS_RECORDED = 'batch_loss_recorded',
+  BATCH_LOSS_CORRECTED = 'batch_loss_corrected',
 }
 
 @Schema({ timestamps: { createdAt: true, updatedAt: false } })

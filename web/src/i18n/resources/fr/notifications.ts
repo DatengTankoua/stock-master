@@ -41,6 +41,18 @@ const notificationsFr = {
       label: "Actions des collaborateurs",
       help: "Créations, modifications et suppressions faites par les autres membres (regroupées par minute).",
     },
+    expirySoon: {
+      label: "Péremption proche",
+      help: "Quand un lot ou un produit en stock entre dans la période d'alerte avant sa date de péremption.",
+    },
+    expiryExpired: {
+      label: "Produits périmés",
+      help: "Quand un lot ou un produit encore en stock dépasse sa date de péremption.",
+    },
+    regularizationRequested: {
+      label: "Régularisations à examiner",
+      help: "Quand un vendeur transmet une vente hors ligne à régulariser.",
+    },
   },
   bell: {
     noneUnread: "Notifications, aucune non lue",
@@ -60,6 +72,11 @@ const notificationsFr = {
     emptyUnread: "Aucune notification non lue.",
   },
   detail: {
+    batch: "Lot",
+    batchStatus: { quarantined: "à l'écart", withdrawn: "retiré" },
+    expiryDate: "Péremption",
+    physicalStock: "Stock physique",
+    batchRemoved: "Ce lot n'existe plus.",
     missing: "Notification introuvable ou plus disponible.",
     open: "Ouvrir",
     productRemoved: "Ce produit a été supprimé définitivement.",

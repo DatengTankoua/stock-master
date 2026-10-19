@@ -1,3 +1,4 @@
+import type { ProductBatchSale } from './batches/sale-batch-summary';
 import type { Types } from 'mongoose';
 import {
   DelegablePermission,
@@ -56,6 +57,8 @@ export interface ProductSource {
   remainingQuantity: number;
   expiryDate?: string | null;
   lowStockThreshold?: number | null;
+  stockTracking?: 'batches' | null;
+  lossTracking?: { netQuantity?: number; netValueAtCost?: number } | null;
   deletedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -78,6 +81,11 @@ export interface ProductView {
   expiryDate: string | null;
   /** Seuil personnalisé, `null` : règle par défaut. */
   lowStockThreshold: number | null;
+  /**
+   * Mode de suivi du stock (standard). `batches` : quantités réparties en
+   * lots ; la date de la fiche est alors `null` (dates portées par les lots).
+   */
+  stockTracking: 'none' | 'batches';
   deletedAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -96,11 +104,20 @@ export interface ProductMetricsView {
   product: ProductView;
   status: ProductStatus;
   unitsSold?: number;
+  /** Lot C — pertes nettes (unités), jamais comptées comme vendues. */
+  lostQuantity?: number;
+  /** Lot C — pertes nettes estimées au prix d'achat de chaque mouvement. */
+  lossValueAtCost?: number;
   totalPurchaseCost?: number;
   actualRevenue?: number;
   actualProfit?: number;
   /** Bénéfice réel / CA réel × 100 ; `null` sans CA (non calculable). */
   margin?: number | null;
+  /**
+   * Lot B — identité des lots vendables d'un produit suivi (liste et
+   * fiche, jamais les diffusions). Aucune quantité.
+   */
+  batchSale?: ProductBatchSale;
 }
 
 function num(value: unknown): number {
@@ -123,6 +140,8 @@ function exposedThreshold(p: ProductSource): number | null {
 }
 
 function exposedExpiryDate(p: ProductSource): string | null {
+  // Suivi par lots : aucune date unique pour tout le stock.
+  if (p.stockTracking === 'batches') return null;
   return typeof p.expiryDate === 'string' && p.expiryDate !== ''
     ? p.expiryDate
     : null;
@@ -142,6 +161,7 @@ export function toProductView(
     remainingQuantity: p.remainingQuantity,
     expiryDate: exposedExpiryDate(p),
     lowStockThreshold: exposedThreshold(p),
+    stockTracking: p.stockTracking === 'batches' ? 'batches' : 'none',
     deletedAt: p.deletedAt ?? null,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
@@ -165,14 +185,24 @@ export function toProductMetricsView(
     product: toProductView(p, visibility, imageUrl),
     status: computeStatus(p),
   };
-  const unitsSold = num(p.initialQuantity) - num(p.remainingQuantity);
-  if (visibility.stockDetails) view.unitsSold = unitsSold;
+  // Lot C : les pertes nettes (lots) ne sont jamais des ventes.
+  const lost = num(p.lossTracking?.netQuantity);
+  const unitsSold = num(p.initialQuantity) - num(p.remainingQuantity) - lost;
+  if (visibility.stockDetails) {
+    view.unitsSold = unitsSold;
+    if (lost !== 0) view.lostQuantity = lost;
+  }
   if (visibility.financials) {
     const buyPrice = num(p.purchasePrice);
     const revenue = num(actualRevenue);
     // Formules métier conservées (1-7B) : bénéfice réel = CA réel − prix
     // d'achat unitaire courant × unités vendues ; coût total = prix d'achat
-    // × stock initial.
+    // × stock initial. Lot C : c'est une MARGE SUR VENTES — les pertes en
+    // sont exclues (unités vendues hors pertes) et affichées à part, à leur
+    // valeur estimée au moment du mouvement ; aucun bénéfice net comptable.
+    if (lost !== 0) {
+      view.lossValueAtCost = num(p.lossTracking?.netValueAtCost);
+    }
     const profit = revenue - buyPrice * unitsSold;
     view.totalPurchaseCost = buyPrice * num(p.initialQuantity);
     view.actualRevenue = revenue;
@@ -187,8 +217,18 @@ export function toProductMetricsView(
  * restreint sont retirés selon la même visibilité (prix d'achat ; stock
  * initial et quantités ajoutées).
  */
-const FINANCIAL_AUDIT_KEYS = ['purchasePrice'];
-const STOCK_DETAIL_AUDIT_KEYS = ['initialQuantity', 'added'];
+const FINANCIAL_AUDIT_KEYS = ['purchasePrice', 'valueAtCost'];
+// Lots : quantités reçues (`added`), répartition et total de la reprise.
+const STOCK_DETAIL_AUDIT_KEYS = [
+  'initialQuantity',
+  'added',
+  'allocations',
+  'totalQuantity',
+  // Lot C : quantités perdues / restituées, stock du lot au moment du statut.
+  'lostQuantity',
+  'restoredQuantity',
+  'remainingQuantity',
+];
 
 export function projectAuditDetails(
   details: Record<string, unknown> | null | undefined,

@@ -35,6 +35,12 @@ export interface OutboxSalePayload {
   buyerName?: string;
   buyerContact?: string;
   occurredAt: string;
+  // Lot B (champs facultatifs, même schemaVersion : ignorés par une
+  // version antérieure qui ne les écrit jamais) : lots CHOISIS par le
+  // vendeur, envoyés tels quels — jamais réaffectés à la synchronisation.
+  batchAllocations?: { batchId: string; quantity: number }[];
+  unknownExpiryConfirmed?: boolean;
+  expiredBatchRegularization?: { reason: string };
 }
 
 export interface OutboxOperation {
@@ -45,11 +51,19 @@ export interface OutboxOperation {
   organizationId: string;
   seq: number;
   payload: OutboxSalePayload;
-  display: { productName: string; unitPriceHint: number };
+  // Lot B : libellés des lots (« L-002 × 3 »), affichage seulement.
+  display: {
+    productName: string;
+    unitPriceHint: number;
+    batchLabels?: string[];
+  };
   status: OutboxStatus;
   attempts: number;
   nextAttemptAt: number;
   lastError?: OutboxLastError;
+  // Lot B (facultatif, même schemaVersion) : demande de régularisation
+  // transmise à un responsable pour CETTE opération (même UUID).
+  regularization?: OutboxRegularization;
   saleId?: string;
   createdAt: number;
   updatedAt: number;
@@ -237,10 +251,46 @@ export type EnqueueResult =
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
 
+const BATCH_ENTRIES_MAX = 20;
+
+// Lot B : affectation absente, ou 1 à 20 lots distincts dont la somme est
+// exactement la quantité vendue.
+function isValidAllocation(p: Omit<OutboxSalePayload, "occurredAt">): boolean {
+  const entries = p.batchAllocations;
+  if (entries === undefined) return true;
+  if (!Array.isArray(entries)) return false;
+  if (entries.length < 1 || entries.length > BATCH_ENTRIES_MAX) return false;
+  const ids = new Set<string>();
+  let sum = 0;
+  for (const e of entries) {
+    if (
+      !e ||
+      typeof e.batchId !== "string" ||
+      !OBJECT_ID.test(e.batchId) ||
+      !Number.isInteger(e.quantity) ||
+      e.quantity < 1
+    ) {
+      return false;
+    }
+    ids.add(e.batchId.toLowerCase());
+    sum += e.quantity;
+  }
+  const reason = p.expiredBatchRegularization?.reason;
+  return (
+    ids.size === entries.length &&
+    sum === p.quantity &&
+    (reason === undefined ||
+      (typeof reason === "string" &&
+        reason.trim().length >= 3 &&
+        reason.length <= 200))
+  );
+}
+
 function isValidPayload(p: Omit<OutboxSalePayload, "occurredAt">): boolean {
   const text = (v: unknown) =>
     v === undefined || (typeof v === "string" && v.length <= 100);
   return (
+    isValidAllocation(p) &&
     typeof p.productId === "string" &&
     OBJECT_ID.test(p.productId) &&
     Number.isInteger(p.quantity) &&
@@ -299,8 +349,15 @@ export async function enqueueOfflineSale(params: {
   organizationId: string;
   token: string | null;
   payload: Omit<OutboxSalePayload, "occurredAt">;
-  display: { productName: string; unitPriceHint: number };
+  display: {
+    productName: string;
+    unitPriceHint: number;
+    batchLabels?: string[];
+  };
   replaces?: string;
+  // Lot B : régularisation d'une vente hors ligne (`BATCH_EXPIRED_AT_SYNC`) :
+  // le remplaçant garde l'heure RÉELLE de la vente remplacée.
+  keepOccurredAt?: boolean;
   now?: number;
 }): Promise<EnqueueResult> {
   if (!isIndexedDbAvailable() || typeof crypto?.randomUUID !== "function") {
@@ -312,8 +369,16 @@ export async function enqueueOfflineSale(params: {
 
   const now = params.now ?? Date.now();
   const clientOperationId = crypto.randomUUID();
-  const { productId, quantity, salePrice, buyerName, buyerContact } =
-    params.payload;
+  const {
+    productId,
+    quantity,
+    salePrice,
+    buyerName,
+    buyerContact,
+    batchAllocations,
+    unknownExpiryConfirmed,
+    expiredBatchRegularization,
+  } = params.payload;
   try {
     const outcome = await withTx([OPS, META], "readwrite", async (tx) => {
       const ops = await getPartitionOps(tx, partitionKey);
@@ -346,11 +411,37 @@ export async function enqueueOfflineSale(params: {
           salePrice,
           ...(buyerName !== undefined ? { buyerName } : {}),
           ...(buyerContact !== undefined ? { buyerContact } : {}),
-          occurredAt: new Date(now).toISOString(),
+          occurredAt:
+            params.keepOccurredAt && replaced
+              ? replaced.payload.occurredAt
+              : new Date(now).toISOString(),
+          ...(batchAllocations !== undefined
+            ? {
+                batchAllocations: batchAllocations.map((e) => ({
+                  batchId: e.batchId.toLowerCase(),
+                  quantity: e.quantity,
+                })),
+              }
+            : {}),
+          ...(unknownExpiryConfirmed ? { unknownExpiryConfirmed: true } : {}),
+          ...(expiredBatchRegularization
+            ? {
+                expiredBatchRegularization: {
+                  reason: expiredBatchRegularization.reason.trim(),
+                },
+              }
+            : {}),
         },
         display: {
           productName: params.display.productName,
           unitPriceHint: params.display.unitPriceHint,
+          ...(Array.isArray(params.display.batchLabels)
+            ? {
+                batchLabels: params.display.batchLabels
+                  .slice(0, 20)
+                  .map((l) => String(l).slice(0, 40)),
+              }
+            : {}),
         },
         status: "pending",
         attempts: 0,
@@ -628,6 +719,13 @@ export async function readPartitionState(params: {
   }
 }
 
+export interface OutboxRegularization {
+  status: "requested" | "approved" | "rejected";
+  requestId: string;
+  reason?: string | null;
+  checkedAt: number;
+}
+
 export type OperationAction =
   "sync-now" | "retry" | "abandon" | "remove-corrupted";
 
@@ -691,6 +789,59 @@ export async function applyOperationAction(
     return ok;
   } catch {
     console.warn("Offline sales outbox: action indisponible.");
+    return false;
+  }
+}
+
+/**
+ * Lot B — résultat d'une demande de régularisation pour UNE opération de SA
+ * partition, refusée `BATCH_EXPIRED_AT_SYNC` :
+ * - `requested` : demande transmise ; l'opération attend la décision
+ *   (aucune correction ni abandon : une nouvelle vente pourrait doubler la
+ *   vente approuvée sous la même clé) ;
+ * - `approved` : l'opération repart avec le MÊME UUID ; le serveur renvoie
+ *   la vente créée à l'approbation (rejeu), jamais une seconde ;
+ * - `rejected` : conflit visible, motif affiché, corriger / abandonner.
+ */
+export async function recordRegularization(
+  params: { userId: string; organizationId: string; token: string | null },
+  clientOperationId: string,
+  regularization: Omit<OutboxRegularization, "checkedAt">,
+  now: number = Date.now(),
+): Promise<boolean> {
+  const partitionKey = await verifiedPartition(params);
+  if (!partitionKey) return false;
+  try {
+    const ok = await withTx([OPS], "readwrite", async (tx) => {
+      const store = tx.objectStore(OPS);
+      const op = (await req(store.get(clientOperationId))) as
+        OutboxOperation | undefined;
+      if (!op || op.partitionKey !== partitionKey) return false;
+      if (op.status !== "conflict") return false;
+      if (
+        op.lastError?.code !== "BATCH_EXPIRED_AT_SYNC" &&
+        !op.regularization
+      ) {
+        return false;
+      }
+      const next: OutboxOperation = {
+        ...op,
+        regularization: { ...regularization, checkedAt: now },
+        updatedAt: now,
+      };
+      if (regularization.status === "approved") {
+        next.status = "pending";
+        next.attempts = 0;
+        next.nextAttemptAt = now;
+        delete next.lastError;
+      }
+      await req(store.put(next));
+      return true;
+    });
+    if (ok) notifyOutboxChanged("enqueued");
+    return ok;
+  } catch {
+    console.warn("Offline sales outbox: régularisation indisponible.");
     return false;
   }
 }
