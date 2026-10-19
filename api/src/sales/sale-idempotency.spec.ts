@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { BadRequestException } from '@nestjs/common';
 import {
   SALE_OCCURRED_AT_MAX_FUTURE_MS,
@@ -47,6 +48,9 @@ describe('sale-idempotency (1-11C.1)', () => {
         buyerName: null,
         buyerContact: null,
         occurredAt: null,
+        batchAllocations: null,
+        unknownExpiryConfirmed: false,
+        regularizationReason: null,
       });
       const h = computeSaleRequestHash(n);
       const variants = [
@@ -57,8 +61,45 @@ describe('sale-idempotency (1-11C.1)', () => {
         { ...n, buyerName: '' },
         { ...n, buyerContact: 'x' },
         { ...n, occurredAt: '2026-09-20T10:00:00.000Z' },
+        // Lot B : affectation, confirmation et régularisation.
+        {
+          ...n,
+          batchAllocations: [
+            { batchId: 'aa2233445566778899001122', quantity: 2 },
+          ],
+        },
+        { ...n, unknownExpiryConfirmed: true },
+        { ...n, regularizationReason: 'vente du matin' },
       ];
       for (const v of variants) expect(computeSaleRequestHash(v)).not.toBe(h);
+    });
+
+    it('lot B : hash d’une vente sans lots inchangé (rejeux d’outbox antérieurs)', () => {
+      const n = normalizeCreateSale(base);
+      const legacy = createHash('sha256')
+        .update(JSON.stringify([PRODUCT, 2, 500, null, null, null]))
+        .digest('hex');
+      expect(computeSaleRequestHash(n)).toBe(legacy);
+    });
+
+    it('lot B : affectation triée et normalisée (ordre et casse sans effet)', () => {
+      const id1 = '1a2233445566778899001122';
+      const id2 = 'bb2233445566778899001122';
+      const a = normalizeCreateSale({
+        ...base,
+        batchAllocations: [
+          { batchId: id2.toUpperCase(), quantity: 1 },
+          { batchId: id1, quantity: 1 },
+        ],
+      });
+      const b = normalizeCreateSale({
+        ...base,
+        batchAllocations: [
+          { batchId: id1, quantity: 1 },
+          { batchId: id2, quantity: 1 },
+        ],
+      });
+      expect(computeSaleRequestHash(a)).toBe(computeSaleRequestHash(b));
     });
   });
 

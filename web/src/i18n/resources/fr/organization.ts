@@ -46,6 +46,13 @@ const organizationFr = {
     "sales.notifications": "Recevoir les notifications de ventes",
     "products.manage_expiry": "Gérer les dates de péremption",
     "stock.manage_thresholds": "Personnaliser les seuils de stock",
+    "stock.manage_batches":
+      "Activer le suivi par lots et répartir le stock existant",
+    "stock.quarantine_batches":
+      "Mettre un lot à l'écart et le remettre à disposition",
+    "stock.record_losses": "Enregistrer et corriger des pertes de stock",
+    "products.manage_expiry_alerts":
+      "Régler le délai des alertes de péremption",
   },
   memberStatus: {
     active: "Active",

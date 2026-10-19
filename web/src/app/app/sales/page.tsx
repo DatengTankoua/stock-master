@@ -18,6 +18,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useLiveRefresh, useSocketSignals } from "@/hooks/use-live-refresh";
 import { SALE_INVALIDATION_EVENTS } from "@/hooks/use-sale-invalidation";
 import { createResponseOrder } from "@/lib/refresh-coordinator";
+import { SaleBatchDetails } from "@/components/sales/sale-batch-details";
+import { RegularizationRequestsCard } from "@/components/sales/regularization-requests-card";
+import { productBatchesEnabled } from "@/lib/api";
 
 // /app/sales (1-9D, ex "/sales") : l'historique exige `sales.view_all` OU
 // `sales.view_own` côté backend (403 sinon) — jamais d'appel si aucune des
@@ -183,6 +186,15 @@ export default function SalesListPage() {
         </PendingSalesAnchor>
       </div>
 
+      {/* Lot B : demandes de régularisation des vendeurs (responsables). */}
+      {canViewAll &&
+        hasPermission(authContext, "stock.adjust") &&
+        productBatchesEnabled(authContext) && (
+          <RegularizationRequestsCard
+            onDecided={() => void load({ silent: true })}
+          />
+        )}
+
       {canView && newerAvailable && pageIndex > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2 text-sm">
           <span>{t("list.page.newer")}</span>
@@ -276,6 +288,7 @@ export default function SalesListPage() {
                         {s.buyerContact ? ` — ${s.buyerContact}` : ""}
                       </p>
                     )}
+                    <SaleBatchDetails sale={s} />
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-bold">

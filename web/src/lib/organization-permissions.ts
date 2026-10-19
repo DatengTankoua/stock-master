@@ -25,6 +25,13 @@ export const DELEGABLE_PERMISSIONS = [
   // complètent `products.manage`, n'ouvrent aucun autre champ.
   "products.manage_expiry",
   "stock.manage_thresholds",
+  // Suivi par lots : activer le suivi d'une fiche et répartir son stock
+  // existant. Proposée seulement si l'API annonce la fonctionnalité.
+  "stock.manage_batches",
+  // Lot C : mise à l'écart d'un lot, pertes, délai des alertes de péremption.
+  "stock.quarantine_batches",
+  "stock.record_losses",
+  "products.manage_expiry_alerts",
 ] as const;
 
 export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
@@ -32,8 +39,51 @@ export type DelegablePermission = (typeof DELEGABLE_PERMISSIONS)[number];
 // 1-19A — version du catalogue ci-dessus (miroir de
 // CURRENT_PERMISSION_CATALOG côté API), déclarée à chaque modification de
 // membre : le serveur conserve les permissions que ce web ne connaît pas.
-// 3 : dates de péremption et seuils de stock.
-export const PERMISSION_CATALOG = 3;
+// 3 : dates de péremption et seuils de stock. 4 : suivi par lots.
+// Lot C : un catalogue par combinaison affichée — 5 : alertes de
+// péremption ; 6 : lots (suivi, mise à l'écart, pertes) ; 7 : tout.
+export const PERMISSION_CATALOG = 7;
+
+// Permissions propres à une fonctionnalité que l'API peut ne pas annoncer :
+// jamais proposées tant qu'elle est désactivée.
+const FEATURE_PERMISSIONS: Partial<
+  Record<DelegablePermission, "productBatches" | "expiryAlerts">
+> = {
+  "stock.manage_batches": "productBatches",
+  "stock.quarantine_batches": "productBatches",
+  "stock.record_losses": "productBatches",
+  "products.manage_expiry_alerts": "expiryAlerts",
+};
+
+export interface PermissionFeatures {
+  productBatches?: boolean;
+  expiryAlerts?: boolean;
+}
+
+/** Permission proposable selon les fonctionnalités annoncées par l'API. */
+export function isPermissionOffered(
+  permission: DelegablePermission,
+  features: PermissionFeatures | undefined,
+): boolean {
+  const feature = FEATURE_PERMISSIONS[permission];
+  return !feature || features?.[feature] === true;
+}
+
+/**
+ * Catalogue DÉCLARÉ par un formulaire : celui des permissions qu'il affiche
+ * réellement. Sans le suivi par lots, le catalogue 3 : une permission de
+ * lots déjà accordée est conservée, jamais retirée à l'insu de l'auteur.
+ */
+export function permissionCatalogFor(
+  features: PermissionFeatures | undefined,
+): number {
+  const batches = features?.productBatches === true;
+  const alerts = features?.expiryAlerts === true;
+  if (batches && alerts) return PERMISSION_CATALOG;
+  if (batches) return 6;
+  if (alerts) return 5;
+  return 3;
+}
 
 // 1-12H — miroir de STANDARD_MEMBER_PERMISSIONS (backend) : droits de tout
 // membre actif, ajoutés par le calcul serveur, jamais proposés ni retirables

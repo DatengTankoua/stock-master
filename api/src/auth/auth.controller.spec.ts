@@ -588,6 +588,8 @@ describe('AuthController', () => {
         'sales.view_own',
         'analytics.read',
       ]),
+      // Fonctionnalités annoncées par le serveur (désactivées par défaut).
+      features: { productBatches: false, expiryAlerts: false },
       // 1-14C.1 : état commercial séparé des permissions réelles.
       access: {
         subscriptionState: 'active',

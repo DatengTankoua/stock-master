@@ -3,8 +3,10 @@
 import { useT } from "next-i18next/client";
 import {
   SUPPLEMENTARY_PERMISSIONS,
+  isPermissionOffered,
   type DelegablePermission,
 } from "@/lib/organization-permissions";
+import { useOrganizationShell } from "@/contexts/organization-shell-context";
 
 interface PermissionCheckboxesProps {
   value: DelegablePermission[];
@@ -29,8 +31,12 @@ export function PermissionCheckboxes({
   allGranted = false,
 }: PermissionCheckboxesProps) {
   const { t } = useT("organization");
-  const options = SUPPLEMENTARY_PERMISSIONS.filter((p) =>
-    assignable.includes(p),
+  // Une permission d'une fonctionnalité non annoncée par l'API (suivi par
+  // lots désactivé) n'est jamais proposée.
+  const { authContext } = useOrganizationShell();
+  const options = SUPPLEMENTARY_PERMISSIONS.filter(
+    (p) =>
+      assignable.includes(p) && isPermissionOffered(p, authContext?.features),
   );
 
   const toggle = (permission: DelegablePermission) => {

@@ -55,6 +55,17 @@ import { productImagePrefix } from '../storage-quota/storage-prefixes';
 import { PushOutboxService } from '../push/push-outbox.service';
 import { stockAlertFor } from './stock-level';
 import {
+  batchError,
+  productBatchTrackedBody,
+} from './batches/product-batch-errors';
+import {
+  ProductBatch,
+  ProductBatchDocument,
+} from './batches/schemas/product-batch.schema';
+import { saleBatchSummaries } from './batches/sale-batch-summary';
+import { nextExpiryAlertOn, normalizeLeadDays } from './expiry/expiry-alerts';
+import { productBatchesEnabledFor } from './batches/product-batches-config';
+import {
   PRODUCT_PAGE_SORT,
   encodeProductPageCursor,
   productNameSearch,
@@ -142,6 +153,11 @@ export class ProductsService {
     private storageQuota: StorageQuotaService,
     @InjectModel(Organization.name)
     private organizationModel: Model<OrganizationDocument>,
+    // Lot B : identité des lots vendables projetée avec la liste ; absent
+    // dans les tests unitaires construits sans lots.
+    @Optional()
+    @InjectModel(ProductBatch.name)
+    private batchModel?: Model<ProductBatchDocument>,
     // Alertes de stock à l'entrée sous un seuil modifié (même circuit que
     // les ventes) ; absent hors processus HTTP (CLI, tests unitaires).
     @Optional() private pushOutbox?: PushOutboxService,
@@ -152,7 +168,7 @@ export class ProductsService {
    * dans sa transaction : règle centrale `stockAlertFor`, mêmes événements
    * (`stock-depleted`, `stock-low`) et mêmes destinataires que les ventes.
    */
-  private async recordStockAlert(
+  async recordStockAlert(
     session: MongooseSession,
     organizationId: string,
     productId: string,
@@ -190,6 +206,43 @@ export class ProductsService {
     } catch {
       this.logger.warn(`${event} non émis (best effort).`);
     }
+  }
+
+  /**
+   * Diffusion `product:updated` (champs standard) après une écriture faite
+   * hors de ce service (lots). Best effort, comme les autres diffusions.
+   */
+  async broadcastUpdated(
+    organizationId: string,
+    productId: string,
+  ): Promise<void> {
+    try {
+      const product = await this.productModel
+        .findOne({
+          _id: new Types.ObjectId(productId),
+          organizationId: new Types.ObjectId(organizationId),
+        })
+        .exec();
+      if (!product) return;
+      const imageUrl = await this.imageUrlFor(organizationId, product);
+      this.emitBestEffort(
+        organizationId,
+        'product:updated',
+        toProductMetricsView(product, COMMON_VISIBILITY, imageUrl),
+      );
+    } catch {
+      this.logger.warn('product:updated non émis (best effort).');
+    }
+  }
+
+  /** Lot C — délai d'anticipation des alertes de péremption du commerce. */
+  async expiryLeadDays(organizationId: string): Promise<number> {
+    const org = await this.organizationModel
+      .findById(organizationId)
+      .select({ expiryAlertLeadDays: 1 })
+      .lean<{ expiryAlertLeadDays?: number }>()
+      .exec();
+    return normalizeLeadDays(org?.expiryAlertLeadDays);
   }
 
   /** Throws 409 if another product (OF THE SAME TENANT) shares the name */
@@ -264,16 +317,24 @@ export class ProductsService {
     const images = await Promise.all(
       products.map((p) => this.imageUrlFor(organizationId, p)),
     );
-    return products.map((p, index) =>
-      toProductMetricsView(
+    // Lot B : seulement si la fonctionnalité est activée (le web, y compris
+    // hors ligne, n'ouvre la vente par lots qu'en sa présence).
+    const batchSales =
+      this.batchModel && productBatchesEnabledFor(organizationId)
+        ? await saleBatchSummaries(this.batchModel, organizationId, products)
+        : new Map();
+    return products.map((p, index) => {
+      const view = toProductMetricsView(
         p,
         visibility,
         images[index],
         visibility.financials
           ? (revenues.get(p._id.toString()) ?? 0)
           : undefined,
-      ),
-    );
+      );
+      const batchSale = batchSales.get(p._id.toString());
+      return batchSale ? { ...view, batchSale } : view;
+    });
   }
 
   /**
@@ -474,6 +535,15 @@ export class ProductsService {
     // 1-17B : création et rattachement de la photo comptabilisée dans la
     // MÊME transaction (jamais une référence sans fichier compté).
     // 1-21D : capacité incluse décidée dans la MÊME transaction.
+    // Lot C : première date de contrôle des alertes de péremption.
+    const expiryAlertNextOn =
+      dto.expiryDate != null
+        ? nextExpiryAlertOn(
+            dto.expiryDate,
+            await this.expiryLeadDays(organizationId),
+            null,
+          )
+        : null;
     const product = await this.inTransaction(async (session) => {
       await this.reserveCapacity(new Types.ObjectId(organizationId), session);
       const [created] = await this.productModel.create(
@@ -489,7 +559,9 @@ export class ProductsService {
             initialQuantity: dto.initialQuantity,
             remainingQuantity: dto.initialQuantity,
             // Facultatifs : absents (et non `null`) quand non renseignés.
-            ...(dto.expiryDate != null ? { expiryDate: dto.expiryDate } : {}),
+            ...(dto.expiryDate != null
+              ? { expiryDate: dto.expiryDate, expiryAlertNextOn }
+              : {}),
             ...(dto.lowStockThreshold != null
               ? { lowStockThreshold: dto.lowStockThreshold }
               : {}),
@@ -676,6 +748,17 @@ export class ProductsService {
       .exec();
     if (!product) throw new NotFoundException(`Product ${id} not found`);
 
+    // Suivi par lots : le stock n'entre que par une réception dans un lot et
+    // les dates de péremption sont portées par les lots. Refus AVANT toute
+    // écriture (journal compris) ; l'écriture ci-dessous est en plus
+    // conditionnée au mode lu (activation concurrente).
+    const touchesBatchManagedFields =
+      Boolean(dto.additionalStock && dto.additionalStock > 0) ||
+      dto.expiryDate !== undefined;
+    if (touchesBatchManagedFields && product.stockTracking === 'batches') {
+      throw new ConflictException(productBatchTrackedBody());
+    }
+
     const changes: Record<string, unknown> = {};
     // Ancienne photo : lue AVANT la mutation, supprimée APRÈS l'écriture.
     // Une ancienne URL (avant R2) reste telle quelle en base.
@@ -751,6 +834,13 @@ export class ProductsService {
       const to = dto.expiryDate ?? null;
       if (from !== to) {
         product.expiryDate = to ?? undefined;
+        // Lot C : nouvelle échéance → étapes replanifiées (une échéance
+        // déjà annoncée ne l'est jamais deux fois : marques conservées).
+        product.expiryAlertNextOn = nextExpiryAlertOn(
+          to,
+          await this.expiryLeadDays(organizationId),
+          product.expiryAlerts,
+        );
         await this.auditService.log(
           organizationId,
           id,
@@ -827,7 +917,11 @@ export class ProductsService {
           }
         : {}),
     };
-    const filter = { _id: product._id, organizationId: product.organizationId };
+    const filter = {
+      _id: product._id,
+      organizationId: product.organizationId,
+      ...(touchesBatchManagedFields ? { stockTracking: null } : {}),
+    };
     // Seuil modifié : écriture ET réévaluation dans la MÊME transaction,
     // valeurs avant / après lues de l'écriture atomique elle-même (une vente
     // concurrente n'est jamais ignorée). Alerte à l'ENTRÉE dans l'état de
@@ -871,6 +965,19 @@ export class ProductsService {
       return after;
     };
     let saved: ProductDocument | null;
+    // Activation du suivi par lots entre la lecture et l'écriture : refus
+    // explicite (409) plutôt qu'un 404 ou un conflit de photo.
+    const assertNotTrackedMeanwhile = async (): Promise<void> => {
+      if (!touchesBatchManagedFields) return;
+      const tracked = await this.productModel
+        .exists({
+          _id: product._id,
+          organizationId: product.organizationId,
+          stockTracking: 'batches',
+        })
+        .exec();
+      if (tracked) throw new ConflictException(productBatchTrackedBody());
+    };
     if (newImage) {
       // 1-17B — remplacement de photo : écriture conditionnée à la photo LUE
       // (deux remplacements concurrents ne laissent jamais un fichier
@@ -890,7 +997,10 @@ export class ProductsService {
         );
         return written;
       });
-      if (!saved) await this.assertImageUnchanged(filter);
+      if (!saved) {
+        await assertNotTrackedMeanwhile();
+        await this.assertImageUnchanged(filter);
+      }
     } else if (Object.keys(update).length === 0) {
       saved = product;
     } else if (thresholdChanged) {
@@ -898,7 +1008,10 @@ export class ProductsService {
     } else {
       saved = await write(filter);
     }
-    if (!saved) throw new NotFoundException(`Product ${id} not found`);
+    if (!saved) {
+      await assertNotTrackedMeanwhile();
+      throw new NotFoundException(`Product ${id} not found`);
+    }
     // Ancienne photo supprimée SEULEMENT après succès de la mutation ; son
     // sort est renvoyé tel quel (un échec n'est jamais présenté comme une
     // suppression).
@@ -1128,8 +1241,13 @@ export class ProductsService {
       ])
       .session(session)
       .exec();
+    // Lot C : les pertes nettes ne sont pas des ventes (elles restent dans
+    // `stock_losses`, valorisées au moment du mouvement).
     const units =
-      product.initialQuantity - product.remainingQuantity - (sold?.units ?? 0);
+      product.initialQuantity -
+      product.remainingQuantity -
+      (product.lossTracking?.netQuantity ?? 0) -
+      (sold?.units ?? 0);
     if (units === 0) return;
     await this.stockAdjustmentModel.create(
       [
@@ -1167,6 +1285,12 @@ export class ProductsService {
       )
       .exec();
     if (!product) return; // product may have been permanently deleted
+    // Suivi par lots : une correction ou une annulation de vente ne sait pas
+    // encore quel lot restaurer (lot B) : refus explicite, rien n'est écrit
+    // (la transaction appelante est annulée).
+    if (product.stockTracking === 'batches') {
+      throw new ConflictException(productBatchTrackedBody());
+    }
     if (product.remainingQuantity + delta < 0) {
       throw new BadRequestException(
         `Insufficient stock. Available: ${product.remainingQuantity}`,
@@ -1221,6 +1345,8 @@ export class ProductsService {
           _id: objectId,
           organizationId: orgOid,
           deletedAt: null,
+          // Produit suivi par lots : jamais décrémenté sans ses lots.
+          stockTracking: null,
           remainingQuantity: { $gte: quantity },
         },
         { $inc: { remainingQuantity: -quantity } },
@@ -1247,6 +1373,17 @@ export class ProductsService {
           code: SALE_ERROR_CODES.PRODUCT_NOT_FOUND,
           message: `Product ${productId} not found`,
         });
+      }
+      // Lot B : un produit suivi par lots ne se vend qu'avec ses lots
+      // (`batchAllocations`). Client antérieur (en ligne ou outbox) : 409
+      // terminal et compréhensible, rien n'est écrit.
+      if (fresh.stockTracking === 'batches') {
+        throw new ConflictException(
+          batchError(
+            'SALE_BATCH_ALLOCATION_REQUIRED',
+            "Ce produit est suivi par lots : mettez à jour l'application puis choisissez les lots vendus.",
+          ),
+        );
       }
       throw new BadRequestException({
         code: SALE_ERROR_CODES.INSUFFICIENT_STOCK,

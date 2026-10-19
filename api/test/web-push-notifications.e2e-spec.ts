@@ -551,6 +551,10 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
       // 1-19A.
       memberJoined: true,
       memberActivity: true,
+      // Lot C : actives par défaut (non proposées tant que désactivées).
+      expirySoon: true,
+      expiryExpired: true,
+      regularizationRequested: true,
     });
 
     const status = (token: string) =>
@@ -597,6 +601,9 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
       monthlyReport: true,
       memberJoined: true,
       memberActivity: true,
+      expirySoon: true,
+      expiryExpired: true,
+      regularizationRequested: true,
     });
     // Aucune réponse ne renvoie l'endpoint ni les clés.
     expect(JSON.stringify(patch.body)).not.toContain('fcm.googleapis.com');

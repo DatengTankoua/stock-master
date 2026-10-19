@@ -62,6 +62,16 @@ export class AppNotification {
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
   reportId: Types.ObjectId | null;
 
+  /** Lot C : lot, échéance annoncée, demande de régularisation. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  batchId?: Types.ObjectId | null;
+
+  @Prop({ type: String, default: null })
+  expiryDate?: string | null;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  regularizationId?: Types.ObjectId | null;
+
   @Prop({ type: Date, default: null })
   coverageEndsAt: Date | null;
 

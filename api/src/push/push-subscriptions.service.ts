@@ -1,3 +1,5 @@
+import { expiryAlertsEnabledFor } from '../products/expiry/expiry-alerts-config';
+import { productBatchesEnabledFor } from '../products/batches/product-batches-config';
 import {
   BadRequestException,
   Inject,
@@ -18,7 +20,7 @@ import {
   DEFAULT_PUSH_PREFERENCES,
   PushCategory,
   PushPreferences,
-  accessibleCategories,
+  offeredCategories,
 } from './schemas/push-category';
 import { validatePushSubscriptionInput } from './push-endpoint-policy';
 import { PUSH_CLOCK, PushRuntime } from './push-runtime';
@@ -66,9 +68,12 @@ const endpointHash = (endpoint: string) =>
 
 /** Catégories ouvertes au membre (aide à l'interface ; revalidé à l'envoi). */
 export function availablePushCategories(
-  context: Pick<PushMemberContext, 'role' | 'permissions'>,
+  context: Pick<PushMemberContext, 'role' | 'permissions' | 'organizationId'>,
 ): PushCategory[] {
-  return accessibleCategories(context);
+  return offeredCategories(context, {
+    expiryAlerts: expiryAlertsEnabledFor(context.organizationId),
+    productBatches: productBatchesEnabledFor(context.organizationId),
+  });
 }
 
 const PREFERENCE_KEYS = Object.keys(

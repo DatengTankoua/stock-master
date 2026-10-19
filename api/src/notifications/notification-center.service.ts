@@ -1,3 +1,5 @@
+import { expiryAlertsEnabledFor } from '../products/expiry/expiry-alerts-config';
+import { productBatchesEnabledFor } from '../products/batches/product-batches-config';
 import {
   BadRequestException,
   Inject,
@@ -34,6 +36,7 @@ import {
   PushCategory,
   PushPreferences,
   accessibleCategories,
+  offeredCategories,
   canAccessCategory,
 } from '../push/schemas/push-category';
 import {
@@ -123,9 +126,13 @@ function link(n: NotificationRecord): string {
       return '/app/organization/members';
     case PushCategory.STOCK_DEPLETED:
     case PushCategory.STOCK_LOW:
+    case PushCategory.EXPIRY_SOON:
+    case PushCategory.EXPIRY_EXPIRED:
       return n.productId
         ? `/app/catalog/products/${n.productId.toHexString()}`
         : '/app/catalog';
+    case PushCategory.REGULARIZATION_REQUESTED:
+      return '/app/sales';
     case PushCategory.SALE_CREATED:
       return '/app/sales';
     case PushCategory.SUBSCRIPTION_ENDING:
@@ -264,6 +271,9 @@ export class NotificationCenterService {
               saleId: job.saleId ?? null,
               paymentId: job.paymentId ?? null,
               reportId: job.reportId ?? null,
+              batchId: job.batchId ?? null,
+              expiryDate: job.expiryDate ?? null,
+              regularizationId: job.regularizationId ?? null,
               coverageEndsAt: job.coverageEndsAt ?? null,
               periodKind: job.periodKind ?? null,
               actorId: job.actorId ?? null,
@@ -497,6 +507,66 @@ export class NotificationCenterService {
     return marked;
   }
 
+  /**
+   * Lot C — détail d'une alerte de péremption (droit
+   * `products.view_stock_details`, vérifié par la catégorie) : produit, lot,
+   * échéance ANNONCÉE et état ACTUEL (stock physique, statut, date).
+   */
+  private async expiryDetails(
+    n: NotificationRecord,
+    organizationId: Types.ObjectId,
+  ): Promise<unknown> {
+    const product = await this.productModel
+      .findOne({ _id: n.productId, organizationId })
+      .select({ name: 1, deletedAt: 1, remainingQuantity: 1, expiryDate: 1 })
+      .lean<{
+        name: string;
+        deletedAt: Date | null;
+        remainingQuantity: number;
+        expiryDate?: string | null;
+      }>()
+      .exec();
+    if (!product) return { kind: 'expiry', productId: null, removed: true };
+    const base = {
+      kind: 'expiry',
+      stage: n.category === PushCategory.EXPIRY_SOON ? 'soon' : 'expired',
+      productId: n.productId?.toHexString() ?? null,
+      productName: product.name,
+      announcedExpiryDate: n.expiryDate ?? null,
+      inTrash: Boolean(product.deletedAt),
+    };
+    if (!n.batchId) {
+      return {
+        ...base,
+        currentExpiryDate: product.expiryDate ?? null,
+        remainingQuantity: product.remainingQuantity,
+      };
+    }
+    const batch = await this.productModel.db
+      .collection('productbatches')
+      .findOne(
+        { _id: n.batchId, organizationId },
+        {
+          projection: {
+            reference: 1,
+            expiryDate: 1,
+            remainingQuantity: 1,
+            status: 1,
+          },
+        },
+      );
+    return batch
+      ? {
+          ...base,
+          batchId: n.batchId.toHexString(),
+          reference: batch.reference as string,
+          currentExpiryDate: (batch.expiryDate as string | null) ?? null,
+          remainingQuantity: batch.remainingQuantity as number,
+          status: batch.status as string,
+        }
+      : { ...base, batchRemoved: true };
+  }
+
   // ─── Détails (droits ACTUELS) ─────────────────────────────────────────────
 
   private async details(
@@ -541,6 +611,9 @@ export class NotificationCenterService {
             }
           : { kind: 'stock', productId: null, removed: true };
       }
+      case PushCategory.EXPIRY_SOON:
+      case PushCategory.EXPIRY_EXPIRED:
+        return this.expiryDetails(n, organizationId);
       case PushCategory.SALE_CREATED: {
         const sale = await this.saleModel
           .findOne({ _id: n.saleId, organizationId })
@@ -828,7 +901,10 @@ export class NotificationCenterService {
   async preferencesView(context: NotificationReaderContext) {
     return {
       categories: await this.preferences(context),
-      available: accessibleCategories(context),
+      available: offeredCategories(
+        context,
+        currentFeatures(context.organizationId),
+      ),
     };
   }
 
@@ -851,6 +927,20 @@ export class NotificationCenterService {
       )
       .exec();
     this.signals.changed(context.organizationId, context.userId);
-    return { categories: next, available: accessibleCategories(context) };
+    return {
+      categories: next,
+      available: offeredCategories(
+        context,
+        currentFeatures(context.organizationId),
+      ),
+    };
   }
+}
+
+/** Lot C : activations courantes (catégories proposées). */
+function currentFeatures(organizationId: string) {
+  return {
+    expiryAlerts: expiryAlertsEnabledFor(organizationId),
+    productBatches: productBatchesEnabledFor(organizationId),
+  };
 }

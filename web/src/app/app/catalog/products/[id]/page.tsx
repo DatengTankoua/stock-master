@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordSaleDialog } from "@/components/products/record-sale-dialog";
 import { EditSaleDialog } from "@/components/products/edit-sale-dialog";
+import { ProductBatchesSection } from "@/components/products/product-batches-section";
+import { SaleBatchDetails } from "@/components/sales/sale-batch-details";
 import {
   fetchProduct,
   getApiErrorMessage,
@@ -51,6 +53,15 @@ const AUDIT_ACTIONS = [
   "sale_cancelled",
   "expiry_changed",
   "threshold_changed",
+  "batch_tracking_enabled",
+  "batch_received",
+  "batch_updated",
+  "batch_status_changed",
+  "batch_loss_recorded",
+  "batch_loss_corrected",
+  "sale_regularization_requested",
+  "sale_regularization_approved",
+  "sale_regularization_rejected",
 ] as const;
 
 function auditLabel(action: string, t: TFunction<"catalog">): string {
@@ -141,6 +152,27 @@ function AuditEntry({ log }: { log: ApiAuditLog }) {
               });
             })()}
           </p>
+        ) : null}
+        {log.action === "batch_received" && log.details?.reference ? (
+          <p className="text-xs mt-0.5">
+            {log.details.added !== undefined
+              ? t("audit.batchReceivedUnits", {
+                  reference: String(log.details.reference),
+                  count: Number(log.details.added),
+                })
+              : String(log.details.reference)}
+          </p>
+        ) : null}
+        {log.action === "batch_tracking_enabled" &&
+        Array.isArray(log.details?.batches) ? (
+          <p className="text-xs mt-0.5">
+            {t("audit.batchesCreated", {
+              count: (log.details.batches as unknown[]).length,
+            })}
+          </p>
+        ) : null}
+        {log.action === "batch_updated" && log.details?.reference ? (
+          <p className="text-xs mt-0.5">{String(log.details.reference)}</p>
         ) : null}
         {log.action === "sale_updated" && log.details && (
           <p className="text-xs mt-0.5">
@@ -382,6 +414,8 @@ export default function ProductDetailPage() {
                   // que l'auteur reçoit aussi (une seule relecture au lieu
                   // de deux) ; le stock indicatif couvre l'intervalle.
                   onSaleRecorded={scheduleRefresh}
+                  batchTracked={detail.stockTracking === "batches"}
+                  batchSale={detail.batchSale}
                 />
               )}
             </div>
@@ -415,6 +449,9 @@ export default function ProductDetailPage() {
             ))}
           </div>
 
+          {/* Lots (si l'API annonce la fonctionnalité). */}
+          <ProductBatchesSection product={detail} onChanged={scheduleRefresh} />
+
           {/* Sellers for this product */}
           {detail.sales.length > 0 && (
             <Card>
@@ -440,6 +477,7 @@ export default function ProductDetailPage() {
                           {format.dateTime(s.createdAt)}
                           {s.buyerName ? ` → ${s.buyerName}` : ""}
                         </p>
+                        <SaleBatchDetails sale={s as ApiSale} />
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="text-right shrink-0">
@@ -498,6 +536,9 @@ export default function ProductDetailPage() {
         }}
         onUpdated={reload}
         onDeleted={reload}
+        batchTracked={detail?.stockTracking === "batches"}
+        productId={detail?._id}
+        batchSale={detail?.batchSale}
       />
     </div>
   );

@@ -25,6 +25,13 @@ export interface NormalizedSaleInput {
   buyerName: string | null;
   buyerContact: string | null;
   occurredAt: string | null;
+  /**
+   * Lot B — affectation triée par lot (`null` : aucune). Doublons conservés
+   * tels quels : refusés par le service, jamais fusionnés en silence.
+   */
+  batchAllocations: { batchId: string; quantity: number }[] | null;
+  unknownExpiryConfirmed: boolean;
+  regularizationReason: string | null;
 }
 
 export function normalizeCreateSale(dto: CreateSaleDto): NormalizedSaleInput {
@@ -37,6 +44,23 @@ export function normalizeCreateSale(dto: CreateSaleDto): NormalizedSaleInput {
       dto.buyerContact === undefined ? null : dto.buyerContact.trim(),
     occurredAt:
       dto.occurredAt === undefined ? null : canonicalInstant(dto.occurredAt),
+    batchAllocations:
+      dto.batchAllocations === undefined
+        ? null
+        : dto.batchAllocations
+            .map((a) => ({
+              batchId: a.batchId.toLowerCase(),
+              quantity: a.quantity,
+            }))
+            .sort((a, b) =>
+              a.batchId === b.batchId
+                ? a.quantity - b.quantity
+                : a.batchId < b.batchId
+                  ? -1
+                  : 1,
+            ),
+    unknownExpiryConfirmed: dto.unknownExpiryConfirmed === true,
+    regularizationReason: dto.expiredBatchRegularization?.reason ?? null,
   };
 }
 
@@ -53,14 +77,28 @@ function canonicalInstant(value: string): string {
  * uniquement, jamais journalisé ni renvoyé.
  */
 export function computeSaleRequestHash(input: NormalizedSaleInput): string {
-  const canonical = JSON.stringify([
+  const fields: unknown[] = [
     input.productId,
     input.quantity,
     input.salePrice,
     input.buyerName,
     input.buyerContact,
     input.occurredAt,
-  ]);
+  ];
+  // Lot B : ajouté SEULEMENT si présent — le hash d'une vente sans lots
+  // reste identique à celui des versions antérieures (rejeux d'outbox).
+  if (
+    input.batchAllocations !== null ||
+    input.unknownExpiryConfirmed ||
+    input.regularizationReason !== null
+  ) {
+    fields.push({
+      batchAllocations: input.batchAllocations,
+      unknownExpiryConfirmed: input.unknownExpiryConfirmed,
+      regularizationReason: input.regularizationReason,
+    });
+  }
+  const canonical = JSON.stringify(fields);
   return createHash('sha256').update(canonical).digest('hex');
 }
 

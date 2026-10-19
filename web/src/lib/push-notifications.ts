@@ -21,7 +21,11 @@ export type PushCategory =
   | "monthly-report"
   // 1-19A.
   | "member-joined"
-  | "member-activity";
+  | "member-activity"
+  // Lot C.
+  | "expiry-soon"
+  | "expiry-expired"
+  | "regularization-requested";
 
 export interface PushPreferences {
   stockDepleted: boolean;
@@ -32,6 +36,9 @@ export interface PushPreferences {
   monthlyReport: boolean;
   memberJoined: boolean;
   memberActivity: boolean;
+  expirySoon: boolean;
+  expiryExpired: boolean;
+  regularizationRequested: boolean;
 }
 
 export interface PushConfig {

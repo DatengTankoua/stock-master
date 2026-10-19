@@ -19,6 +19,21 @@ import {
   Organization,
   OrganizationSchema,
 } from '../organizations/schemas/organization.schema';
+import {
+  ProductBatch,
+  ProductBatchSchema,
+} from './batches/schemas/product-batch.schema';
+import {
+  ProductBatchOperation,
+  ProductBatchOperationSchema,
+} from './batches/schemas/product-batch-operation.schema';
+import { ProductBatchesService } from './batches/product-batches.service';
+import {
+  StockLoss,
+  StockLossSchema,
+} from './batches/schemas/stock-loss.schema';
+import { ProductBatchesController } from './batches/product-batches.controller';
+import { ExpiryAlertsController } from './expiry/expiry-alerts.controller';
 
 @Module({
   imports: [
@@ -33,6 +48,14 @@ import {
         name: PurgedStockAdjustment.name,
         schema: PurgedStockAdjustmentSchema,
       },
+      // Lots (lot A) : lots et traces idempotentes de leurs opérations.
+      { name: ProductBatch.name, schema: ProductBatchSchema },
+      {
+        name: ProductBatchOperation.name,
+        schema: ProductBatchOperationSchema,
+      },
+      // Lot C : mouvements de perte et leurs corrections.
+      { name: StockLoss.name, schema: StockLossSchema },
     ]),
     S3Module,
     StorageQuotaModule,
@@ -41,8 +64,12 @@ import {
     // 1-19A : activité des membres annoncée au propriétaire.
     PushModule,
   ],
-  providers: [ProductsService],
-  controllers: [ProductsController],
-  exports: [ProductsService],
+  providers: [ProductsService, ProductBatchesService],
+  controllers: [
+    ProductsController,
+    ProductBatchesController,
+    ExpiryAlertsController,
+  ],
+  exports: [ProductsService, ProductBatchesService],
 })
 export class ProductsModule {}

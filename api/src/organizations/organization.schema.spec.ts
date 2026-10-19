@@ -152,8 +152,8 @@ describe('permissions (phase 1-1A)', () => {
     expect([...seller].sort()).toEqual(['sales.record', 'sales.view_own']);
   });
 
-  it('liste délégable : 18 permissions, aucune opération owner-only', () => {
-    expect(ALL_DELEGABLE_PERMISSIONS).toHaveLength(18);
+  it('liste délégable : 22 permissions, aucune opération owner-only', () => {
+    expect(ALL_DELEGABLE_PERMISSIONS).toHaveLength(22);
     for (const op of OWNER_ONLY_OPERATIONS) {
       expect(ALL_DELEGABLE_PERMISSIONS).not.toContain(
         op as (typeof ALL_DELEGABLE_PERMISSIONS)[number],
@@ -183,6 +183,7 @@ describe('permissions (phase 1-1A)', () => {
       'members.manage',
       'products.manage',
       'products.manage_expiry',
+      'products.manage_expiry_alerts',
       'products.view_financials',
       'products.view_stock_details',
       'sales.notifications',
@@ -190,7 +191,10 @@ describe('permissions (phase 1-1A)', () => {
       'sales.view_all',
       'sales.view_own',
       'stock.adjust',
+      'stock.manage_batches',
       'stock.manage_thresholds',
+      'stock.quarantine_batches',
+      'stock.record_losses',
       'support.contact',
       'trash.manage',
     ]);
@@ -207,7 +211,7 @@ describe('permissions (phase 1-1A)', () => {
     expect(setOf(DEFAULT_PERMISSIONS_BY_ROLE[OrganizationRole.SELLER])).toEqual(
       new Set(['sales.record', 'sales.view_own']),
     );
-    expect(ALL_DELEGABLE_PERMISSIONS).toHaveLength(18);
+    expect(ALL_DELEGABLE_PERMISSIONS).toHaveLength(22);
     expect([...OWNER_ONLY_OPERATIONS].sort()).toEqual([
       'billing.identity',
       'billing.payment',
