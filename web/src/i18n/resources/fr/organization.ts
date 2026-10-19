@@ -194,6 +194,8 @@ const organizationFr = {
       message: "Message",
       emailAlternative:
         "Vous préférez l'e-mail ? Utilisez le <form>formulaire « Par e-mail »</form> ci-dessous : la réponse arrivera à votre adresse e-mail.",
+      widgetEmail:
+        "Vous préférez l'e-mail ? Utilisez le <form>formulaire d'Assistance</form> : la réponse arrivera à votre adresse e-mail.",
     },
     forbidden:
       "Votre rôle ne permet pas de contacter le service client depuis ce commerce. Demandez ce droit au propriétaire ou à un administrateur, ou utilisez les coordonnées de la page <contact>Contact</contact>.",

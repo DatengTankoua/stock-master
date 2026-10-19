@@ -37,6 +37,7 @@ import { useLocale } from "@/i18n/locale-provider";
 import { localizedHref } from "@/lib/seo/public-routes";
 import { useMessage } from "@/i18n/use-message";
 import { EngagementPrompt } from "@/components/notifications/engagement-prompt";
+import { WhatsAppWidget } from "@/components/contact/whatsapp-widget";
 import { LegalAcceptancePrompt } from "@/components/legal/legal-acceptance-prompt";
 import {
   Dialog,
@@ -1068,8 +1069,11 @@ export default function AppShellLayout({
               </p>
             )}
 
+            {/* Contact WhatsApp : marge basse agrandie pour que le bouton
+                flottant (au-dessus de la barre mobile) ne masque jamais la
+                fin du contenu. */}
             <main
-              className={`flex flex-1 flex-col ${navOffline ? "pb-24 md:pb-16" : "pb-16"}`}
+              className={`flex flex-1 flex-col ${navOffline ? "pb-40 md:pb-24" : "pb-36 md:pb-24"}`}
             >
               {/* 1-16A.1 : invitation installation / notifications, après
                   chargement du contexte, en session applicative seulement. */}
@@ -1145,6 +1149,18 @@ export default function AppShellLayout({
                 <Fragment key={contentGeneration}>{children}</Fragment>
               )}
             </main>
+
+            {/* Contact WhatsApp : session applicative avec le droit
+                `support.contact` (mêmes restrictions que l'Assistance),
+                masqué sur la page Assistance qui a sa propre carte. */}
+            {contextIsCurrent &&
+              !commercialBlock &&
+              authContext &&
+              hasApplicationAccess(authContext) &&
+              authContext.effectivePermissions.includes("support.contact") &&
+              !pathname.startsWith("/app/organization/support") && (
+                <WhatsAppWidget variant="app" raised={navOffline} />
+              )}
 
             <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden">
               {navOffline && (

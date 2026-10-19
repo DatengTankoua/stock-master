@@ -184,6 +184,8 @@ const organizationEn: Translation<typeof organizationFr> = {
       message: "Message",
       emailAlternative:
         "Prefer email? Use the <form>“By email” form</form> below: the reply will arrive at your email address.",
+      widgetEmail:
+        "Prefer email? Use the <form>Support form</form>: the reply will arrive at your email address.",
     },
     forbidden:
       "Your role does not allow you to contact customer support from this shop. Ask the owner or an administrator for this right, or use the details on the <contact>Contact</contact> page.",

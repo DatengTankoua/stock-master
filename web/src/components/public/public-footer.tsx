@@ -3,7 +3,7 @@ import { Wordmark } from "@/components/brand/wordmark";
 import { LocaleLinks } from "@/components/i18n/locale-links";
 import { LANDING_NAV } from "@/components/landing/landing-nav";
 import { WhatsAppIcon } from "@/components/contact/whatsapp-icon";
-import { WhatsAppWidget } from "@/components/public/whatsapp-widget";
+import { WhatsAppWidget } from "@/components/contact/whatsapp-widget";
 import {
   HELP_PAGES,
   LEGAL_DOCUMENTS,
