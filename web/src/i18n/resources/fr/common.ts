@@ -44,6 +44,20 @@ const commonFr = {
     text: "Les tarifs et conditions affichés peuvent avoir changé depuis. L'inscription, la connexion et le paiement nécessitent une connexion Internet.",
     refresh: "Actualiser",
   },
+  // Contact WhatsApp : fin commune (pages publiques et Assistance).
+  whatsapp: {
+    subjectLine: "Sujet : {{subject}}",
+    charCount: "{{length}} / {{count}} caractères",
+    previewLabel: "Texte prérempli dans WhatsApp (modifiable avant l'envoi)",
+    notice:
+      "WhatsApp s'ouvrira. Envoyez votre message pour démarrer la conversation.",
+    continue: "Continuer sur WhatsApp",
+    newWindow: "(ouvre WhatsApp ou un nouvel onglet)",
+    afterOpen:
+      "Stock Master n'envoie rien à votre place : envoyez le message depuis WhatsApp. Si WhatsApp ne s'est pas ouvert, votre texte est toujours ici ; réessayez ou écrivez-nous par e-mail.",
+    offline:
+      "Pas de connexion : WhatsApp comme l'e-mail nécessitent Internet. Votre texte reste sur cet écran ; rien ne sera envoyé automatiquement.",
+  },
   actions: {
     retry: "Réessayer",
     cancel: "Annuler",

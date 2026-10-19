@@ -44,6 +44,8 @@ export function EnglishVersionHint() {
     <div
       lang="en"
       role="region"
+      // Repère du bouton WhatsApp flottant, relevé tant que le bandeau est là.
+      data-language-hint=""
       aria-label={t("languageHint.text")}
       className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-xl flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border bg-background/95 px-4 py-2 text-center text-sm text-muted-foreground shadow-lg backdrop-blur-sm"
     >

@@ -54,6 +54,24 @@ export const CONTACT_EMAILS = Object.freeze({
 });
 
 /**
+ * Numéro WhatsApp Business, canal de contact prioritaire (communiqué par
+ * le propriétaire). Simple lien de conversation `wa.me` : aucune API, aucun
+ * widget tiers, aucune requête vers WhatsApp avant un clic de l'utilisateur.
+ * Les mentions légales (texte archivé) ne l'affichent pas : `OPERATOR.phone`
+ * reste à renseigner avec une nouvelle version du document.
+ */
+export const WHATSAPP = Object.freeze({
+  /** Numéro affiché. */
+  display: "+237 651 563 665",
+  /** Format international sans « + » ni espace (`wa.me`). */
+  digits: "237651563665",
+  /** Format E.164. */
+  e164: "+237651563665",
+  url: "https://wa.me/237651563665",
+  tel: "tel:+237651563665",
+});
+
+/**
  * État des adresses : DÉCLARÉES fonctionnelles par le propriétaire le
  * 7 octobre 2026. Aucun envoi ni aucune réception n'a été testé par
  * l'équipe technique (validations 1-16C.1 : transport e-mail simulé).
