@@ -22,7 +22,14 @@ import {
   fetchPushDeviceState,
   getNotificationPermission,
   getPushSupport,
+  isPushOptedOut,
+  reconcilePushSubscription,
 } from "@/lib/push-notifications";
+import {
+  PUSH_DEFERRED_UNTIL_KEY,
+  PUSH_DEFER_MS,
+  decidePushInvitation,
+} from "@/lib/push-invitation";
 import {
   InstallState,
   getInstallState,
@@ -39,7 +46,7 @@ const MODAL_PATH = "/app";
 
 type Invitation =
   | { kind: "install"; install: Exclude<InstallState, "installed" | "unknown"> }
-  | { kind: "push"; publicKey: string }
+  | { kind: "push" | "push-link"; publicKey: string }
   | { kind: "push-denied" };
 
 function readNumber(storage: Storage, key: string): number | null {
@@ -77,6 +84,11 @@ function busyScreen(): boolean {
 //   la propose (ou aide iPhone/iPad), sinon activation du push si le
 //   navigateur ET le serveur le permettent ; permission refusée → aide aux
 //   réglages, jamais de nouvel appel à `requestPermission`.
+// - Permission déjà accordée : réconciliation silencieuse de l'abonnement
+//   existant avec le compte connecté ; invitation « relier cet appareil »
+//   seulement si elle échoue. Rien n'est affiché pendant la vérification.
+// - « Plus tard » sur une invitation push : 7 jours sans relance sur cet
+//   appareil ; désactivation volontaire : plus aucune invitation.
 // - Au plus un modal par 24 h et par appareil, seulement sur l'accueil, sans
 //   autre dialogue ouvert ni saisie en cours ; sinon une bannière discrète
 //   (masquable pour la session).
@@ -120,15 +132,29 @@ export function EngagementPrompt() {
         setInvitation(null);
         return;
       }
-      const device = await fetchPushDeviceState();
-      if (device.registered) {
-        setInvitation(null);
-        return;
+      let device = await fetchPushDeviceState();
+      const permission = getNotificationPermission();
+      // Permission déjà accordée : l'abonnement existant est d'abord
+      // réconcilié avec le compte connecté (jamais `requestPermission`).
+      if (!device.registered && permission === "granted") {
+        const before = device;
+        device = await reconcilePushSubscription(config.publicKey).catch(
+          () => before,
+        );
       }
+      const kind = decidePushInvitation({
+        permission,
+        registered: device.registered,
+        optedOut: isPushOptedOut(),
+        deferredUntil: readNumber(localStorage, PUSH_DEFERRED_UNTIL_KEY),
+        now: Date.now(),
+      });
       setInvitation(
-        getNotificationPermission() === "denied"
-          ? { kind: "push-denied" }
-          : { kind: "push", publicKey: config.publicKey },
+        kind === null
+          ? null
+          : kind === "push-denied"
+            ? { kind }
+            : { kind, publicKey: config.publicKey },
       );
     } catch {
       setInvitation(null);
@@ -161,7 +187,10 @@ export function EngagementPrompt() {
         invitation.install === "promptable"
       ) {
         await promptInstall();
-      } else if (invitation.kind === "push") {
+      } else if (
+        invitation.kind === "push" ||
+        invitation.kind === "push-link"
+      ) {
         await enablePushNotifications(invitation.publicKey);
         toast.success(t("push.enabled"));
       }
@@ -179,6 +208,15 @@ export function EngagementPrompt() {
   };
 
   const hideBanner = () => {
+    // Report d'une invitation push : mémorisé sur l'appareil (7 jours), pas
+    // seulement pour la session — aucune relance à chaque connexion.
+    if (invitation && invitation.kind !== "install") {
+      write(
+        localStorage,
+        PUSH_DEFERRED_UNTIL_KEY,
+        String(Date.now() + PUSH_DEFER_MS),
+      );
+    }
     write(sessionStorage, BANNER_HIDDEN_KEY, "1");
     setBannerHidden(true);
   };
@@ -267,6 +305,12 @@ function describe(
         title: t("engagement.push.title"),
         body: t("engagement.push.body"),
         action: t("engagement.push.action"),
+      };
+    case "push-link":
+      return {
+        title: t("engagement.link.title"),
+        body: t("engagement.link.body"),
+        action: t("engagement.link.action"),
       };
     case "push-denied":
       return {

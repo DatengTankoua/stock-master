@@ -186,6 +186,11 @@ const notificationsFr = {
       body: "Soyez prévenu des ruptures de stock, des ventes et des échéances, même application fermée.",
       action: "Activer",
     },
+    link: {
+      title: "Relier cet appareil aux notifications",
+      body: "Ce navigateur autorise déjà les notifications de Stock Master, mais il n'est pas relié à votre compte (autre compte utilisé avant, ou abonnement retiré). Un clic suffit, sans nouvelle demande du navigateur.",
+      action: "Relier",
+    },
     denied: {
       title: "Notifications bloquées",
       body: "Les notifications sont refusées pour ce site sur cet appareil.",

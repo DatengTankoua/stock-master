@@ -21,6 +21,12 @@ export enum PushSubscriptionDisabledReason {
   SESSION_REVOKED = 'session-revoked',
   /** Plafond d'appareils atteint : le plus ancien est remplacé. */
   REPLACED = 'replaced',
+  /**
+   * Déconnexion de l'appareil (ou autre compte connecté sur ce navigateur) :
+   * plus aucun envoi, préférences conservées. Seul le MÊME utilisateur,
+   * session vérifiée, peut le réactiver (`reconcile`).
+   */
+  SIGNED_OUT = 'signed-out',
 }
 
 /**
@@ -114,6 +120,14 @@ export class PushSubscriptionRecord {
 
   @Prop({ type: Date, default: null })
   lastDeliveredAt: Date | null;
+
+  /**
+   * Empreinte (SHA-256) du jeton de la DERNIÈRE session qui a détaché cet
+   * appareil (`release`). Une réconciliation portée par cette même session
+   * est refusée, quel que soit l'ordre d'arrivée des requêtes.
+   */
+  @Prop({ type: String, default: null, maxlength: 64 })
+  releasedSession: string | null;
 
   createdAt?: Date;
   updatedAt?: Date;

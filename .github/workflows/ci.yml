@@ -51,6 +51,9 @@ jobs:
       # repli français) et inventaire des textes visibles non traduits.
       - run: pnpm test:i18n
       - run: pnpm i18n:coverage
+      # Notifications : réconciliation après reconnexion, détachement à la
+      # déconnexion, report et refus respectés (doublures, aucun push réel).
+      - run: pnpm test:push-reconnect
       - run: pnpm build
       # 1-16C.2 : le texte servi des documents soumis à acceptation doit être
       # identique à l'archive de sa version (api/src/legal/archive), pour

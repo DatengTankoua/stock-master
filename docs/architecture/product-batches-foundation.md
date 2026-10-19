@@ -319,7 +319,10 @@ espace insécable en FR, « : » en EN).
 
 1. API puis web, drapeau absent. Rien ne change pour les clients.
 2. Aucune migration automatique : `migrate:product-batches` n'est pas dans
-   le pré-déploiement.
+   le pré-déploiement. **Mis à jour** : l'installation de la garde est
+   désormais faite par `migrate:predeploy`
+   ([product-batches-expiry-losses.md § 5](product-batches-expiry-losses.md)).
+   Elle n'active rien.
 3. **Ne pas activer en production avant le lot B.** Pour une recette :
    `migrate:product-batches -- --install --apply` (validateur + index),
    puis `PRODUCT_BATCHES_ENABLED=true` avec une portée explicite

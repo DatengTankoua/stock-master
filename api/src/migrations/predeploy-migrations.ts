@@ -6,7 +6,8 @@
  *
  * Lance, dans l'ordre et dans des processus séparés, les migrations d'index
  * EXISTANTES (chacune idempotente : no-op si l'index exact existe, échec
- * sans rien écraser sinon). S'arrête au premier échec avec le code 1 : sur
+ * sans rien écraser sinon), puis la garde du suivi par lots et la
+ * préparation des alertes de péremption (aucune activation). S'arrête au premier échec avec le code 1 : sur
  * Railway, le déploiement ne se poursuit pas et la version en service reste
  * active. Aucun outil opérateur (`subscription:grant`, rapprochement,
  * rattrapage d'historique) n'est lancé ici.
@@ -53,6 +54,12 @@ export const PREDEPLOY_MIGRATIONS: readonly string[] = Object.freeze([
   'create-sale-history-indexes.js',
   // 1-20F : liste paginée des produits (performance, non bloquant).
   'create-product-page-indexes.js',
+  // Lots A à C : garde du suivi par lots (= migrate:product-batches --
+  // --install --apply). N'active rien : drapeaux et portées séparés.
+  'install-product-batches.js',
+  // Lot C : index et planification initiale des alertes de péremption
+  // (= migrate:expiry-alerts -- --apply), après la garde.
+  'install-expiry-alerts.js',
 ]);
 
 /**

@@ -179,6 +179,11 @@ const notificationsEn: Translation<typeof notificationsFr> = {
       body: "Be alerted about stock-outs, sales and due dates, even when the app is closed.",
       action: "Turn on",
     },
+    link: {
+      title: "Link this device to notifications",
+      body: "This browser already allows Stock Master notifications, but it isn't linked to your account (another account was used before, or the subscription was removed). One click is enough, with no new browser prompt.",
+      action: "Link",
+    },
     denied: {
       title: "Notifications blocked",
       body: "Notifications are refused for this site on this device.",

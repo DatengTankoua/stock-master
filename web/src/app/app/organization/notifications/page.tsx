@@ -18,6 +18,7 @@ import {
   fetchPushDeviceState,
   getNotificationPermission,
   getPushSupport,
+  reconcilePushSubscription,
   updatePushPreferences,
 } from "@/lib/push-notifications";
 import type { PushPreferences } from "@/lib/push-notifications";
@@ -46,10 +47,24 @@ function PushSettings() {
     try {
       const support = getPushSupport();
       const config = await fetchPushConfig();
-      const device =
+      let device: PushDeviceState =
         support === "supported" && config.enabled
           ? await fetchPushDeviceState()
           : { registered: false, preferences: null };
+      // Permission déjà accordée : abonnement existant réconcilié avec le
+      // compte connecté avant d'afficher « Activer ».
+      if (
+        !device.registered &&
+        config.enabled &&
+        config.publicKey &&
+        support === "supported" &&
+        getNotificationPermission() === "granted"
+      ) {
+        const before = device;
+        device = await reconcilePushSubscription(config.publicKey).catch(
+          () => before,
+        );
+      }
       setState({
         status: "ready",
         config,

@@ -95,6 +95,14 @@ export class RegisterPushSubscriptionDto {
   preferences?: PushPreferencesDto;
 }
 
+/** Réconciliation : abonnement existant du navigateur, sans préférences. */
+export class ReconcilePushSubscriptionDto {
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => PushBrowserSubscriptionDto)
+  subscription: PushBrowserSubscriptionDto;
+}
+
 export class PushEndpointDto {
   @IsString()
   @MaxLength(PUSH_ENDPOINT_MAX_LENGTH)
