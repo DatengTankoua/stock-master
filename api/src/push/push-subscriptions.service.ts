@@ -176,8 +176,10 @@ export class PushSubscriptionsService {
         existing?.status === PushSubscriptionStatus.ACTIVE &&
         existing.userId.equals(userId) &&
         existing.organizationId.equals(organizationId);
+      // Même utilisateur (déconnecté, autre organisation…) : ses choix sur
+      // cet appareil sont conservés, jamais remis « tout activé ».
       const preferences = mergePreferences(
-        sameHolder
+        existing?.userId.equals(userId)
           ? completePreferences(existing.preferences)
           : { ...DEFAULT_PUSH_PREFERENCES },
         dto.preferences,
@@ -199,6 +201,8 @@ export class PushSubscriptionsService {
                 disabledReason: null,
                 disabledAt: null,
                 registeredAt: sameHolder ? existing.registeredAt : now,
+                // Activation explicite : remplace tout détachement antérieur.
+                releasedSession: null,
               },
               $setOnInsert: { lastDeliveredAt: null },
             },
@@ -222,6 +226,147 @@ export class PushSubscriptionsService {
     endpoint: string,
   ): Promise<PushDeviceView> {
     return this.view(context, endpoint);
+  }
+
+  /**
+   * Réconciliation SANS action de l'utilisateur, appelée par le navigateur
+   * quand la permission est déjà accordée et qu'un abonnement local existe.
+   * Seul le MÊME utilisateur (contexte serveur, session vérifiée par les
+   * gardes) récupère l'appareil, avec ses préférences :
+   * - actif pour une autre de ses organisations → rattaché à l'organisation
+   *   courante ;
+   * - désactivé par déconnexion ou révocation de session → réactivé.
+   * Jamais d'attribution à un autre utilisateur : un appareil encore actif
+   * pour un autre compte est seulement DÉTACHÉ (plus aucun envoi à l'ancien
+   * titulaire sur ce navigateur), et la réponse reste celle d'un appareil
+   * absent. Événements antérieurs jamais livrés (`registeredAt`).
+   */
+  async reconcile(
+    context: PushMemberContext,
+    dto: { subscription: RegisterPushSubscriptionDto['subscription'] },
+    session: string,
+  ): Promise<PushDeviceView> {
+    const absent: PushDeviceView = { registered: false, preferences: null };
+    if (!this.runtime.pushActive) return absent;
+    const subscription = validatePushSubscriptionInput(dto.subscription);
+    if (!subscription) return absent;
+    const hash = endpointHash(subscription.endpoint);
+    const userId = new Types.ObjectId(context.userId);
+    const organizationId = new Types.ObjectId(context.organizationId);
+    const existing = await this.subscriptionModel
+      .findOne({ endpointHash: hash })
+      .lean<PushSubscriptionRecord & { _id: Types.ObjectId }>()
+      .exec();
+    if (!existing) return absent;
+
+    if (!existing.userId.equals(userId)) {
+      if (existing.status === PushSubscriptionStatus.ACTIVE) {
+        await this.subscriptionModel
+          .updateOne(
+            { _id: existing._id, status: PushSubscriptionStatus.ACTIVE },
+            {
+              $set: {
+                status: PushSubscriptionStatus.DISABLED,
+                disabledReason: PushSubscriptionDisabledReason.SIGNED_OUT,
+                disabledAt: this.clock(),
+              },
+            },
+          )
+          .exec();
+      }
+      return absent;
+    }
+
+    const active = existing.status === PushSubscriptionStatus.ACTIVE;
+    if (active && existing.organizationId.equals(organizationId)) {
+      return this.view(context, subscription.endpoint);
+    }
+    // Session déjà déconnectée de cet appareil : requête arrivée (ou traitée)
+    // après son `release` — jamais de réactivation.
+    if (existing.releasedSession === session) return absent;
+    const reclaimable =
+      active ||
+      existing.disabledReason === PushSubscriptionDisabledReason.SIGNED_OUT ||
+      existing.disabledReason ===
+        PushSubscriptionDisabledReason.SESSION_REVOKED;
+    if (!reclaimable) return absent;
+
+    const user = await this.userModel
+      .findById(userId)
+      .select({ authVersion: 1 })
+      .lean<{ authVersion?: number | null }>()
+      .exec();
+    if (!user) return absent;
+    // Filtre sur l'état relu : une écriture concurrente (autre compte,
+    // retrait explicite, `release` de CETTE session entre la lecture et
+    // l'écriture) l'emporte, l'appareil reste alors absent.
+    await this.subscriptionModel
+      .updateOne(
+        {
+          _id: existing._id,
+          userId,
+          status: existing.status,
+          organizationId: existing.organizationId,
+          releasedSession: { $ne: session },
+        },
+        {
+          $set: {
+            organizationId,
+            p256dh: subscription.p256dh,
+            auth: subscription.auth,
+            preferences: completePreferences(existing.preferences),
+            authVersion: currentSessionVersion(user),
+            status: PushSubscriptionStatus.ACTIVE,
+            disabledReason: null,
+            disabledAt: null,
+            registeredAt: this.clock(),
+          },
+        },
+        { runValidators: true },
+      )
+      .exec();
+    await this.enforceDeviceLimit(userId, organizationId);
+    return this.view(context, subscription.endpoint);
+  }
+
+  /**
+   * Déconnexion : ce navigateur cesse de recevoir, sans perdre les
+   * préférences de son titulaire ; l'abonnement local peut alors être
+   * conservé pour une reconnexion du même compte. Le titulaire actif est
+   * détaché QUEL QU'IL SOIT (l'endpoint, jamais renvoyé par l'API, désigne
+   * ce navigateur ; un compte précédent dont la session a simplement expiré
+   * n'y reçoit donc plus rien non plus). Réponse identique dans tous les cas.
+   */
+  async release(endpoint: string, session: string): Promise<void> {
+    if (typeof endpoint !== 'string' || endpoint.length === 0) return;
+    const active = { $eq: ['$status', PushSubscriptionStatus.ACTIVE] };
+    // UNE écriture atomique, quel que soit l'état : la session est marquée
+    // (toute réconciliation qu'elle porte, même déjà partie, est refusée) et
+    // un appareil actif est détaché.
+    await this.subscriptionModel
+      .updateOne(
+        { endpointHash: endpointHash(endpoint) },
+        [
+          {
+            $set: {
+              releasedSession: session,
+              status: {
+                $cond: [active, PushSubscriptionStatus.DISABLED, '$status'],
+              },
+              disabledReason: {
+                $cond: [
+                  active,
+                  PushSubscriptionDisabledReason.SIGNED_OUT,
+                  '$disabledReason',
+                ],
+              },
+              disabledAt: { $cond: [active, this.clock(), '$disabledAt'] },
+            },
+          },
+        ],
+        { updatePipeline: true },
+      )
+      .exec();
   }
 
   async updatePreferences(

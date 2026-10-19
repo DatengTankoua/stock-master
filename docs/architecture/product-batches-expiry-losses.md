@@ -230,7 +230,7 @@ toutes ; le vendeur n'en a aucune sans délégation explicite.
   externe. Un balayage `scanExpiryAlerts` au plus toutes les 15 min par
   processus, si `EXPIRY_ALERTS_ENABLED=true`, limité à la portée de
   `EXPIRY_ALERTS_ORGANIZATIONS` (§ 6). Les deux index partiels sont
-  vérifiés avant chaque balayage (§ 7, étape 6).
+  vérifiés avant chaque balayage (§ 7, étape 4).
 - **Requête ciblée** : index **partiels** sur `products` et
   `productbatches` (cibles en stock planifiées seulement), imposés à la
   requête (`hint`) :
@@ -279,6 +279,54 @@ toutes ; le vendeur n'en a aucune sans délégation explicite.
   commerces (testé).
 
 ## 5. Index et migrations
+
+**Pré-déploiement.** `migrate:predeploy`, la commande déjà configurée
+dans la « Pre-deploy Command » Railway et **inchangée**, applique
+désormais, après les migrations existantes et dans cet ordre :
+
+1. `install-product-batches.js` : équivalent de
+   `migrate:product-batches -- --install --apply` (même fonction
+   `ensureProductBatchGuard`) ;
+2. `install-expiry-alerts.js` : équivalent de
+   `migrate:expiry-alerts -- --apply` (mêmes fonctions `installExpiryAlerts`
+   et `planExpiryAlerts`), suivi de la vérification des index.
+
+Chaque étape s'exécute dans un processus séparé, sans `pnpm` imbriqué.
+Garanties (testées sur base isolée, § 9) :
+
+- **Idempotence** : un second passage ne change rien.
+- **Reprise** :
+  - après une installation partielle, seuls les éléments manquants sont
+    ajoutés ;
+  - après une planification interrompue, la relance traite les cibles
+    restantes.
+- **Validateurs et index existants conservés** : un validateur ou un index
+  homonyme différent n'est jamais remplacé.
+- **Planification initiale par lots** de 500 écritures, chacune
+  conditionnée à l'état lu : champ toujours absent, même date, mêmes
+  marques, produit toujours sans lots. Une date ou une planification
+  modifiée en parallèle par l'API en service n'est jamais écrasée ; la
+  cible est relue à la passe suivante.
+- **Compatibilité avec l'API en service** pendant le pré-déploiement :
+  - le validateur ne contraint que les produits suivis par lots, et l'API
+    en service n'en écrit pas ;
+  - les index sont partiels ;
+  - seul `expiryAlertNextOn` est ajouté.
+- **Échec explicite** : code de sortie 1. L'orchestrateur s'arrête,
+  n'exécute pas l'étape suivante, et Railway ne met pas la version en
+  service.
+- **Aucun secret journalisé** : ni URI, ni identifiant ; seulement des
+  comptes et des messages de garde.
+- **Ce que ces migrations ne font pas** :
+  - aucune activation : drapeaux et portées restent des variables
+    séparées ;
+  - aucune conversion en lots, aucun retrait de permission ;
+  - aucun travail ni aucune notification ;
+  - aucune opération de retour arrière.
+
+Après un pré-déploiement réussi, les deux commandes manuelles ci-dessous
+ne sont **plus nécessaires**. Elles restent disponibles pour le
+diagnostic (inventaires sans `--apply`) ou une intervention contrôlée.
 
 | Commande | Effet |
 |---|---|
@@ -364,6 +412,15 @@ Aucune de ces étapes n'a été exécutée en production. Commandes après
    reprise en cas d'incident grave, **pas** un moyen de retour arrière
    ordinaire (§ 8).
 2. **Déployer l'API** (lots A + B + C), drapeaux et listes **absents**.
+   La « Pre-deploy Command » Railway, inchangée, applique les migrations,
+   dont la garde des lots et les index et dates des alertes (§ 5).
+   - Journal attendu : `install-product-batches.js` puis
+     `install-expiry-alerts.js`, puis « toutes les migrations sont
+     appliquées ».
+   - En cas d'échec, la version en service reste active. Corriger la cause
+     indiquée, puis redéployer : la relance est sans effet sur ce qui est
+     déjà fait.
+
    Contrôle : aucun avertissement d'activation au démarrage, `/health` OK,
    contexte `features: { productBatches: false, expiryAlerts: false }`.
 3. **Déployer le web.** Aucun changement visible : pas de bouton de lot, pas
@@ -373,10 +430,12 @@ Aucune de ces étapes n'a été exécutée en production. Commandes après
    pnpm --filter api migrate:product-batches
    pnpm --filter api migrate:expiry-alerts -- --organizations=<id_pilote_1>,<id_pilote_2>
    ```
-   Noter :
-   - `guard` (attendu avant migration : incomplète ou absente),
-     `trackedProducts`, `losses` (attendu : 0) ;
-   - `unplanned` par collection ;
+   Attendu après le pré-déploiement :
+   - `guard: "installée"`, `trackedProducts`, `losses` (attendu : 0) ;
+   - `index: true` sur `products` et `productbatches` (les deux index
+     `expiry_alert_due` et `expiry_alert_due_org`) ;
+   - `unplanned: 0`. Sinon, des cibles ont été modifiées en parallèle :
+     relancer `migrate:expiry-alerts -- --apply` ;
    - **premières alertes** :
      - par pilote : `pilots[i].soon` / `pilots[i].expired` = nombre de
        cibles qui recevront une alerte au premier balayage ;
@@ -384,30 +443,17 @@ Aucune de ces étapes n'a été exécutée en production. Commandes après
        volume et pire cas d'une future activation générale (`all`). Ces
        cibles ne sont pas lues par le balayage des pilotes (§ 6).
 
-   Ces nombres ne peuvent être connus qu'au moment de l'inventaire sur les
-   vraies données. Ils sont à reporter dans le compte rendu du pilote. En
-   e2e, l'inventaire concorde avec les étapes attendues (testé).
-5. **Migrations** (idempotentes) :
-   ```
-   pnpm --filter api migrate:product-batches -- --install --apply
-   pnpm --filter api migrate:expiry-alerts -- --apply
-   ```
-   La seconde écrit seulement `expiryAlertNextOn` sur **toutes** les cibles
-   datées, pilotes ou non. C'est inerte tant que le commerce est hors de la
-   liste.
-6. **Contrôles après migration** : relancer les deux inventaires de
-   l'étape 4. Attendu :
-   - `guard: "installée"` ;
-   - `index: true` sur `products` et `productbatches` (les deux index
-     `expiry_alert_due` et `expiry_alert_due_org`) ;
-   - `unplanned: 0` ;
-   - premières alertes des pilotes inchangées (sauf passage de jour).
+   Ces nombres ne dépendent que des dates et des marques, pas de la
+   planification : ils sont identiques avant et après le pré-déploiement.
+   Ils ne peuvent être connus qu'au moment de l'inventaire sur les vraies
+   données, et sont à reporter dans le compte rendu du pilote. En e2e,
+   l'inventaire concorde avec les étapes attendues (testé).
 
    Si l'index manque, le planificateur ne balaie pas. Il journalise à
    chaque tentative « Alertes de péremption : balayage non exécuté (...).
    Exécuter migrate:expiry-alerts -- --apply. » et ne fait **aucun**
    parcours de secours (testé).
-7. **Activation des pilotes**, en une seule modification de configuration :
+5. **Activation des pilotes**, en une seule modification de configuration :
    ```
    PRODUCT_BATCHES_ORGANIZATIONS=<id_pilote_1>,<id_pilote_2>
    EXPIRY_ALERTS_ORGANIZATIONS=<id_pilote_1>,<id_pilote_2>
@@ -426,10 +472,10 @@ Aucune de ces étapes n'a été exécutée en production. Commandes après
    - Le volume se maîtrise par le choix des pilotes (nombre de premières
      alertes connu) et, au besoin, par l'activation des alertes séparée et
      postérieure à celle des lots.
-8. **Permissions** : le propriétaire et les responsables accordent les
+6. **Permissions** : le propriétaire et les responsables accordent les
    permissions des lots aux membres des pilotes, depuis l'application.
    Aucune attribution en masse.
-9. **Contrôle push réel**, le seul qui reste (§ 9). Sur un **appareil de
+7. **Contrôle push réel**, le seul qui reste (§ 9). Sur un **appareil de
    test autorisé**, abonné aux notifications d'un compte du commerce pilote :
    - clés VAPID de l'environnement présentes ;
    - abonnement aux catégories « Péremption proche » / « Produits
@@ -565,6 +611,10 @@ web relancé.
 | **Sécurisation de l'activation pilote** (portée explicite, balayage filtré par commerce, index `expiry_alert_due_org`) : `tsc`, `nest build`, ESLint et Prettier sur les fichiers modifiés, `node --check` du lanceur de recette | OK |
 | Jest unitaire `common/organization-scope`, `products`, `push` | 263 tests OK |
 | e2e lots A, B et C, contexte, notifications push (les suites des lots déclarent désormais `*_ORGANIZATIONS=all`) | 5 suites, 80 tests OK |
+
+| **Pré-déploiement** (§ 5) : unitaire de l'orchestrateur (ordre, échec qui arrête la suite) ; `tsc`, `nest build`, ESLint, Prettier | 7 tests OK |
+| e2e `predeploy-product-batches` (base isolée, orchestrateur **compilé**) : premier passage, second sans effet, reprise après installation partielle, planification interrompue puis reprise, modifications concurrentes (date, planification par l'API, passage aux lots) non écrasées, échec remonté (validateur étranger conservé, étape suivante non lancée, code non nul), aucune activation ni notification, aucune URI journalisée | 7 tests OK |
+| e2e lots A et C relancés (fonctions de garde et d'installation partagées) | 44 tests OK |
 
 **e2e de livraison** (lot C, § 6) :
 

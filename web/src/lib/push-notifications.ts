@@ -6,8 +6,12 @@
 //   aucun second worker n'est enregistré.
 // - Utilisateur, organisation et droits sont décidés par le serveur : ce
 //   module n'envoie que l'abonnement du navigateur et des préférences.
-// - Aucune donnée n'est conservée localement : l'abonnement vit dans le
-//   navigateur (PushManager) et côté serveur.
+// - Aucune donnée personnelle n'est conservée localement : l'abonnement vit
+//   dans le navigateur (PushManager) et côté serveur ; seul un indicateur
+//   « désactivé volontairement sur cet appareil » est mémorisé.
+// - Trois notions distinctes : permission du navigateur (par origine),
+//   abonnement PushManager (par origine et service worker), rattachement
+//   de cet abonnement à un compte (serveur, avec ses préférences).
 import axios from "axios";
 import { apiClient } from "./api";
 import { withTimeout } from "./offline-db-utils";
@@ -153,6 +157,59 @@ export async function fetchPushDeviceState(): Promise<PushDeviceState> {
   return data;
 }
 
+/** Désactivation volontaire depuis Stock Master sur CET appareil. */
+export const PUSH_OPTED_OUT_KEY = "stockmaster.push.optedOut";
+
+export function isPushOptedOut(): boolean {
+  try {
+    return localStorage.getItem(PUSH_OPTED_OUT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setPushOptedOut(value: boolean): void {
+  try {
+    if (value) localStorage.setItem(PUSH_OPTED_OUT_KEY, "1");
+    else localStorage.removeItem(PUSH_OPTED_OUT_KEY);
+  } catch {
+    // stockage indisponible : choix simplement non mémorisé
+  }
+}
+
+// Déconnexion en cours : aucune nouvelle réconciliation n'est envoyée. Une
+// réconciliation DÉJÀ partie est neutralisée par le serveur (`release`
+// marque la session ; sa réconciliation est refusée quel que soit l'ordre
+// de traitement).
+let releasing = false;
+
+/**
+ * Réconciliation SANS action de l'utilisateur ni `requestPermission` :
+ * uniquement si la permission est DÉJÀ accordée et qu'un abonnement local
+ * créé avec la clé serveur courante existe. Le serveur ne le rattache qu'au
+ * même utilisateur qu'avant (session vérifiée) ; sinon l'appareil reste
+ * absent et une action explicite est nécessaire.
+ */
+export async function reconcilePushSubscription(
+  publicKey: string,
+): Promise<PushDeviceState> {
+  const absent: PushDeviceState = { registered: false, preferences: null };
+  if (releasing || getNotificationPermission() !== "granted") return absent;
+  const subscription = await currentSubscription();
+  if (
+    releasing ||
+    !subscription ||
+    !sameKey(subscription, applicationServerKey(publicKey))
+  ) {
+    return absent;
+  }
+  const { data } = await apiClient.post<PushDeviceState>(
+    "/notifications/push/subscription/reconcile",
+    { subscription: serialize(subscription) },
+  );
+  return data;
+}
+
 export class PushPermissionDeniedError extends Error {
   constructor() {
     // Message technique (jamais affiché : l'interface traduit ce cas).
@@ -187,6 +244,7 @@ export async function enablePushNotifications(
     "/notifications/push/subscription",
     { subscription: serialize(subscription) },
   );
+  setPushOptedOut(false);
   return data;
 }
 
@@ -204,6 +262,9 @@ export async function updatePushPreferences(
 
 /** Désactivation explicite : retrait serveur PUIS désabonnement local. */
 export async function disablePushNotifications(): Promise<void> {
+  // Choix respecté : plus d'invitation automatique sur cet appareil (les
+  // réglages permettent toujours de réactiver).
+  setPushOptedOut(true);
   const subscription = await currentSubscription();
   if (!subscription) return;
   try {
@@ -216,32 +277,48 @@ export async function disablePushNotifications(): Promise<void> {
 }
 
 /**
- * Déconnexion : best effort, borné, jamais bloquant. Retrait serveur avec le
- * jeton de la session qui se termine (client HTTP brut : un refus ne
- * déclenche aucune redirection), puis désabonnement local du navigateur —
- * fait même hors ligne. Si le retrait serveur échoue, l'abonnement local
- * retiré rend l'endpoint invalide (404/410 au prochain envoi, désactivé
- * côté serveur) et le service worker n'affiche de toute façon plus aucun
- * contenu sans identité locale correspondante.
+ * Déconnexion : best effort, borné, jamais bloquant. Détachement serveur
+ * avec le jeton de la session qui se termine (client HTTP brut : un refus
+ * ne déclenche aucune redirection) : plus aucun envoi vers ce navigateur,
+ * préférences conservées. CONFIRMÉ par le serveur, l'abonnement local est
+ * gardé : à la reconnexion du MÊME compte, il est réconcilié sans nouvelle
+ * demande. Sinon (hors ligne, erreur, API plus ancienne), désabonnement
+ * local comme avant : l'endpoint devient invalide (404/410 au prochain
+ * envoi) et le service worker n'affiche de toute façon aucun contenu sans
+ * identité locale correspondante.
  */
 export async function releasePushOnLogout(token: string | null): Promise<void> {
+  releasing = true;
   const run = async () => {
     const subscription = await currentSubscription();
     if (!subscription) return;
+    let released = false;
     if (token && navigator.onLine !== false) {
-      await axios
+      released = await axios
         .post(
-          `${process.env.NEXT_PUBLIC_API_URL ?? ""}/notifications/push/subscription/remove`,
+          `${process.env.NEXT_PUBLIC_API_URL ?? ""}/notifications/push/subscription/release`,
           { endpoint: subscription.endpoint },
           { headers: { Authorization: `Bearer ${token}` }, timeout: 2000 },
         )
-        .catch(() => undefined);
+        .then(
+          (res) => res.status === 204,
+          () => false,
+        );
     }
-    await subscription.unsubscribe().catch(() => false);
+    if (!released) await subscription.unsubscribe().catch(() => false);
   };
-  await withTimeout(
-    run().catch(() => undefined),
-    3000,
-    () => undefined,
-  );
+  try {
+    await withTimeout(
+      run().catch(() => undefined),
+      3000,
+      () => {
+        // Délai dépassé (détachement non confirmé) : désabonnement local.
+        void currentSubscription()
+          .then((subscription) => subscription?.unsubscribe())
+          .catch(() => false);
+      },
+    );
+  } finally {
+    releasing = false;
+  }
 }

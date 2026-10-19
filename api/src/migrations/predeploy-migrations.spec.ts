@@ -53,6 +53,31 @@ describe('predeploy-migrations — contrôle JWT_SECRET préalable (1-22C)', () 
     ).toEqual([...PREDEPLOY_MIGRATIONS]);
   });
 
+  it('lots et alertes de péremption : en dernier, garde des lots d’abord', () => {
+    expect(PREDEPLOY_MIGRATIONS.slice(-2)).toEqual([
+      'install-product-batches.js',
+      'install-expiry-alerts.js',
+    ]);
+  });
+
+  it('échec d’une étape : code 1, étapes suivantes non lancées', () => {
+    spawn.mockImplementation((_node: string, [file]: string[]) => ({
+      status: file.endsWith('install-product-batches.js') ? 1 : 0,
+    }));
+    expect(main({ MONGODB_URI: uri })).toBe(1);
+    const launched = spawn.mock.calls.map(([, args]) =>
+      String((args as string[])[0])
+        .split(/[\\/]/)
+        .pop(),
+    );
+    expect(launched.at(-1)).toBe('install-product-batches.js');
+    expect(launched).not.toContain('install-expiry-alerts.js');
+    expect(errors.mock.calls.flat().join('\n')).toContain(
+      'échec de install-product-batches.js',
+    );
+    spawn.mockImplementation(() => ({ status: 0 }));
+  });
+
   it('hors production (migrations locales, tests) : aucun contrôle du secret', () => {
     expect(main({ JWT_SECRET: 'short', MONGODB_URI: uri })).toBe(0);
     expect(spawn).toHaveBeenCalledTimes(PREDEPLOY_MIGRATIONS.length);

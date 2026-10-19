@@ -1,7 +1,9 @@
 /**
  * Suivi par lots (lot A) — inventaire, installation de la garde et outils
- * de retour arrière. N'est PAS lancé par le pré-déploiement : aucune
- * écriture tant qu'un opérateur ne le demande pas explicitement.
+ * de retour arrière. L'installation (`--install --apply`) est AUSSI faite
+ * par le pré-déploiement (`install-product-batches.js`, même fonction) ;
+ * cette commande reste pour l'inventaire, le diagnostic et les
+ * interventions contrôlées. Les retraits ne sont jamais automatiques.
  *
  * Usage (après `pnpm --filter api build`) :
  *   MONGODB_URI=... pnpm --filter api migrate:product-batches

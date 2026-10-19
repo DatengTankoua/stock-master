@@ -1,6 +1,9 @@
 /**
- * Lot C — alertes de péremption : index et planification initiale. N'est
- * PAS lancé par le pré-déploiement ; prérequis de `EXPIRY_ALERTS_ENABLED`.
+ * Lot C — alertes de péremption : index et planification initiale,
+ * prérequis de `EXPIRY_ALERTS_ENABLED`. `--apply` est AUSSI fait par le
+ * pré-déploiement (`install-expiry-alerts.js`, mêmes fonctions) ; cette
+ * commande reste pour l'inventaire, le diagnostic et les interventions
+ * contrôlées.
  *
  * Usage (après `pnpm --filter api build`) :
  *   MONGODB_URI=... pnpm --filter api migrate:expiry-alerts [-- --organizations=<id,id>]
@@ -32,6 +35,7 @@ import {
 } from '../products/expiry/expiry-alerts';
 import { businessDate } from '../products/batches/business-date';
 import {
+  describeExpiryAlertIndexProblem,
   EXPIRY_ALERT_INDEXES,
   EXPIRY_ALERT_INDEX_FILTER,
   EXPIRY_ALERT_INDEX_KEY,
@@ -172,9 +176,27 @@ export async function firstAlertInventory(
   };
 }
 
+/** Taille des lots d'écriture de la planification initiale. */
+export const EXPIRY_ALERT_PLAN_BATCH = 500;
+/** Passes au plus : une cible modifiée en parallèle est relue à la suivante. */
+const EXPIRY_ALERT_PLAN_PASSES = 3;
+
+export interface ExpiryAlertPlanOptions {
+  batchSize?: number;
+  /** Tests uniquement : appelé entre la lecture d'un lot et son écriture. */
+  beforeWrite?: (collection: string, ids: Types.ObjectId[]) => Promise<void>;
+}
+
+/**
+ * Index partiels des alertes (idempotent : no-op si l'index exact existe ;
+ * échec SANS rien écraser si un index homonyme diffère), puis planification
+ * initiale (`planExpiryAlerts`). N'active rien, ne crée aucun travail ni
+ * aucune notification.
+ */
 export async function installExpiryAlerts(
   connection: Connection,
-): Promise<{ planned: number }> {
+  options: ExpiryAlertPlanOptions = {},
+): Promise<{ planned: number; skipped: number }> {
   for (const name of COLLECTIONS) {
     for (const required of EXPIRY_ALERT_INDEXES) {
       await connection.collection(name).createIndex(
@@ -186,6 +208,24 @@ export async function installExpiryAlerts(
       );
     }
   }
+  return planExpiryAlerts(connection, options);
+}
+
+/**
+ * Première date de contrôle (`expiryAlertNextOn`) des cibles datées JAMAIS
+ * planifiées, par lots d'écritures. Chaque écriture est CONDITIONNÉE à
+ * l'état lu : champ toujours absent, même date, mêmes marques et, pour un
+ * produit, toujours sans lots. Une cible modifiée en parallèle (date
+ * changée, planifiée par l'API, passée aux lots) n'est donc jamais écrasée :
+ * elle est relue à la passe suivante (ou laissée à l'API qui l'a planifiée).
+ * Reprenable : une interruption laisse des cibles planifiées (exactes) et
+ * d'autres absentes, que la relance traite.
+ */
+export async function planExpiryAlerts(
+  connection: Connection,
+  options: ExpiryAlertPlanOptions = {},
+): Promise<{ planned: number; skipped: number }> {
+  const batchSize = options.batchSize ?? EXPIRY_ALERT_PLAN_BATCH;
   const leads = new Map<string, number>();
   const leadOf = async (organizationId: Types.ObjectId) => {
     const key = organizationId.toHexString();
@@ -201,25 +241,69 @@ export async function installExpiryAlerts(
     return leads.get(key)!;
   };
   let planned = 0;
+  let skipped = 0;
   for (const name of COLLECTIONS) {
     const collection = connection.collection(name);
-    const cursor = collection.find(unplannedFilter(name), {
-      projection: { organizationId: 1, expiryDate: 1, expiryAlerts: 1 },
-    });
-    for await (const row of cursor) {
-      const next = nextExpiryAlertOn(
-        row.expiryDate as string,
-        await leadOf(row.organizationId as Types.ObjectId),
-        row.expiryAlerts as { soonFor?: string; expiredFor?: string },
-      );
-      const written = await collection.updateOne(
-        { _id: row._id, expiryAlertNextOn: { $exists: false } },
-        { $set: { expiryAlertNextOn: next } },
-      );
-      planned += written.modifiedCount;
+    for (let pass = 0; pass < EXPIRY_ALERT_PLAN_PASSES; pass += 1) {
+      let passSkipped = 0;
+      let rows: Record<string, unknown>[] = [];
+      const flush = async () => {
+        if (rows.length === 0) return;
+        const batch = rows;
+        rows = [];
+        await options.beforeWrite?.(
+          name,
+          batch.map((row) => row._id as Types.ObjectId),
+        );
+        const operations = await Promise.all(
+          batch.map(async (row) => {
+            const marks = row.expiryAlerts as
+              { soonFor?: string; expiredFor?: string } | undefined;
+            return {
+              updateOne: {
+                filter: {
+                  _id: row._id as Types.ObjectId,
+                  expiryAlertNextOn: { $exists: false },
+                  expiryDate: row.expiryDate as string,
+                  'expiryAlerts.soonFor': marks?.soonFor ?? null,
+                  'expiryAlerts.expiredFor': marks?.expiredFor ?? null,
+                  ...(name === 'products'
+                    ? { stockTracking: { $ne: 'batches' } }
+                    : {}),
+                },
+                update: {
+                  $set: {
+                    expiryAlertNextOn: nextExpiryAlertOn(
+                      row.expiryDate as string,
+                      await leadOf(row.organizationId as Types.ObjectId),
+                      marks,
+                    ),
+                  },
+                },
+              },
+            };
+          }),
+        );
+        const written = await collection.bulkWrite(operations, {
+          ordered: false,
+        });
+        planned += written.modifiedCount;
+        passSkipped += batch.length - written.modifiedCount;
+      };
+      const cursor = collection.find(unplannedFilter(name), {
+        projection: { organizationId: 1, expiryDate: 1, expiryAlerts: 1 },
+        sort: { _id: 1 },
+      });
+      for await (const row of cursor) {
+        rows.push(row);
+        if (rows.length >= batchSize) await flush();
+      }
+      await flush();
+      if (passSkipped === 0) break;
+      if (pass === EXPIRY_ALERT_PLAN_PASSES - 1) skipped += passSkipped;
     }
   }
-  return { planned };
+  return { planned, skipped };
 }
 
 async function main(): Promise<void> {
@@ -251,15 +335,30 @@ async function main(): Promise<void> {
     autoCreate: false,
   }).asPromise();
   try {
+    const apply = args.includes('--apply');
     console.log(JSON.stringify(await inventoryExpiryAlerts(connection)));
-    // Premières alertes prévisibles (lecture seule, aucun identifiant).
-    console.log(JSON.stringify(await firstAlertInventory(connection, pilots)));
-    if (!args.includes('--apply')) {
+    // Premières alertes prévisibles (lecture seule, aucun identifiant) :
+    // en aperçu, ou si des commerces pilotes sont désignés.
+    if (!apply || pilots.length > 0) {
+      console.log(
+        JSON.stringify(await firstAlertInventory(connection, pilots)),
+      );
+    }
+    if (!apply) {
       console.log('Aperçu : aucune écriture (ajouter --apply).');
       return;
     }
-    const { planned } = await installExpiryAlerts(connection);
-    console.log(`Index installés ; ${planned} cible(s) planifiée(s).`);
+    const { planned, skipped } = await installExpiryAlerts(connection);
+    const problem = await describeExpiryAlertIndexProblem(connection);
+    if (problem) {
+      console.error(`Index des alertes invalides : ${problem}.`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(
+      `Index installés et vérifiés ; ${planned} cible(s) planifiée(s)` +
+        (skipped ? `, ${skipped} modifiée(s) en parallèle (relancer).` : '.'),
+    );
   } finally {
     await connection.close();
   }

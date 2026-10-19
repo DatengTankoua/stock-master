@@ -209,6 +209,19 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
     return res.body.access_token as string;
   }
 
+  /**
+   * Nouvelle session : jetons déterministes (`iat` à la seconde), une
+   * reconnexion dans la même seconde redonnerait le MÊME jeton, donc la
+   * même session.
+   */
+  async function freshLogin(email: string, previous: string) {
+    for (;;) {
+      const token = await login(email);
+      if (token !== previous) return token;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+
   async function registerOwner(label: string) {
     clearThrottle();
     seq += 1;
@@ -1211,6 +1224,213 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
     expect(transport.to(lateDevice.endpoint)).toEqual([]);
     const [lateJob] = await remindersOf(late.orgId);
     expect(lateJob.outcome).toBe('expired');
+  });
+
+  it('13. déconnexion → reconnexion → changement de compte : appareil détaché puis réconcilié pour le même compte seulement, préférences conservées', async () => {
+    const a = await registerOwner('reconnect');
+    const b = await seedMember(a.orgId, OrganizationRole.ADMIN);
+    const browser = await subscribed(a.token, 'reconnect');
+    const endpoint = { endpoint: browser.endpoint };
+    const status = (token: string) =>
+      request(server())
+        .post('/notifications/push/subscription/status')
+        .set(auth(token))
+        .send(endpoint);
+    const reconcile = (token: string, sub = browser) =>
+      request(server())
+        .post('/notifications/push/subscription/reconcile')
+        .set(auth(token))
+        .send({ subscription: sub });
+    const release = (token?: string) => {
+      const req = request(server())
+        .post('/notifications/push/subscription/release')
+        .send(endpoint);
+      return token ? req.set(auth(token)) : req;
+    };
+    const record = () =>
+      subscriptionModel.findOne({ endpoint: browser.endpoint }).lean();
+    const deplete = async () => {
+      const productId = await seedProduct(a.orgId, 1);
+      expect((await sell(a.token, productId, 1)).status).toBe(201);
+      await dispatcher.runOnce();
+    };
+
+    // Déconnexion : sans jeton refusé ; avec jeton, détaché, préférences
+    // conservées (aucune suppression).
+    expect((await release()).status).toBe(401);
+    expect((await release(a.token)).status).toBe(204);
+    let stored = await record();
+    expect(stored?.status).toBe(PushSubscriptionStatus.DISABLED);
+    expect(stored?.disabledReason).toBe('signed-out');
+    expect(stored?.preferences.saleCreated).toBe(false);
+    expect((await status(a.token)).body.registered).toBe(false);
+
+    // Événement pendant la déconnexion : rien n'est envoyé à l'appareil.
+    await deplete();
+    expect(transport.to(browser.endpoint)).toEqual([]);
+
+    // Reconnexion du même compte : réconcilié sans nouvel enregistrement,
+    // préférences intactes, événement antérieur jamais livré.
+    advance(60_000);
+    const a2 = await freshLogin(a.email, a.token);
+    const back = await reconcile(a2);
+    expect(back.status).toBe(200);
+    expect(back.body.registered).toBe(true);
+    expect(back.body.preferences.saleCreated).toBe(false);
+    expect(back.body.preferences.stockLow).toBe(false);
+    expect(JSON.stringify(back.body)).not.toContain(browser.endpoint);
+    await dispatcher.runOnce();
+    expect(transport.to(browser.endpoint)).toEqual([]);
+    advance(60_000);
+    await deplete();
+    const delivered = transport.to(browser.endpoint);
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0].payload.aud).toEqual({ u: a.userId, o: a.orgId });
+    // Idempotent : déjà rattaché.
+    expect((await reconcile(a2)).body.registered).toBe(true);
+
+    // Changement de compte : A se déconnecte, B se connecte sur le MÊME
+    // navigateur. Aucune attribution silencieuse à B ; l'ancien titulaire
+    // reste détaché.
+    expect((await release(a2)).status).toBe(204);
+    transport.reset();
+    const other = await reconcile(b.token);
+    expect(other.status).toBe(200);
+    expect(other.body).toEqual({ registered: false, preferences: null });
+    stored = await record();
+    expect(String(stored?.userId)).toBe(a.userId);
+    expect(stored?.status).toBe(PushSubscriptionStatus.DISABLED);
+    advance(60_000);
+    await deplete();
+    expect(transport.to(browser.endpoint)).toEqual([]);
+
+    // B active explicitement (clic) : préférences par défaut, pas celles de A.
+    const claimed = await subscribe(b.token, browser);
+    expect(claimed.status).toBe(200);
+    expect(claimed.body.preferences.saleCreated).toBe(true);
+    // Session de B expirée sans déconnexion, A se reconnecte : B est
+    // détaché (plus rien pour B sur ce navigateur), A n'est PAS rattaché.
+    const a3 = await freshLogin(a.email, a2);
+    expect((await reconcile(a3)).body.registered).toBe(false);
+    stored = await record();
+    expect(String(stored?.userId)).toBe(b.userId);
+    expect(stored?.status).toBe(PushSubscriptionStatus.DISABLED);
+    expect(stored?.disabledReason).toBe('signed-out');
+    advance(60_000);
+    transport.reset();
+    await deplete();
+    expect(transport.to(browser.endpoint)).toEqual([]);
+
+    // Retrait explicite (« Désactiver ») ou endpoint invalide : jamais
+    // réactivé automatiquement.
+    const removedDevice = await subscribed(a3, 'removed');
+    await request(server())
+      .post('/notifications/push/subscription/remove')
+      .set(auth(a3))
+      .send({ endpoint: removedDevice.endpoint })
+      .expect(204);
+    expect((await reconcile(a3, removedDevice)).body.registered).toBe(false);
+    const goneDevice = await subscribed(a3, 'gone-reconcile');
+    await subscriptionModel.updateOne(
+      { endpoint: goneDevice.endpoint },
+      {
+        $set: {
+          status: PushSubscriptionStatus.DISABLED,
+          disabledReason: 'gone',
+        },
+      },
+    );
+    expect((await reconcile(a3, goneDevice)).body.registered).toBe(false);
+
+    // Changement d'organisation du même compte : l'appareil suit
+    // l'organisation active, préférences conservées.
+    const c = await registerOwner('reconnect-c');
+    await membershipModel.create({
+      organizationId: new Types.ObjectId(c.orgId),
+      userId: new Types.ObjectId(a.userId),
+      role: OrganizationRole.ADMIN,
+      status: MembershipStatus.ACTIVE,
+      permissions: [],
+    });
+    const orgDevice = await subscribed(a3, 'switch');
+    const switched = await request(server())
+      .post('/auth/switch-organization')
+      .set(auth(a3))
+      .send({ organizationId: c.orgId });
+    expect(switched.status).toBe(200);
+    const inC = await reconcile(
+      switched.body.access_token as string,
+      orgDevice,
+    );
+    expect(inC.body.registered).toBe(true);
+    expect(inC.body.preferences.saleCreated).toBe(false);
+    const moved = await subscriptionModel
+      .findOne({ endpoint: orgDevice.endpoint })
+      .lean();
+    expect(String(moved?.organizationId)).toBe(c.orgId);
+  });
+
+  it('14. course reconcile / release : jamais réactivé après la déconnexion, quel que soit l’ordre de traitement', async () => {
+    const a = await registerOwner('race');
+    const browser = await subscribed(a.token, 'race');
+    const endpoint = { endpoint: browser.endpoint };
+    const release = (token: string) =>
+      request(server())
+        .post('/notifications/push/subscription/release')
+        .set(auth(token))
+        .send(endpoint);
+    const reconcile = (token: string) =>
+      request(server())
+        .post('/notifications/push/subscription/reconcile')
+        .set(auth(token))
+        .send({ subscription: browser });
+    const status = async () =>
+      (await subscriptionModel.findOne({ endpoint: browser.endpoint }).lean())
+        ?.status;
+
+    // Session 1 déconnectée ; session 2 ouverte.
+    expect((await release(a.token)).status).toBe(204);
+    const s2 = await freshLogin(a.email, a.token);
+
+    // a) Ordre inverse : la réconciliation de s2, partie avant la
+    // déconnexion, n'est traitée qu'APRÈS le `release` de s2.
+    expect((await release(s2)).status).toBe(204);
+    const late = await reconcile(s2);
+    expect(late.status).toBe(200);
+    expect(late.body).toEqual({ registered: false, preferences: null });
+    expect(await status()).toBe(PushSubscriptionStatus.DISABLED);
+
+    // b) Entrelacement : la réconciliation de s3 a déjà LU l'appareil
+    // (détaché) quand le `release` de s3 est appliqué, puis elle écrit.
+    const s3 = await freshLogin(a.email, s2);
+    const original = subscriptionModel.findOne.bind(subscriptionModel);
+    jest.spyOn(subscriptionModel, 'findOne').mockImplementationOnce(((
+      ...args: Parameters<typeof original>
+    ) => {
+      const query = original(...args);
+      const exec = query.exec.bind(query);
+      query.exec = (async () => {
+        const result = await exec();
+        expect((await release(s3)).status).toBe(204);
+        return result;
+      }) as typeof query.exec;
+      return query;
+    }) as typeof subscriptionModel.findOne);
+    const interleaved = await reconcile(s3);
+    expect(interleaved.body.registered).toBe(false);
+    expect(await status()).toBe(PushSubscriptionStatus.DISABLED);
+
+    // Rien n'est livré à l'appareil.
+    const productId = await seedProduct(a.orgId, 1);
+    expect((await sell(a.token, productId, 1)).status).toBe(201);
+    await dispatcher.runOnce();
+    expect(transport.to(browser.endpoint)).toEqual([]);
+
+    // Session suivante, jamais déconnectée : réconciliation normale.
+    const s4 = await freshLogin(a.email, s3);
+    advance(60_000);
+    expect((await reconcile(s4)).body.registered).toBe(true);
+    expect(await status()).toBe(PushSubscriptionStatus.ACTIVE);
   });
 
   it('12. contexte CLI (`createApplicationContext(AppModule)`, push configuré) : aucun dispatcher, aucune écriture, aucun envoi', async () => {
