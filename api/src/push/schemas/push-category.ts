@@ -28,6 +28,14 @@ export enum PushCategory {
   MEMBER_JOINED = 'member-joined',
   MEMBER_ACTIVITY = 'member-activity',
   /**
+   * Lot C — péremption d'un lot (ou de la date d'un produit sans lots) en
+   * stock : entrée dans la période d'anticipation, puis date dépassée.
+   */
+  EXPIRY_SOON = 'expiry-soon',
+  EXPIRY_EXPIRED = 'expiry-expired',
+  /** Lot C — nouvelle demande de régularisation d'une vente (lot B). */
+  REGULARIZATION_REQUESTED = 'regularization-requested',
+  /**
    * 1-16A.1 — INTERNE, push seulement : regroupement des ventes d'une
    * organisation sur une fenêtre fixe d'une minute (jamais une notification
    * du centre, jamais une préférence).
@@ -45,6 +53,9 @@ export const PUSH_CATEGORIES: readonly PushCategory[] = Object.freeze([
   PushCategory.MONTHLY_REPORT,
   PushCategory.MEMBER_JOINED,
   PushCategory.MEMBER_ACTIVITY,
+  PushCategory.EXPIRY_SOON,
+  PushCategory.EXPIRY_EXPIRED,
+  PushCategory.REGULARIZATION_REQUESTED,
 ]);
 
 /** Préférences push par appareil ; toutes actives à l'activation. */
@@ -58,6 +69,10 @@ export interface PushPreferences {
   /** 1-19A : absentes des préférences déjà enregistrées → actives. */
   memberJoined: boolean;
   memberActivity: boolean;
+  /** Lot C : absentes des préférences déjà enregistrées → actives. */
+  expirySoon: boolean;
+  expiryExpired: boolean;
+  regularizationRequested: boolean;
 }
 
 export const DEFAULT_PUSH_PREFERENCES: Readonly<PushPreferences> =
@@ -70,6 +85,9 @@ export const DEFAULT_PUSH_PREFERENCES: Readonly<PushPreferences> =
     monthlyReport: true,
     memberJoined: true,
     memberActivity: true,
+    expirySoon: true,
+    expiryExpired: true,
+    regularizationRequested: true,
   });
 
 export const PREFERENCE_BY_CATEGORY: Readonly<
@@ -83,6 +101,9 @@ export const PREFERENCE_BY_CATEGORY: Readonly<
   [PushCategory.MONTHLY_REPORT]: 'monthlyReport',
   [PushCategory.MEMBER_JOINED]: 'memberJoined',
   [PushCategory.MEMBER_ACTIVITY]: 'memberActivity',
+  [PushCategory.EXPIRY_SOON]: 'expirySoon',
+  [PushCategory.EXPIRY_EXPIRED]: 'expiryExpired',
+  [PushCategory.REGULARIZATION_REQUESTED]: 'regularizationRequested',
   // Le regroupement suit la préférence « nouvelle vente ».
   [PushCategory.SALE_DIGEST]: 'saleCreated',
 });
@@ -114,9 +135,15 @@ export function canAccessCategory(
 ): boolean {
   const granted = effectivePermissions(context.role, [...context.permissions]);
   switch (category) {
+    // Lot C : la péremption relève aussi des informations de stock.
     case PushCategory.STOCK_DEPLETED:
     case PushCategory.STOCK_LOW:
+    case PushCategory.EXPIRY_SOON:
+    case PushCategory.EXPIRY_EXPIRED:
       return granted.has('products.view_stock_details');
+    // Lot C : ceux qui peuvent TRAITER la demande (lot B).
+    case PushCategory.REGULARIZATION_REQUESTED:
+      return granted.has('stock.adjust') && granted.has('sales.view_all');
     case PushCategory.SALE_CREATED:
     case PushCategory.SALE_DIGEST:
       return granted.has('sales.notifications');
@@ -135,4 +162,25 @@ export function accessibleCategories(
   context: CategoryAccessContext,
 ): PushCategory[] {
   return PUSH_CATEGORIES.filter((c) => canAccessCategory(c, context));
+}
+
+/**
+ * Lot C — catégories PROPOSÉES (préférences, configuration push) : les
+ * catégories accessibles, sans celles d'une fonctionnalité désactivée
+ * (péremption : `EXPIRY_ALERTS_ENABLED` ; régularisations : lots). Jamais
+ * présentées comme disponibles avant leur activation.
+ */
+export function offeredCategories(
+  context: CategoryAccessContext,
+  features: { expiryAlerts: boolean; productBatches: boolean },
+): PushCategory[] {
+  return accessibleCategories(context).filter((c) => {
+    if (c === PushCategory.EXPIRY_SOON || c === PushCategory.EXPIRY_EXPIRED) {
+      return features.expiryAlerts;
+    }
+    if (c === PushCategory.REGULARIZATION_REQUESTED) {
+      return features.productBatches;
+    }
+    return true;
+  });
 }

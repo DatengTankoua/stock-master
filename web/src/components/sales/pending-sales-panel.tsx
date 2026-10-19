@@ -24,15 +24,43 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SaleFormDialog } from "@/components/products/record-sale-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { hasPermission } from "@/lib/organization-permissions";
+import {
+  fetchSaleRegularizations,
+  getApiErrorCode,
+  getApiErrorMessage,
+  requestSaleRegularization,
+} from "@/lib/api";
+import { useOrganizationShell } from "@/contexts/organization-shell-context";
+import {
   OFFLINE_SALES_PANEL_ID,
   OFFLINE_SALES_PANEL_OPEN_EVENT,
   useOfflineSales,
 } from "@/contexts/offline-sales-context";
 import {
+  BATCH_BUSINESS_CODES,
   allowedOperationActions,
   describeOperationError,
   isUnfinalized,
 } from "@/lib/offline-sales-policy";
+
+// Lot B : une vente en conflit pour un motif de lot se corrige avec le
+// choix des lots (jamais réaffectée automatiquement).
+const BATCH_CODES = new Set<string>(BATCH_BUSINESS_CODES);
+function isBatchOperation(op: OutboxOperation): boolean {
+  return (
+    Boolean(op.payload.batchAllocations?.length) ||
+    BATCH_CODES.has(op.lastError?.code ?? "")
+  );
+}
 import type { OutboxOperation } from "@/lib/offline-sales-outbox-db";
 
 // 1-16G : libellés de statut dans `sales` (`outbox.status.*`).
@@ -52,9 +80,96 @@ const STATUS_VARIANT = {
 export function PendingSalesPanel() {
   const { t } = useT("sales");
   const format = useFormat();
-  const { status, operations, blocked, online, syncNow, act } =
-    useOfflineSales();
+  const {
+    status,
+    operations,
+    blocked,
+    online,
+    syncNow,
+    act,
+    recordSale,
+    markRegularization,
+  } = useOfflineSales();
+  const { authContext } = useOrganizationShell();
+  // Régularisation : `stock.adjust`, revérifié par l'API (403 sinon).
+  const canRegularize = hasPermission(authContext, "stock.adjust");
   const [editing, setEditing] = useState<OutboxOperation | null>(null);
+  const [regularizing, setRegularizing] = useState<OutboxOperation | null>(
+    null,
+  );
+  const [requesting, setRequesting] = useState<OutboxOperation | null>(null);
+
+  // Lot B : décisions des responsables pour les demandes en attente (relues
+  // en ligne, au montage puis toutes les 20 s).
+  const awaiting = operations
+    .filter(
+      (op) =>
+        op.status === "conflict" && op.regularization?.status === "requested",
+    )
+    .map((op) => op.clientOperationId);
+  const awaitingKey = awaiting.join(",");
+  useEffect(() => {
+    if (!online || awaitingKey === "") return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const requests = await fetchSaleRegularizations({
+          clientOperationIds: awaitingKey.split(","),
+        });
+        if (cancelled) return;
+        for (const r of requests) {
+          if (r.status === "pending") continue;
+          await markRegularization(r.clientOperationId, {
+            status: r.status,
+            requestId: r._id,
+            reason: r.decisionReason,
+          });
+        }
+      } catch {
+        // Réseau ou droits : nouvel essai au prochain tour.
+      }
+    };
+    void check();
+    const timer = setInterval(() => void check(), 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [online, awaitingKey, markRegularization]);
+
+  const sendRegularizationRequest = (op: OutboxOperation) =>
+    run(async () => {
+      try {
+        const request = await requestSaleRegularization({
+          ...op.payload,
+          clientOperationId: op.clientOperationId,
+        });
+        await markRegularization(op.clientOperationId, {
+          status:
+            request.status === "pending"
+              ? "requested"
+              : request.status === "approved"
+                ? "approved"
+                : "rejected",
+          requestId: request._id,
+          reason: request.decisionReason,
+        });
+        toast.success(t("outbox.regularize.requested"));
+      } catch (err) {
+        // Vente déjà enregistrée sous cette clé : renvoi de la même
+        // opération (le serveur rejoue la vente existante).
+        if (getApiErrorCode(err) === "SALE_REGULARIZATION_ALREADY_APPLIED") {
+          await markRegularization(op.clientOperationId, {
+            status: "approved",
+            requestId: "",
+          });
+        } else {
+          toast.error(getApiErrorMessage(err));
+        }
+      } finally {
+        setRequesting(null);
+      }
+    });
   const [confirm, setConfirm] = useState<{
     op: OutboxOperation;
     action: "abandon" | "remove-corrupted";
@@ -159,6 +274,10 @@ export function PendingSalesPanel() {
               op={op}
               busy={busy}
               onEdit={() => setEditing(op)}
+              canRegularize={canRegularize}
+              online={online}
+              onRegularize={() => setRegularizing(op)}
+              onRequestRegularization={() => setRequesting(op)}
               onRetry={() =>
                 void run(async () => {
                   if (!(await act(op.clientOperationId, "retry"))) {
@@ -217,8 +336,69 @@ export function PendingSalesPanel() {
             salePrice: editing.payload.salePrice,
             buyerName: editing.payload.buyerName,
             buyerContact: editing.payload.buyerContact,
+            batchAllocations: editing.payload.batchAllocations,
+            unknownExpiryConfirmed: editing.payload.unknownExpiryConfirmed,
           }}
           replaces={editing.clientOperationId}
+          batchTracked={isBatchOperation(editing)}
+        />
+      )}
+
+      {requesting && (
+        <Dialog open onOpenChange={(v) => !v && !busy && setRequesting(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t("outbox.regularize.requestTitle")}</DialogTitle>
+              <DialogDescription>
+                {t("outbox.regularize.requestText", {
+                  date: format.dateTime(requesting.payload.occurredAt),
+                })}
+              </DialogDescription>
+            </DialogHeader>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={busy}
+              onClick={() => void sendRegularizationRequest(requesting)}
+            >
+              {t("outbox.regularize.requestConfirm")}
+            </Button>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {regularizing && (
+        <RegularizeDialog
+          op={regularizing}
+          onClose={() => setRegularizing(null)}
+          onConfirm={(reason) =>
+            run(async () => {
+              const op = regularizing;
+              // Même vente, même heure réelle, mêmes lots : seule la
+              // régularisation explicite (motif) est ajoutée.
+              const result = await recordSale(
+                {
+                  productId: op.payload.productId,
+                  productName: op.display.productName,
+                  unitPriceHint: op.display.unitPriceHint,
+                  quantity: op.payload.quantity,
+                  salePrice: op.payload.salePrice,
+                  buyerName: op.payload.buyerName,
+                  buyerContact: op.payload.buyerContact,
+                  batchAllocations: op.payload.batchAllocations,
+                  unknownExpiryConfirmed: op.payload.unknownExpiryConfirmed,
+                  expiredBatchRegularization: { reason },
+                  batchLabels: op.display.batchLabels,
+                },
+                { replaces: op.clientOperationId, keepOccurredAt: true },
+              );
+              setRegularizing(null);
+              if (result.kind === "synced") toast.success(t("form.recorded"));
+              else if (result.kind === "refused" || result.kind === "conflict")
+                toast.error(t("outbox.actionFailed"));
+              else toast.info(t("form.pending"));
+            })
+          }
         />
       )}
 
@@ -275,9 +455,17 @@ function OperationItem({
   onRetry,
   onAbandon,
   onRemoveCorrupted,
+  canRegularize,
+  online,
+  onRegularize,
+  onRequestRegularization,
 }: {
   op: OutboxOperation;
   busy: boolean;
+  canRegularize: boolean;
+  online: boolean;
+  onRegularize: () => void;
+  onRequestRegularization: () => void;
   onEdit: () => void;
   onRetry: () => void;
   onAbandon: () => void;
@@ -331,15 +519,73 @@ function OperationItem({
               </span>
             </p>
           )}
+          {op.display.batchLabels?.length ? (
+            <p className="text-xs text-muted-foreground">
+              {t("batches.saleLots", {
+                list: op.display.batchLabels.join(", "),
+              })}
+            </p>
+          ) : null}
+          {op.regularization?.status === "requested" && (
+            <p
+              role="status"
+              className="text-xs text-amber-700 dark:text-amber-400"
+            >
+              {t("outbox.regularize.awaiting", {
+                date: format.dateTime(op.regularization.checkedAt),
+              })}
+            </p>
+          )}
+          {op.regularization?.status === "rejected" && (
+            <p className="text-xs text-destructive">
+              {t("outbox.regularize.rejected", {
+                reason: op.regularization.reason ?? "—",
+              })}
+            </p>
+          )}
+          {op.lastError?.code === "BATCH_EXPIRED_AT_SYNC" &&
+            !canRegularize &&
+            !op.regularization && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {t("outbox.regularize.noRight")}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onRequestRegularization}
+                  disabled={busy || !online}
+                >
+                  {t("outbox.actions.requestRegularization")}
+                </Button>
+              </div>
+            )}
           {(allowed.edit ||
             allowed.retry ||
             allowed.abandon ||
             allowed.removeCorrupted) && (
             <div className="flex flex-wrap gap-2 pt-1">
+              {allowed.edit &&
+                canRegularize &&
+                op.lastError?.code === "BATCH_EXPIRED_AT_SYNC" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={onRegularize}
+                    disabled={busy}
+                  >
+                    {t("outbox.actions.regularize")}
+                  </Button>
+                )}
               {allowed.edit && (
                 <Button
                   type="button"
                   size="sm"
+                  variant={
+                    op.lastError?.code === "BATCH_EXPIRED_AT_SYNC"
+                      ? "outline"
+                      : "default"
+                  }
                   onClick={onEdit}
                   disabled={busy}
                 >
@@ -459,5 +705,75 @@ export function OfflineSalesPanelSection({ count }: { count: number }) {
         </div>
       </details>
     </section>
+  );
+}
+
+// Lot B — régularisation explicite d'une vente hors ligne saisie avant la
+// péremption d'un lot et reçue après : motif obligatoire, heure réelle et
+// lots conservés. Jamais une autorisation de vendre ce lot aujourd'hui.
+function RegularizeDialog({
+  op,
+  onClose,
+  onConfirm,
+}: {
+  op: OutboxOperation;
+  onClose: () => void;
+  onConfirm: (reason: string) => Promise<void>;
+}) {
+  const { t } = useT("sales");
+  const format = useFormat();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  return (
+    <Dialog open onOpenChange={(v) => !v && !saving && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("outbox.regularize.title")}</DialogTitle>
+          <DialogDescription>
+            {t("outbox.regularize.text", {
+              date: format.dateTime(op.payload.occurredAt),
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-3"
+          noValidate
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (reason.trim().length < 3) {
+              setError(t("outbox.regularize.reasonTooShort"));
+              return;
+            }
+            setSaving(true);
+            try {
+              await onConfirm(reason.trim());
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
+          <div className="space-y-1">
+            <Label htmlFor="reg-reason">{t("outbox.regularize.reason")}</Label>
+            <Input
+              id="reg-reason"
+              maxLength={200}
+              value={reason}
+              placeholder={t("outbox.regularize.reasonPlaceholder")}
+              onChange={(e) => setReason(e.target.value)}
+              disabled={saving}
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" className="w-full" disabled={saving}>
+            {t("outbox.regularize.confirm")}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

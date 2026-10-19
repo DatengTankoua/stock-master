@@ -85,6 +85,14 @@ export class Organization {
    */
   @Prop({ type: Number, required: false, select: false })
   productCreationSerial?: number;
+
+  /**
+   * Lot C — délai d'anticipation des alertes de péremption, en jours
+   * (entier 0 à 365 ; 0 : alerte le jour de l'échéance, jamais une
+   * désactivation). Absent : 30 jours.
+   */
+  @Prop({ type: Number, required: false, min: 0, max: 365 })
+  expiryAlertLeadDays?: number;
 }
 
 export const OrganizationSchema = SchemaFactory.createForClass(Organization);

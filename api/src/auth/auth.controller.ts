@@ -17,6 +17,8 @@ import { AuthService, REGISTRATION_ACCEPTED_MESSAGE } from './auth.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import type { ResolvedOrganizationContext } from '../organizations/organizations.service';
 import { effectivePermissions } from '../organizations/permissions';
+import { productBatchesEnabledFor } from '../products/batches/product-batches-config';
+import { expiryAlertsEnabledFor } from '../products/expiry/expiry-alerts-config';
 import { AllowInactiveSubscription } from '../subscriptions/subscription-access';
 import {
   AuthThrottlerGuard,
@@ -486,6 +488,18 @@ export class AuthController {
       role: organizationContext.role,
       permissions: organizationContext.permissions,
       effectivePermissions: [...effective],
+      // Fonctionnalités activées côté SERVEUR (autorité : l'API). Le web
+      // n'affiche le suivi par lots que si l'API l'annonce ; une API
+      // antérieure n'envoie rien (fonctionnalité masquée).
+      features: {
+        productBatches: productBatchesEnabledFor(
+          organizationContext.organizationId,
+        ),
+        // Lot C : activation distincte des alertes de péremption.
+        expiryAlerts: expiryAlertsEnabledFor(
+          organizationContext.organizationId,
+        ),
+      },
       access: {
         ...access,
         tokenScope: user.accessScope,

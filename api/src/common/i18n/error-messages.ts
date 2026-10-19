@@ -269,6 +269,11 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     fr: 'Vente {0} introuvable.',
     en: 'Sale {0} not found.',
   },
+  // Lot B : demande de régularisation.
+  'Request ${…} not found': {
+    fr: 'Demande {0} introuvable.',
+    en: 'Request {0} not found.',
+  },
   'Object with id ${…} not found': {
     fr: 'Élément {0} introuvable.',
     en: 'Object with id {0} not found.',
@@ -295,6 +300,142 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
   'Vente déjà enregistrée puis supprimée.': {
     en: 'Sale already recorded, then deleted.',
   },
+
+  // ─── Lots de produits (lot A) ─────────────────────────────────────────
+  "Ce produit est suivi par lots : cette opération n'est pas encore disponible pour lui.":
+    {
+      en: 'This product is tracked by batches: this operation is not available for it yet.',
+    },
+  "Le suivi par lots n'est pas disponible.": {
+    en: 'Batch tracking is not available.',
+  },
+  "Le suivi par lots n'est pas disponible pour le moment. Réessayez plus tard.":
+    {
+      en: 'Batch tracking is not available at the moment. Try again later.',
+    },
+  "Le suivi par lots n'est pas activé pour ce produit.": {
+    en: 'Batch tracking is not enabled for this product.',
+  },
+  'Le suivi par lots est déjà activé pour ce produit.': {
+    en: 'Batch tracking is already enabled for this product.',
+  },
+  'La somme des lots doit être exactement égale au stock restant.': {
+    en: 'The batches must add up exactly to the remaining stock.',
+  },
+  "Le stock de ce produit n'est pas un nombre entier d'unités : répartition impossible.":
+    {
+      en: 'This product’s stock is not a whole number of units: it cannot be split into batches.',
+    },
+  'Le stock a changé depuis l’affichage. Actualisez puis répartissez à nouveau.':
+    {
+      en: 'The stock has changed since it was displayed. Refresh, then split it again.',
+    },
+  'Lot introuvable pour ce produit.': {
+    en: 'Batch not found for this product.',
+  },
+  'La date de réception ne peut pas être dans le futur.': {
+    en: 'The receipt date cannot be in the future.',
+  },
+  "La date de réception d'un lot reçu ne peut pas être retirée.": {
+    en: 'The receipt date of a received batch cannot be removed.',
+  },
+  "Clé d'opération déjà utilisée pour une autre opération.": {
+    en: 'Operation key already used for another operation.',
+  },
+  // Lot B : ventes, corrections et annulations par lots.
+  "Ce produit est suivi par lots : mettez à jour l'application puis choisissez les lots vendus.":
+    {
+      en: 'This product is tracked by batches: update the app, then choose the batches sold.',
+    },
+  "Chaque lot ne peut apparaître qu'une fois.": {
+    en: 'Each batch can only appear once.',
+  },
+  "Un lot choisi n'est plus disponible. Actualisez les lots.": {
+    en: 'A chosen batch is no longer available. Refresh the batches.',
+  },
+  'Un lot choisi n’a pas de date de péremption connue : confirmez ce choix.': {
+    en: 'A chosen batch has no known expiry date: confirm this choice.',
+  },
+  'Un lot choisi a dépassé sa date de péremption : il ne peut pas être vendu.':
+    {
+      en: 'A chosen batch is past its expiry date: it cannot be sold.',
+    },
+  'Vente saisie avant la péremption du lot mais reçue après : une régularisation autorisée est nécessaire.':
+    {
+      en: 'Sale entered before the batch expired but received after: an authorised regularisation is required.',
+    },
+  "Un lot choisi n'a plus assez d'unités. Actualisez les lots.": {
+    en: 'A chosen batch no longer has enough units. Refresh the batches.',
+  },
+  'Le stock a changé. Actualisez les lots.': {
+    en: 'The stock has changed. Refresh the batches.',
+  },
+  'Le produit a été supprimé définitivement : aucune restitution de stock possible.':
+    {
+      en: 'The product was permanently deleted: no stock can be returned.',
+    },
+  'La somme des lots doit être exactement égale à la quantité vendue.': {
+    en: 'The batches must add up exactly to the quantity sold.',
+  },
+  'Indiquez le motif de la restitution.': {
+    en: 'Give the reason for returning the units.',
+  },
+  "Un lot rendu ne correspond pas aux lots d'origine de la vente.": {
+    en: 'A returned batch does not match the batches of the sale.',
+  },
+  "Les unités restituées dépassent celles dont le lot d'origine est inconnu.": {
+    en: 'The returned units exceed those whose original batch is unknown.',
+  },
+  'Cette vente est antérieure au suivi par lots : indiquez dans quels lots restituer les unités, avec un motif.':
+    {
+      en: 'This sale predates batch tracking: say which batches the units go back to, with a reason.',
+    },
+  'Ce produit est suivi par lots : précisez les lots concernés par la correction.':
+    {
+      en: 'This product is tracked by batches: specify the batches affected by the correction.',
+    },
+  'Les lots indiqués ne correspondent pas à la nouvelle quantité.': {
+    en: 'The batches given do not match the new quantity.',
+  },
+  "Cette vente n'a pas besoin de régularisation : renvoyez-la normalement.": {
+    en: 'This sale does not need regularising: send it normally.',
+  },
+  'Cette vente est déjà enregistrée : aucune régularisation à demander.': {
+    en: 'This sale is already recorded: there is nothing to regularise.',
+  },
+  'Cette demande a déjà été traitée.': {
+    en: 'This request has already been handled.',
+  },
+  'La demande doit reprendre la vente en attente telle quelle (opération, heure et lots).':
+    {
+      en: 'The request must carry the pending sale as is (operation, time and batches).',
+    },
+  // Lot C : mise à l'écart, pertes, alertes.
+  "Ce lot est déjà dans cet état ou ne peut pas changer d'état ainsi.": {
+    en: 'This batch is already in this state or cannot change state this way.',
+  },
+  'Précisez la cause de la perte dans le commentaire.': {
+    en: 'Give the cause of the loss in the comment.',
+  },
+  'La correction dépasse les unités perdues non encore corrigées.': {
+    en: 'The correction exceeds the lost units not yet corrected.',
+  },
+  'Perte introuvable pour ce produit.': {
+    en: 'Loss not found for this product.',
+  },
+  "Ce lot est mis à l'écart ou retiré : il ne reçoit plus d'unités.": {
+    en: 'This batch is set aside or withdrawn: it no longer receives units.',
+  },
+  'Les alertes de péremption ne sont pas disponibles.': {
+    en: 'Expiry alerts are not available.',
+  },
+  'La quantité vendue doit rester au moins égale à 1.': {
+    en: 'The quantity sold must stay at least 1.',
+  },
+  "Les unités restituées doivent correspondre exactement à celles dont le lot d'origine est inconnu.":
+    {
+      en: 'The returned units must exactly match those whose original batch is unknown.',
+    },
 
   // ─── Analyse, rapports, notifications ─────────────────────────────────
   'Mois invalide.': { en: 'Invalid month.' },

@@ -240,6 +240,35 @@ const analyticsEn: Translation<typeof analyticsFr> = {
         "The server could not prepare the file. Try again in a few moments.",
     },
   },
+  stockHealth: {
+    title: "Expiry and losses",
+    subtitle:
+      "Alert lead time: {{days}} days · business day: {{date}}. Physical stock, set-aside batches included.",
+    soon_one: "Expiring soon ({{count}})",
+    soon_other: "Expiring soon ({{count}})",
+    expired_one: "Expired ({{count}})",
+    expired_other: "Expired ({{count}})",
+    noneSoon: "No product in stock reaches its date within the lead time.",
+    noneExpired: "No product in stock is past its date.",
+    batch: "Batch {{reference}}",
+    expiry: "Expiry: {{date}}",
+    physical_one: "{{count}} unit",
+    physical_other: "{{count}} units",
+    status: { quarantined: "Set aside", withdrawn: "Withdrawn" },
+    leadLabel: "Alert lead time (days)",
+    leadSave: "Save",
+    leadSaved: "Alert lead time saved.",
+    leadInvalid: "Enter a whole number from 0 to 365.",
+    leadHelp:
+      "0: alert on the expiry day itself. Alerts already sent are not sent again.",
+    lossesTitle: "Losses this month",
+    lostUnits_one: "{{count}} unit lost (net of corrections)",
+    lostUnits_other: "{{count}} units lost (net of corrections)",
+    lossValue:
+      "estimated value at the purchase cost of each movement: {{amount}}",
+    lossesNote:
+      "Losses are neither sales nor revenue; the estimated profit is a margin on sales and does not deduct them.",
+  },
 };
 
 export default analyticsEn;

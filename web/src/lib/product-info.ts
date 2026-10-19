@@ -10,12 +10,15 @@ export type ProductInfoKey =
   | "salePrice"
   | "stock"
   | "expiryDate"
+  | "stockTracking"
   | "lowStockThreshold"
   | "initialQuantity"
   | "unitsSold"
   | "purchasePrice"
   | "totalPurchaseCost"
   | "actualRevenue"
+  | "lostQuantity"
+  | "lossValueAtCost"
   | "actualProfit"
   | "margin";
 
@@ -40,6 +43,7 @@ export interface ProductInfoSource {
   salePrice: number;
   remainingQuantity: number;
   expiryDate?: string | null;
+  stockTracking?: "none" | "batches";
   lowStockThreshold?: number | null;
   initialQuantity?: number;
   unitsSold?: number;
@@ -47,6 +51,8 @@ export interface ProductInfoSource {
   totalPurchaseCost?: number;
   actualRevenue?: number;
   actualProfit?: number;
+  lostQuantity?: number;
+  lossValueAtCost?: number;
   margin?: number | null;
 }
 
@@ -97,6 +103,15 @@ export function productInfoItems(
       ...(past ? { tone: "negative" as const } : {}),
     });
   }
+  // Suivi par lots : aucune date unique pour tout le stock (dates des lots
+  // dans la section « Lots » de la fiche).
+  if (product.stockTracking === "batches") {
+    items.push({
+      key: "stockTracking",
+      label: t("info.stockTracking"),
+      value: t("info.byBatches"),
+    });
+  }
   // Seuil : personnalisé (valeur, `0` compris) ou règle par défaut ; absent
   // (API antérieure) : rien n'est affiché.
   if (product.lowStockThreshold !== undefined) {
@@ -144,10 +159,30 @@ export function productInfoItems(
       value: fcfa(product.actualRevenue),
     });
   }
+  // Lot C : pertes affichées À PART (jamais des ventes) ; le bénéfice est
+  // alors explicitement une marge sur ventes, hors pertes.
+  if (product.lostQuantity !== undefined) {
+    items.push({
+      key: "lostQuantity",
+      label: t("info.lostQuantity"),
+      value: String(product.lostQuantity),
+    });
+  }
+  if (product.lossValueAtCost !== undefined) {
+    items.push({
+      key: "lossValueAtCost",
+      label: t("info.lossValueAtCost"),
+      value: fcfa(product.lossValueAtCost),
+      tone: "negative",
+    });
+  }
   if (product.actualProfit !== undefined) {
     items.push({
       key: "actualProfit",
-      label: t("info.actualProfit"),
+      label:
+        product.lostQuantity !== undefined
+          ? t("info.actualProfitExclLosses")
+          : t("info.actualProfit"),
       value: fcfa(product.actualProfit),
       tone: product.actualProfit >= 0 ? "positive" : "negative",
     });

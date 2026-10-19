@@ -70,6 +70,18 @@ export class PushJob {
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
   paymentId: Types.ObjectId | null;
 
+  /** Lot C : lot concerné (alerte de péremption d'un lot). */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  batchId?: Types.ObjectId | null;
+
+  /** Lot C : échéance annoncée (date civile). */
+  @Prop({ type: String, default: null })
+  expiryDate?: string | null;
+
+  /** Lot C : demande de régularisation (lot B). */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  regularizationId?: Types.ObjectId | null;
+
   /** 1-16A.1 : vente créée (`sale-created`). */
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
   saleId: Types.ObjectId | null;

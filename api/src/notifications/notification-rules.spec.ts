@@ -127,6 +127,10 @@ describe('Droits par catégorie (1-16A.1)', () => {
       PushCategory.SALE_CREATED,
       PushCategory.MONTHLY_REPORT,
       PushCategory.MEMBER_JOINED,
+      // Lot C : détail du stock, et traitement des régularisations.
+      PushCategory.EXPIRY_SOON,
+      PushCategory.EXPIRY_EXPIRED,
+      PushCategory.REGULARIZATION_REQUESTED,
     ]);
     expect(
       accessibleCategories({ role: OrganizationRole.SELLER, permissions: [] }),

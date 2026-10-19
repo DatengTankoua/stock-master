@@ -39,6 +39,7 @@ const STANDARD_PRODUCT_KEYS = [
   'remainingQuantity',
   'salePrice',
   'sectionId',
+  'stockTracking',
   'updatedAt',
 ];
 

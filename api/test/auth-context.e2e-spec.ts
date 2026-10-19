@@ -248,14 +248,20 @@ describe('GET /auth/context (e2e 1-9C)', () => {
     const body: unknown = res.body;
     assertAuthContextBody(body);
     // 1-14C.1 : bloc `access` (état commercial) ajouté au contrat.
+    // Lots : `features` (fonctionnalités annoncées par le serveur).
     expect(Object.keys(body).sort()).toEqual([
       'access',
       'effectivePermissions',
+      'features',
       'organizationId',
       'permissions',
       'role',
       'userId',
     ]);
+    expect(res.body.features).toEqual({
+      productBatches: false,
+      expiryAlerts: false,
+    });
   });
 
   it('seller avec permission supplémentaire : effectivePermissions = défauts du rôle ∪ extra', async () => {

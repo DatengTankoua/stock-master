@@ -94,6 +94,8 @@ const salesEn: Translation<typeof salesFr> = {
       unavailable: "Local storage unavailable: sale not saved.",
       "not-replaceable": "This sale can no longer be corrected.",
     },
+    batchTracked:
+      "Batch sales unavailable on this device: go online to load this product's batches.",
   },
   edit: {
     title: "Edit the sale",
@@ -104,6 +106,32 @@ const salesEn: Translation<typeof salesFr> = {
     deleteText:
       "The stock will be restored automatically. This action cannot be undone.",
     deleting: "Deleting…",
+    soldFromBatch_one: "{{count}} sold from this batch",
+    soldFromBatch_other: "{{count}} sold from this batch",
+    batchesTitle: "Batches of this sale",
+    returnsTitle: "Batches to credit ({{count}} unit(s) to give back)",
+    addTitle: "Batches for the added units",
+    legacyTitle: "Units whose original batch is unknown",
+    legacyText:
+      "This sale predates batch tracking: no batch is assigned to it. Say which batches the returned units go back to. This is not a receipt.",
+    legacyNoRight: "Returning these units requires the right to adjust stock.",
+    destinationFor: "Units put back into {{reference}}",
+    historical: "Create a “historical batch, date unknown” for these units",
+    historicalQuantity: "Units in the historical batch",
+    historicalConfirm:
+      "I confirm the batch of these units is unknown (no date will be assigned).",
+    reason: "Reason for the return",
+    errors: {
+      returns: "The credited batches must add up to the units given back.",
+      legacy:
+        "The units put back must add up to the returned units of unknown batch.",
+      reason: "Give a reason of at least 3 characters.",
+      historicalConfirm: "Confirm creating the historical batch.",
+    },
+    deleteBatchText:
+      "The units will go back exactly to their original batches: {{list}}. This cannot be undone.",
+    deleteLegacyText:
+      "Sale made before batch tracking: say where to put the {{count}} unit(s) back, with a reason.",
   },
   logout: {
     title: "Sales not synchronised",
@@ -174,10 +202,14 @@ const salesEn: Translation<typeof salesFr> = {
       abandon: "Abandon",
       remove: "Remove",
       removeFromQueue: "Remove from the queue",
+      regularize: "Regularise",
+      requestRegularization: "Request a regularisation",
     },
     errors: {
       insufficientStock: "Not enough stock on the server.",
       productNotFound: "Product not found or deleted.",
+      batchTracked:
+        "Product tracked by batches: sale refused by the server. Correct it by choosing the batches.",
       dateOutOfRange: "Sale date outside the allowed period.",
       validationFailed: "Sale details refused by the server.",
       expired: "Sale pending for more than 14 days: not sent automatically.",
@@ -192,6 +224,102 @@ const salesEn: Translation<typeof salesFr> = {
       server: "Sending temporarily impossible, automatic retry.",
       auth: "Session expired or access refused.",
       refused: "Sale refused by the server.",
+      batchAllocationRequired:
+        "Product tracked by batches: choose the batches sold (Correct).",
+      batchInsufficient:
+        "A chosen batch no longer has enough units: correct the split.",
+      batchUnavailable:
+        "A chosen batch is no longer available: correct the split.",
+      batchExpired:
+        "A chosen batch is past its expiry date: it cannot be sold.",
+      batchExpiredAtSync:
+        "Sale entered before the batch expired, received after: a manager must regularise it.",
+      batchExpiryUnconfirmed:
+        "A batch without an expiry date must be confirmed: correct the sale.",
+      batchMismatch: "The batches do not match the quantity: correct the sale.",
+      batchesDisabled: "Batch sales are not available at the moment.",
+    },
+    regularize: {
+      title: "Regularise this sale",
+      text: "The sale was entered on {{date}}, before the batch expired, but received after. Regularising records it with its real time, without allowing any other sale of this batch.",
+      reason: "Reason (required)",
+      reasonPlaceholder: "E.g. sold offline before midnight",
+      confirm: "Regularise",
+      noRight:
+        "An authorised manager must regularise this sale: send them the request. It stays pending on this device.",
+      reasonTooShort: "Give a reason of at least 3 characters.",
+      requestTitle: "Request a regularisation",
+      requestText:
+        "The sale, its batches and the time declared by this device ({{date}}, not verified) will be sent to a manager. Nothing is recorded before their approval.",
+      requestConfirm: "Send the request",
+      requested: "Request sent to a manager.",
+      awaiting:
+        "Request sent ({{date}}): waiting for a manager's decision. The sale is not recorded yet.",
+      rejected: "Regularisation rejected: {{reason}}",
+    },
+  },
+  batches: {
+    title: "Batches given to the customer",
+    loading: "Loading batches…",
+    noCache:
+      "Batches unavailable offline for this product: go online to load them.",
+    hintOnline:
+      "Suggested by nearest expiry. Adjust it to the units actually handed over. Nothing is reserved before confirmation.",
+    hintOffline:
+      "Offline: availability not checked, nothing is reserved. The server will confirm when syncing.",
+    none: "No sellable batch for this product.",
+    datedLabel: "Dated batches, nearest expiry first",
+    undatedLabel: "Batches without an expiry date",
+    undatedWarning:
+      "Batches with no known expiry date: no guarantee of validity.",
+    undatedConfirm: "I confirm selling units whose expiry date is unknown.",
+    expiresToday: "Expires today",
+    expiresTodayOffline:
+      "A batch expires today: if the sale is not synced before midnight, it will need to be regularised.",
+    expiry: "Expiry: {{date}}",
+    noExpiry: "No date",
+    available_one: "{{count}} available",
+    available_other: "{{count}} available",
+    quantityFor: "Quantity from batch {{reference}}",
+    expiredExcluded_one: "{{count}} expired batch is not offered.",
+    expiredExcluded_other: "{{count}} expired batches are not offered.",
+    allocated: "Split: {{allocated}} / {{total}}",
+    errors: {
+      sum: "The batches must add up to the quantity sold.",
+      unknownUnconfirmed: "Confirm selling units without an expiry date.",
+      aboveAvailable: "A batch does not have enough units available.",
+    },
+    saleLots: "Batches: {{list}}",
+    regularized: "Regularised (batch expired on receipt): {{reason}}",
+    corrected_one: "{{count}} batch correction",
+    corrected_other: "{{count}} batch corrections",
+    originUnknown: "Sale made before batch tracking: original batch unknown.",
+  },
+  regularizations: {
+    title_one: "Regularisations to review ({{count}})",
+    title_other: "Regularisations to review ({{count}})",
+    intro:
+      "Offline sales entered before a batch expired but received after. The declared time comes from the seller's device and is not verified.",
+    seller: "Seller:",
+    declared: "Declared time (device, not verified):",
+    received: "Received by the server:",
+    expired: "Batches expired on receipt:",
+    decision: "Decision:",
+    decisionBy: "{{name}}, {{date}} — {{reason}}",
+    approve: "Approve",
+    reject: "Reject",
+    approveTitle: "Approve the regularisation",
+    approveText:
+      "The sale will be recorded in the name of {{seller}}, at the declared time ({{date}}), with the same batches. You will be its approver.",
+    rejectTitle: "Reject the request",
+    rejectText:
+      "No sale will be recorded. The request and your reason remain viewable.",
+    approved: "Sale regularised.",
+    rejectedDone: "Request rejected.",
+    status: {
+      pending: "Pending",
+      approved: "Approved",
+      rejected: "Rejected",
     },
   },
 };

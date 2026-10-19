@@ -30,6 +30,14 @@ import {
 } from '../organizations/schemas/membership.schema';
 import { Product, ProductSchema } from '../products/schemas/product.schema';
 import {
+  ProductBatch,
+  ProductBatchSchema,
+} from '../products/batches/schemas/product-batch.schema';
+import {
+  SaleRegularizationRequest,
+  SaleRegularizationRequestSchema,
+} from '../sales/schemas/sale-regularization-request.schema';
+import {
   SubscriptionPayment,
   SubscriptionPaymentSchema,
 } from '../subscriptions/payments/schemas/subscription-payment.schema';
@@ -70,6 +78,12 @@ import {
       { name: SubscriptionPeriod.name, schema: SubscriptionPeriodSchema },
       { name: Sale.name, schema: SaleSchema },
       { name: MonthlyReport.name, schema: MonthlyReportSchema },
+      // Lot C : alertes de péremption des lots, demandes de régularisation.
+      { name: ProductBatch.name, schema: ProductBatchSchema },
+      {
+        name: SaleRegularizationRequest.name,
+        schema: SaleRegularizationRequestSchema,
+      },
     ]),
   ],
   controllers: [PushController],

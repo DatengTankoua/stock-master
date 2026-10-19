@@ -75,4 +75,17 @@ export class NotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   memberActivity?: boolean;
+
+  // Lot C.
+  @IsOptional()
+  @IsBoolean()
+  expirySoon?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  expiryExpired?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  regularizationRequested?: boolean;
 }

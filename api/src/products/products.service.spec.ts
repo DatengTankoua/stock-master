@@ -224,6 +224,8 @@ describe('ProductsService.decrementStock — décrémentation atomique (0B.7B)',
       _id: new Types.ObjectId(PRODUCT_OBJECT_ID),
       organizationId: new Types.ObjectId(TRADE_ORG_A),
       deletedAt: null,
+      // Produit suivi par lots : jamais décrémenté sans ses lots.
+      stockTracking: null,
       remainingQuantity: { $gte: 3 },
     });
     expect(update).toEqual({ $inc: { remainingQuantity: -3 } });
@@ -1093,7 +1095,12 @@ describe('ProductsService — isolation multi-tenant catalogue (1-4B)', () => {
     );
 
     expect(productModel.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: doc._id, organizationId: new Types.ObjectId(ORG_A) },
+      // Écriture conditionnée à l'absence de suivi par lots.
+      {
+        _id: doc._id,
+        organizationId: new Types.ObjectId(ORG_A),
+        stockTracking: null,
+      },
       {
         $set: { salePrice: 12 },
         $inc: { initialQuantity: 5, remainingQuantity: 5 },

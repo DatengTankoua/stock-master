@@ -30,6 +30,46 @@ import {
 import { PUSH_CLOCK, PushRuntime } from './push-runtime';
 import type { PushClock } from './push-runtime';
 import { buildPushMessage, pushTopic } from './push-messages';
+import {
+  ProductBatch,
+  ProductBatchDocument,
+} from '../products/batches/schemas/product-batch.schema';
+import {
+  SaleRegularizationRequest,
+  SaleRegularizationRequestDocument,
+  SaleRegularizationStatus,
+} from '../sales/schemas/sale-regularization-request.schema';
+import { businessDate } from '../products/batches/business-date';
+import {
+  dueExpiryAlert,
+  expiryAlertEventKey,
+  nextExpiryAlertOn,
+  normalizeLeadDays,
+} from '../products/expiry/expiry-alerts';
+import {
+  expiryAlertsEnabled,
+  expiryAlertsEnabledFor,
+  expiryAlertsScope,
+} from '../products/expiry/expiry-alerts-config';
+import { productBatchesEnabledFor } from '../products/batches/product-batches-config';
+import { organizationScopeIds } from '../common/organization-scope';
+import {
+  EXPIRY_ALERT_INDEX_NAME,
+  EXPIRY_ALERT_ORG_INDEX_NAME,
+  describeExpiryAlertIndexProblem,
+} from '../products/expiry/expiry-alert-index';
+
+/** Lot C — cible d'une alerte de péremption (lot ou produit sans lots). */
+interface ExpiryTarget {
+  _id: Types.ObjectId;
+  organizationId: Types.ObjectId;
+  productId?: Types.ObjectId;
+  expiryDate?: string | null;
+  expiryAlerts?: { soonFor?: string | null; expiredFor?: string | null };
+  expiryAlertNextOn?: string | null;
+  deletedAt?: Date | null;
+  stockTracking?: string;
+}
 import { recipientLocale } from '../common/i18n/locale';
 import type { PushSendResult } from './push-transport';
 import { completePreferences } from './push-subscriptions.service';
@@ -82,6 +122,15 @@ import {
 export const SUBSCRIPTION_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Fréquence du balayage des échéances et des bilans mensuels. */
 export const SUBSCRIPTION_REMINDER_SCAN_MS = 5 * 60 * 1000;
+/**
+ * Lot C — balayage des alertes de péremption : au plus toutes les 15 min
+ * par processus (index partiel : seules les cibles en stock dont une étape
+ * est due sont lues), par pages bornées — par type de cible et, en mode
+ * pilote, par commerce.
+ */
+export const EXPIRY_ALERT_SCAN_MS = 15 * 60 * 1000;
+export const EXPIRY_ALERT_SCAN_PAGE = 200;
+export const EXPIRY_ALERT_SCAN_MAX_PAGES = 25;
 /** 1-16A.1 : fenêtre FIXE de regroupement des push de ventes. */
 export const SALE_DIGEST_WINDOW_MS = 60_000;
 /**
@@ -101,6 +150,10 @@ export const PUSH_EVENT_MAX_AGE_MS: Readonly<
   [PushCategory.MONTHLY_REPORT]: 12 * 60 * 60 * 1000,
   [PushCategory.MEMBER_JOINED]: 60 * 60 * 1000,
   [PushCategory.MEMBER_ACTIVITY]: 60 * 60 * 1000,
+  // Lot C : annoncé dans la journée (une étape par échéance).
+  [PushCategory.EXPIRY_SOON]: 24 * 60 * 60 * 1000,
+  [PushCategory.EXPIRY_EXPIRED]: 24 * 60 * 60 * 1000,
+  [PushCategory.REGULARIZATION_REQUESTED]: 24 * 60 * 60 * 1000,
   // Pertinent jusqu'à l'échéance visée elle-même.
   [PushCategory.SUBSCRIPTION_ENDING]: null,
 });
@@ -208,6 +261,7 @@ export class PushDispatcherService implements OnApplicationShutdown {
   /** 1-20B : passes sérialisées (jamais deux passes superposées). */
   private passChain: Promise<unknown> = Promise.resolve();
   private lastReminderScanAt: number | null = null;
+  private lastExpiryScanAt: number | null = null;
   /** 1-20B : budget de durée d'une passe (réglable par les tests). */
   passTimeBudgetMs = PUSH_PASS_TIME_BUDGET_MS;
   /** 1-20B : voies parallèles (organisations distinctes) d'un lot. */
@@ -234,6 +288,10 @@ export class PushDispatcherService implements OnApplicationShutdown {
     private readonly periodModel: Model<SubscriptionPeriodDocument>,
     @InjectModel(MonthlyReport.name)
     private readonly reportModel: Model<MonthlyReportDocument>,
+    @InjectModel(ProductBatch.name)
+    private readonly batchModel: Model<ProductBatchDocument>,
+    @InjectModel(SaleRegularizationRequest.name)
+    private readonly regularizationModel: Model<SaleRegularizationRequestDocument>,
     private readonly center: NotificationCenterService,
     private readonly reports: MonthlyReportService,
     private readonly runtime: PushRuntime,
@@ -336,6 +394,19 @@ export class PushDispatcherService implements OnApplicationShutdown {
       summary.reports = await this.scanMonthlyReports();
       this.lastReminderScanAt = now;
     }
+    // Lot C : alertes de péremption (activation distincte, désactivée par
+    // défaut). Aucun état en mémoire n'est nécessaire à la reprise : un
+    // redémarrage relit les étapes dues (index), les clés uniques des
+    // travaux empêchent tout doublon entre instances.
+    if (
+      expiryAlertsEnabled() &&
+      (this.lastExpiryScanAt === null ||
+        now - this.lastExpiryScanAt >= EXPIRY_ALERT_SCAN_MS ||
+        now < this.lastExpiryScanAt)
+    ) {
+      summary.reminders += await this.scanExpiryAlerts();
+      this.lastExpiryScanAt = now;
+    }
     const startedAt = Date.now();
     for (;;) {
       const moreJobs = await this.dispatchJobs(summary);
@@ -427,6 +498,9 @@ export class PushDispatcherService implements OnApplicationShutdown {
     category: PushCategory;
     organizationId: Types.ObjectId;
     eventAt: Date;
+    productId?: Types.ObjectId;
+    batchId?: Types.ObjectId;
+    expiryDate?: string;
     coverageEndsAt?: Date;
     periodKind?: SubscriptionPeriodKind;
     reportId?: Types.ObjectId;
@@ -440,7 +514,9 @@ export class PushDispatcherService implements OnApplicationShutdown {
           $setOnInsert: {
             category: job.category,
             organizationId: job.organizationId,
-            productId: null,
+            productId: job.productId ?? null,
+            batchId: job.batchId ?? null,
+            expiryDate: job.expiryDate ?? null,
             paymentId: null,
             saleId: null,
             actorId: job.actorId ?? null,
@@ -459,6 +535,201 @@ export class PushDispatcherService implements OnApplicationShutdown {
       )
       .exec();
     return result.upsertedCount;
+  }
+
+  /**
+   * Lot C — étapes de péremption DUES (lots et produits sans lots en stock,
+   * `expiryAlertNextOn ≤ aujourd'hui`, index partiel), par pages bornées.
+   * Pour chacune : travail idempotent (`expiry-<étape>:<cible>:<échéance>`),
+   * puis marques et prochaine date, conditionnées à l'échéance lue (une
+   * date modifiée entre-temps a déjà été replanifiée par son écriture).
+   * Produit à la corbeille : rien n'est annoncé ni marqué (annoncé à sa
+   * restauration s'il est encore concerné). Renvoie les travaux créés.
+   */
+  async scanExpiryAlerts(): Promise<number> {
+    // Index partiel requis : sans lui, AUCUN balayage (jamais de parcours
+    // massif de secours) ; l'absence est journalisée à chaque tentative.
+    const indexProblem = await describeExpiryAlertIndexProblem(
+      this.jobModel.db,
+    );
+    if (indexProblem) {
+      this.logger.error(
+        `Alertes de péremption : balayage non exécuté (${indexProblem}). Exécuter migrate:expiry-alerts -- --apply.`,
+      );
+      return 0;
+    }
+    // Portée : `null` = tous les commerces (index `expiry_alert_due`) ;
+    // sinon un balayage PAR commerce pilote, filtré dans la requête
+    // (index `expiry_alert_due_org`) : les cibles des autres commerces ne
+    // sont ni lues ni comptées dans les pages d'un pilote.
+    const scopeIds = organizationScopeIds(expiryAlertsScope());
+    if (scopeIds !== null && scopeIds.length === 0) return 0;
+    const today = businessDate(this.clock());
+    const leads = new Map<string, number>();
+    const leadOf = async (organizationId: Types.ObjectId) => {
+      const key = organizationId.toHexString();
+      if (!leads.has(key)) {
+        const org = await this.organizationModel
+          .findById(organizationId)
+          .select({ expiryAlertLeadDays: 1 })
+          .lean<{ expiryAlertLeadDays?: number }>()
+          .exec();
+        leads.set(key, normalizeLeadDays(org?.expiryAlertLeadDays));
+      }
+      return leads.get(key)!;
+    };
+    const organizations =
+      scopeIds === null ? [null] : scopeIds.map((id) => new Types.ObjectId(id));
+    let created = 0;
+    for (const organizationId of organizations) {
+      for (const kind of ['batch', 'product'] as const) {
+        created += await this.scanExpiryTargets(
+          kind,
+          organizationId,
+          today,
+          leadOf,
+        );
+      }
+    }
+    return created;
+  }
+
+  /**
+   * Pages bornées des cibles dues d'un type, pour un commerce (`organizationId`)
+   * ou pour tous (`null`). L'index est IMPOSÉ (`hint`) : jamais de parcours
+   * de collection, même si le planificateur de requêtes hésite.
+   */
+  private async scanExpiryTargets(
+    kind: 'batch' | 'product',
+    organizationId: Types.ObjectId | null,
+    today: string,
+    leadOf: (organizationId: Types.ObjectId) => Promise<number>,
+  ): Promise<number> {
+    const model = (kind === 'batch'
+      ? this.batchModel
+      : this.productModel) as unknown as Model<ExpiryTarget>;
+    let created = 0;
+    let after: { nextOn: string; id: Types.ObjectId } | null = null;
+    for (let page = 0; page < EXPIRY_ALERT_SCAN_MAX_PAGES; page += 1) {
+      const filter: Record<string, unknown> = {
+        ...(organizationId ? { organizationId } : {}),
+        expiryAlertNextOn: { $type: 'string', $lte: today },
+        remainingQuantity: { $gt: 0 },
+      };
+      if (after) {
+        filter.$or = [
+          { expiryAlertNextOn: { $gt: after.nextOn, $lte: today } },
+          { expiryAlertNextOn: after.nextOn, _id: { $gt: after.id } },
+        ];
+      }
+      const rows = await model
+        .find(filter)
+        .sort({ expiryAlertNextOn: 1, _id: 1 })
+        .hint(
+          organizationId
+            ? EXPIRY_ALERT_ORG_INDEX_NAME
+            : EXPIRY_ALERT_INDEX_NAME,
+        )
+        .limit(EXPIRY_ALERT_SCAN_PAGE)
+        .select({
+          organizationId: 1,
+          productId: 1,
+          expiryDate: 1,
+          expiryAlerts: 1,
+          expiryAlertNextOn: 1,
+          deletedAt: 1,
+          stockTracking: 1,
+        })
+        .lean<ExpiryTarget[]>()
+        .exec();
+      for (const row of rows) {
+        created += await this.expiryStep(
+          kind,
+          row,
+          today,
+          await leadOf(row.organizationId),
+        );
+      }
+      if (rows.length < EXPIRY_ALERT_SCAN_PAGE) break;
+      const last = rows[rows.length - 1];
+      after = { nextOn: last.expiryAlertNextOn!, id: last._id };
+    }
+    return created;
+  }
+
+  private async expiryStep(
+    kind: 'batch' | 'product',
+    row: ExpiryTarget,
+    today: string,
+    leadDays: number,
+  ): Promise<number> {
+    const model = (kind === 'batch'
+      ? this.batchModel
+      : this.productModel) as unknown as Model<ExpiryTarget>;
+    const expiryDate = row.expiryDate ?? null;
+    const productId = kind === 'batch' ? row.productId! : row._id;
+    // Cible encore concernée : produit actif ; produit sans lots seulement
+    // pour sa propre date (la reprise par lots retire sa planification).
+    const product = await this.productModel
+      .findOne({ _id: productId, organizationId: row.organizationId })
+      .select({ deletedAt: 1, stockTracking: 1 })
+      .lean<{ deletedAt: Date | null; stockTracking?: string }>()
+      .exec();
+    const outOfScope =
+      !product ||
+      (kind === 'product' && product.stockTracking === 'batches') ||
+      (kind === 'batch' && product.stockTracking !== 'batches');
+    if (outOfScope) {
+      await model
+        .updateOne(
+          { _id: row._id, expiryAlertNextOn: row.expiryAlertNextOn },
+          { $set: { expiryAlertNextOn: null } },
+        )
+        .exec();
+      return 0;
+    }
+    if (product.deletedAt) return 0;
+    const due = dueExpiryAlert(expiryDate, today, leadDays, row.expiryAlerts);
+    if (!due) {
+      // Délai réduit, échéance déjà annoncée : simple replanification.
+      const next = nextExpiryAlertOn(expiryDate, leadDays, row.expiryAlerts);
+      if (next !== row.expiryAlertNextOn) {
+        await model
+          .updateOne(
+            {
+              _id: row._id,
+              expiryDate,
+              expiryAlertNextOn: row.expiryAlertNextOn,
+            },
+            { $set: { expiryAlertNextOn: next } },
+          )
+          .exec();
+      }
+      return 0;
+    }
+    const createdJob = await this.recordJob({
+      eventKey: expiryAlertEventKey(
+        due.stage,
+        { kind, id: row._id.toHexString() },
+        expiryDate!,
+      ),
+      category:
+        due.stage === 'soon'
+          ? PushCategory.EXPIRY_SOON
+          : PushCategory.EXPIRY_EXPIRED,
+      organizationId: row.organizationId,
+      productId,
+      ...(kind === 'batch' ? { batchId: row._id } : {}),
+      expiryDate: expiryDate!,
+      eventAt: this.clock(),
+    });
+    await model
+      .updateOne(
+        { _id: row._id, expiryDate },
+        { $set: { expiryAlerts: due.marks, expiryAlertNextOn: due.nextOn } },
+      )
+      .exec();
+    return createdJob;
   }
 
   /** Échéance effective dans la fenêtre de rappel, sinon `null`. */
@@ -1196,7 +1467,82 @@ export class PushDispatcherService implements OnApplicationShutdown {
           .exec();
         return report ? null : 'report-missing';
       }
+      case PushCategory.EXPIRY_SOON:
+      case PushCategory.EXPIRY_EXPIRED:
+        return this.expiryIrrelevance(job, now);
+      case PushCategory.REGULARIZATION_REQUESTED: {
+        if (!productBatchesEnabledFor(job.organizationId.toHexString())) {
+          return 'disabled';
+        }
+        // Demande traitée (ou absente) avant l'annonce : plus rien à faire.
+        const request = await this.regularizationModel
+          .findOne({
+            _id: job.regularizationId,
+            organizationId: job.organizationId,
+          })
+          .select({ status: 1 })
+          .lean<{ status: SaleRegularizationStatus }>()
+          .exec();
+        return request?.status === SaleRegularizationStatus.PENDING
+          ? null
+          : 'decided';
+      }
     }
+  }
+
+  /**
+   * Lot C — utilité d'une alerte de péremption, relue AVANT chaque annonce
+   * (centre et push) : cible encore en stock, même échéance, produit actif
+   * et toujours dans le même mode ; « expire bientôt » devenu « périmé »
+   * cède la place à l'alerte « périmé ».
+   */
+  private async expiryIrrelevance(
+    job: JobRecord,
+    now: Date,
+  ): Promise<string | null> {
+    // Activation retirée (globalement ou pour ce commerce) avant l'annonce.
+    if (!expiryAlertsEnabledFor(job.organizationId.toHexString())) {
+      return 'disabled';
+    }
+    const product = await this.productModel
+      .findOne({ _id: job.productId, organizationId: job.organizationId })
+      .select({
+        deletedAt: 1,
+        stockTracking: 1,
+        expiryDate: 1,
+        remainingQuantity: 1,
+      })
+      .lean<{
+        deletedAt: Date | null;
+        stockTracking?: string;
+        expiryDate?: string | null;
+        remainingQuantity: number;
+      }>()
+      .exec();
+    if (!product || product.deletedAt) return 'product-removed';
+    let target: { expiryDate?: string | null; remainingQuantity: number };
+    if (job.batchId) {
+      if (product.stockTracking !== 'batches') return 'not-tracked';
+      const batch = await this.batchModel
+        .findOne({ _id: job.batchId, organizationId: job.organizationId })
+        .select({ expiryDate: 1, remainingQuantity: 1 })
+        .lean<{ expiryDate?: string | null; remainingQuantity: number }>()
+        .exec();
+      if (!batch) return 'batch-removed';
+      target = batch;
+    } else {
+      if (product.stockTracking === 'batches') return 'batch-tracked';
+      target = product;
+    }
+    if (target.remainingQuantity <= 0) return 'no-stock';
+    if ((target.expiryDate ?? null) !== job.expiryDate) return 'date-changed';
+    if (
+      job.category === PushCategory.EXPIRY_SOON &&
+      job.expiryDate! < businessDate(now)
+    ) {
+      return 'now-expired';
+    }
+    return null;
   }
 
   /**

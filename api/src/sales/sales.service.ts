@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -34,6 +35,159 @@ import {
   decodeSalesHistoryCursor,
   encodeSalesHistoryCursor,
 } from './sale-history';
+import {
+  ProductBatchesService,
+  type BatchCreditResult,
+  type BatchEntry,
+  type BatchSaleResult,
+  type BatchStockChange,
+  type SaleBatchSnapshot,
+} from '../products/batches/product-batches.service';
+import { batchError } from '../products/batches/product-batch-errors';
+import { businessDate } from '../products/batches/business-date';
+import { CancelSaleDto } from '../products/batches/dto/product-batch.dto';
+import {
+  SaleRegularizationRequest,
+  SaleRegularizationRequestDocument,
+  SaleRegularizationStatus,
+} from './schemas/sale-regularization-request.schema';
+import { SALE_REGULARIZATION_REQUEST_INDEX_KEY } from './schemas/sale-regularization-request.schema';
+
+/** Approbation d'une demande de régularisation (dans la transaction). */
+interface RegularizationApproval {
+  requestId: Types.ObjectId;
+  approverId: string;
+  reason: string;
+  receivedAt: Date;
+}
+
+function isRequestDuplicateKeyError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { code, keyPattern } = error as {
+    code?: unknown;
+    keyPattern?: unknown;
+  };
+  if (code !== 11000 || typeof keyPattern !== 'object' || !keyPattern) {
+    return false;
+  }
+  const actual = Object.keys(keyPattern);
+  const expected = Object.keys(SALE_REGULARIZATION_REQUEST_INDEX_KEY);
+  return (
+    actual.length === expected.length &&
+    expected.every((key, i) => actual[i] === key)
+  );
+}
+import type { ProductDocument } from '../products/schemas/product.schema';
+
+type MongooseSession = Awaited<ReturnType<Connection['startSession']>>;
+
+interface RestitutionLog {
+  batchId: Types.ObjectId;
+  reference: string;
+  quantity: number;
+  historical: boolean;
+}
+
+function sumOf(entries: readonly { quantity: number }[]): number {
+  return entries.reduce((s, e) => s + e.quantity, 0);
+}
+
+/** Somme des lots = quantité vendue, exactement (400 sinon). */
+function assertAllocationSum(
+  entries: readonly BatchEntry[],
+  quantity: number,
+): void {
+  if (sumOf(entries) !== quantity) {
+    throw new BadRequestException(
+      batchError(
+        'BATCH_ALLOCATION_MISMATCH',
+        'La somme des lots doit être exactement égale à la quantité vendue.',
+      ),
+    );
+  }
+}
+
+function assertRestitutionReason(reason: string | undefined): void {
+  if (!reason || reason.trim().length < 3) {
+    throw new BadRequestException(
+      batchError(
+        'SALE_BATCH_RESTITUTION_REQUIRED',
+        'Indiquez le motif de la restitution.',
+      ),
+    );
+  }
+}
+
+function hasBatchCorrectionFields(dto: UpdateSaleDto): boolean {
+  return Boolean(
+    dto.batchReturns?.length ||
+    dto.batchAllocations?.length ||
+    dto.restitutions?.length ||
+    dto.historicalRestitution,
+  );
+}
+
+/** Copie simple d'une affectation (sous-document Mongoose → objet). */
+function plainAllocation(a: SaleBatchSnapshot): SaleBatchSnapshot {
+  return {
+    batchId: new Types.ObjectId(String(a.batchId)),
+    reference: a.reference,
+    expiryDate: a.expiryDate ?? null,
+    manufacturerLot: a.manufacturerLot ?? null,
+    quantity: a.quantity,
+  };
+}
+
+/** Affectation courante − retours + ajouts (par lot, jamais négative). */
+function mergeAllocations(
+  current: readonly SaleBatchSnapshot[],
+  returned: readonly SaleBatchSnapshot[],
+  added: readonly SaleBatchSnapshot[],
+): SaleBatchSnapshot[] {
+  const byId = new Map<string, SaleBatchSnapshot>();
+  for (const a of current) byId.set(a.batchId.toHexString(), { ...a });
+  for (const r of returned) {
+    const entry = byId.get(r.batchId.toHexString());
+    if (entry) entry.quantity -= r.quantity;
+  }
+  for (const a of added) {
+    const entry = byId.get(a.batchId.toHexString());
+    if (entry) entry.quantity += a.quantity;
+    else byId.set(a.batchId.toHexString(), { ...a });
+  }
+  return [...byId.values()].filter((a) => a.quantity > 0);
+}
+
+function allocationSummary(
+  allocations: readonly SaleBatchSnapshot[],
+): { batchId: Types.ObjectId; reference: string; quantity: number }[] {
+  return allocations.map((a) => ({
+    batchId: a.batchId,
+    reference: a.reference,
+    quantity: a.quantity,
+  }));
+}
+
+function restitutionEntries(credit: BatchCreditResult): RestitutionLog[] {
+  return [
+    ...credit.credited.map((c) => ({
+      batchId: c.batchId,
+      reference: c.reference,
+      quantity: c.quantity,
+      historical: false,
+    })),
+    ...(credit.historicalBatch
+      ? [
+          {
+            batchId: credit.historicalBatch.batchId,
+            reference: credit.historicalBatch.reference,
+            quantity: credit.historicalBatch.quantity,
+            historical: true,
+          },
+        ]
+      : []),
+  ];
+}
 
 @Injectable()
 export class SalesService {
@@ -49,6 +203,11 @@ export class SalesService {
     private auditService: AuditService,
     // 1-16A : optionnel (tests unitaires construits sans module push).
     @Optional() private pushOutbox?: PushOutboxService,
+    // Lot B : optionnel (tests unitaires construits sans lots).
+    @Optional() private batches?: ProductBatchesService,
+    @Optional()
+    @InjectModel(SaleRegularizationRequest.name)
+    private regularizationModel?: Model<SaleRegularizationRequestDocument>,
   ) {}
 
   /**
@@ -211,8 +370,13 @@ export class SalesService {
     sellerId: string,
     occurredAt: Date,
     idempotency?: { clientOperationId: string; requestHash: string },
+    approval?: RegularizationApproval,
   ): Promise<SaleDocument> {
     const orgOid = new Types.ObjectId(organizationId);
+    if (input.batchAllocations !== null) {
+      this.requireBatches().assertEnabled(organizationId);
+      assertAllocationSum(input.batchAllocations, input.quantity);
+    }
     // `_id` connu AVANT la transaction : la trace idempotente le référence
     // dès sa première écriture.
     const saleId = new Types.ObjectId();
@@ -242,13 +406,37 @@ export class SalesService {
         // 1. Décrémentation ATOMIQUE et conditionnelle du stock tenant. Lève
         //    404 (produit absent/étranger/corbeillé) ou 400 (stock
         //    insuffisant) : la transaction est alors annulée, rien n'est
-        //    persisté.
-        const product = await this.productsService.decrementStock(
-          organizationId,
-          input.productId,
-          input.quantity,
-          session,
-        );
+        //    persisté. Lot B : produit suivi par lots → lots désignés
+        //    décrémentés avec la fiche (jamais substitués) ; sans
+        //    affectation → 409 `SALE_BATCH_ALLOCATION_REQUIRED`.
+        let product: ProductDocument;
+        let stock: BatchStockChange;
+        let batchSale: BatchSaleResult | null = null;
+        if (input.batchAllocations !== null) {
+          batchSale = await this.requireBatches().consumeForSale(session, {
+            organizationId,
+            productId: input.productId,
+            entries: input.batchAllocations,
+            unknownExpiryConfirmed: input.unknownExpiryConfirmed,
+            occurredAt,
+            regularize: input.regularizationReason !== null,
+          });
+          product = batchSale.product;
+          stock = batchSale.stock;
+        } else {
+          product = await this.productsService.decrementStock(
+            organizationId,
+            input.productId,
+            input.quantity,
+            session,
+          );
+          stock = {
+            initialQuantity: product.initialQuantity,
+            remainingBefore: product.remainingQuantity + input.quantity,
+            remainingAfter: product.remainingQuantity,
+            lowStockThreshold: product.lowStockThreshold ?? null,
+          };
+        }
         // 1-16A / 1-16A.1 — seuils de stock franchis par CETTE décrémentation
         // atomique (valeurs avant / après exactes) : événement enregistré
         // dans la transaction (annulé avec elle ; clé stable `sale:<id>`
@@ -258,14 +446,28 @@ export class SalesService {
           session,
           organizationId,
           input.productId,
-          {
-            initialQuantity: product.initialQuantity,
-            remainingBefore: product.remainingQuantity + input.quantity,
-            remainingAfter: product.remainingQuantity,
-            lowStockThreshold: product.lowStockThreshold ?? null,
-          },
+          stock,
           `sale:${saleId.toHexString()}`,
         );
+        const regularization =
+          batchSale && (batchSale.regularizedReferences.length > 0 || approval)
+            ? {
+                reason: input.regularizationReason!,
+                // Approbation : le responsable ; sinon le vendeur autorisé.
+                actorId: new Types.ObjectId(approval?.approverId ?? sellerId),
+                at: new Date(),
+                businessDate: businessDate(),
+                references: batchSale.regularizedReferences,
+                ...(approval
+                  ? {
+                      requestId: approval.requestId,
+                      requestedBy: new Types.ObjectId(sellerId),
+                      declaredOccurredAt: occurredAt,
+                      receivedAt: approval.receivedAt,
+                    }
+                  : {}),
+              }
+            : null;
 
         // 2. Création de la vente, MÊME session. L'org SERVEUR est écrite
         //    dans le document (jamais issue du DTO). Sur échec, le rollback
@@ -286,6 +488,15 @@ export class SalesService {
                 : {}),
               ...(input.buyerContact !== null
                 ? { buyerContact: input.buyerContact }
+                : {}),
+              ...(batchSale
+                ? {
+                    batchAllocations: batchSale.allocations,
+                    originalBatchAllocations: batchSale.allocations,
+                  }
+                : {}),
+              ...(regularization
+                ? { expiredBatchRegularization: regularization }
                 : {}),
             },
           ],
@@ -308,9 +519,42 @@ export class SalesService {
             ...(idempotency
               ? { clientOperationId: idempotency.clientOperationId }
               : {}),
+            ...(batchSale
+              ? { batches: allocationSummary(batchSale.allocations) }
+              : {}),
+            ...(regularization
+              ? {
+                  expiredBatchRegularization: {
+                    reason: regularization.reason,
+                    references: regularization.references,
+                    ...(approval
+                      ? {
+                          requestId: approval.requestId,
+                          approvedBy: new Types.ObjectId(approval.approverId),
+                          declaredOccurredAt: occurredAt,
+                          receivedAt: approval.receivedAt,
+                        }
+                      : {}),
+                  },
+                }
+              : {}),
           },
           session,
         );
+
+        // Lot B : décision de la demande DANS la même transaction que la
+        // vente (conditionnée à `pending`) — une approbation concurrente
+        // ou un rejet simultané annule tout.
+        if (approval) {
+          await this.decideRegularizationInSession(session, {
+            organizationId,
+            approval,
+            saleId: sale._id,
+            sellerId,
+            occurredAt,
+            references: regularization?.references ?? [],
+          });
+        }
 
         // 1-16A.1 — nouvelle vente VALIDÉE : événement durable dans la même
         // transaction (aucun après rollback ; un rejeu idempotent ne passe
@@ -462,11 +706,38 @@ export class SalesService {
         if (!sale) throw new NotFoundException(`Sale ${id} not found`);
 
         const changes: Record<string, unknown> = {};
-        if (dto.quantity !== undefined && dto.quantity !== sale.quantity) {
+        const productId = sale.productId.toString();
+        const tracking = await this.trackingOf(
+          session,
+          organizationId,
+          productId,
+        );
+        if (tracking === 'batches' || sale.batchAllocations?.length) {
+          // Lot B : correction d'une vente d'un produit suivi par lots.
+          await this.correctBatchSale(session, {
+            organizationId,
+            sale,
+            dto,
+            actorId,
+            tracking,
+            operationId,
+            changes,
+          });
+        } else if (hasBatchCorrectionFields(dto)) {
+          throw new ConflictException(
+            batchError(
+              'BATCH_TRACKING_NOT_ENABLED',
+              "Le suivi par lots n'est pas activé pour ce produit.",
+            ),
+          );
+        } else if (
+          dto.quantity !== undefined &&
+          dto.quantity !== sale.quantity
+        ) {
           const delta = sale.quantity - dto.quantity;
           const adjustment = await this.productsService.adjustStock(
             organizationId,
-            sale.productId.toString(),
+            productId,
             delta,
             session,
           );
@@ -476,7 +747,7 @@ export class SalesService {
             await this.recordStockThresholds(
               session,
               organizationId,
-              sale.productId.toString(),
+              productId,
               adjustment,
               `sale-update:${operationId}`,
             );
@@ -515,6 +786,675 @@ export class SalesService {
       productId: String(saved.productId),
     });
     return saved.populate('sellerId', 'name email');
+  }
+
+  // ─── Lot B : régularisation par un responsable ───────────────────────
+
+  private requireRegularizations(): Model<SaleRegularizationRequestDocument> {
+    if (!this.regularizationModel) {
+      throw new Error('Demandes de régularisation indisponibles');
+    }
+    return this.regularizationModel;
+  }
+
+  /**
+   * Demande de régularisation transmise EXPLICITEMENT par le vendeur d'une
+   * vente hors ligne refusée `BATCH_EXPIRED_AT_SYNC` (même payload, même
+   * `clientOperationId` que l'opération de son outbox). Idempotente par
+   * opération ; refusée si une vente existe déjà pour cette opération ou si
+   * la vente n'est pas éligible. Rien n'est réservé.
+   */
+  async requestRegularization(
+    organizationId: string,
+    dto: CreateSaleDto,
+    sellerId: string,
+  ): Promise<SaleRegularizationRequestDocument> {
+    const model = this.requireRegularizations();
+    const batches = this.requireBatches();
+    batches.assertEnabled(organizationId);
+    if (
+      dto.clientOperationId === undefined ||
+      dto.occurredAt === undefined ||
+      !dto.batchAllocations?.length ||
+      dto.expiredBatchRegularization !== undefined
+    ) {
+      throw new BadRequestException(
+        batchError(
+          'BATCH_ALLOCATION_MISMATCH',
+          'La demande doit reprendre la vente en attente telle quelle (opération, heure et lots).',
+        ),
+      );
+    }
+    const input = normalizeCreateSale(dto);
+    assertAllocationSum(input.batchAllocations!, input.quantity);
+    const declaredOccurredAt = resolveOccurredAt(input.occurredAt);
+    const requestHash = computeSaleRequestHash(input);
+    const orgOid = new Types.ObjectId(organizationId);
+    const key = {
+      organizationId: orgOid,
+      clientOperationId: dto.clientOperationId,
+    };
+    if (await this.saleOperationModel.exists(key).exec()) {
+      throw new ConflictException(
+        batchError(
+          'SALE_REGULARIZATION_ALREADY_APPLIED',
+          'Cette vente est déjà enregistrée : aucune régularisation à demander.',
+        ),
+      );
+    }
+    const existing = await model.findOne(key).exec();
+    if (existing) return this.sameRequest(existing, sellerId, requestHash);
+    const eligibility = await batches.regularizationEligibility({
+      organizationId,
+      productId: input.productId,
+      entries: input.batchAllocations!,
+      unknownExpiryConfirmed: input.unknownExpiryConfirmed,
+      occurredAt: declaredOccurredAt,
+    });
+    const session = await this.connection.startSession();
+    let created: SaleRegularizationRequestDocument | undefined;
+    try {
+      await session.withTransaction(async () => {
+        const [doc] = await model.create(
+          [
+            {
+              organizationId: orgOid,
+              clientOperationId: dto.clientOperationId,
+              sellerId: new Types.ObjectId(sellerId),
+              productId: new Types.ObjectId(input.productId),
+              productName: eligibility.product.name,
+              quantity: input.quantity,
+              salePrice: input.salePrice,
+              buyerName: input.buyerName,
+              buyerContact: input.buyerContact,
+              declaredOccurredAt,
+              batchAllocations: eligibility.lines,
+              unknownExpiryConfirmed: input.unknownExpiryConfirmed,
+              expiredReferences: eligibility.expiredReferences,
+              requestHash,
+              status: SaleRegularizationStatus.PENDING,
+            },
+          ],
+          { session },
+        );
+        await this.auditService.log(
+          organizationId,
+          input.productId,
+          AuditAction.SALE_REGULARIZATION_REQUESTED,
+          sellerId,
+          {
+            requestId: doc._id,
+            clientOperationId: dto.clientOperationId,
+            quantity: input.quantity,
+            batches: allocationSummary(eligibility.lines),
+            expiredReferences: eligibility.expiredReferences,
+            // Heure déclarée par l'appareil, non vérifiée ; la réception
+            // est l'horodatage serveur de cette entrée.
+            declaredOccurredAt,
+          },
+          session,
+        );
+        // Lot C : responsables prévenus (centre et push), une fois par
+        // demande ; annulé avec la transaction.
+        await this.pushOutbox?.regularizationRequestedInSession(session, {
+          organizationId,
+          productId: input.productId,
+          requestId: doc._id.toHexString(),
+        });
+        created = doc;
+      });
+    } catch (error) {
+      if (!isRequestDuplicateKeyError(error)) throw error;
+      const winner = await model.findOne(key).read('primary').exec();
+      if (!winner) throw error;
+      return this.sameRequest(winner, sellerId, requestHash);
+    } finally {
+      await session.endSession();
+    }
+    return created!;
+  }
+
+  private sameRequest(
+    request: SaleRegularizationRequestDocument,
+    sellerId: string,
+    requestHash: string,
+  ): SaleRegularizationRequestDocument {
+    if (request.sellerId.toHexString() !== sellerId) {
+      throw new ConflictException({
+        code: SALE_ERROR_CODES.IDEMPOTENCY_KEY_CONFLICT,
+        message: "Clé d'opération déjà utilisée.",
+      });
+    }
+    if (request.requestHash !== requestHash) {
+      throw new ConflictException({
+        code: SALE_ERROR_CODES.IDEMPOTENCY_KEY_REUSED,
+        message: "Clé d'opération déjà utilisée pour une autre vente.",
+      });
+    }
+    return request;
+  }
+
+  /** Demandes visibles : tout le commerce (responsable) ou les siennes. */
+  async listRegularizations(
+    organizationId: string,
+    options: {
+      scopeSellerId?: string;
+      clientOperationIds?: string[];
+      status?: SaleRegularizationStatus;
+    },
+  ): Promise<SaleRegularizationRequestDocument[]> {
+    const filter: Record<string, unknown> = {
+      organizationId: new Types.ObjectId(organizationId),
+    };
+    if (options.scopeSellerId) {
+      filter.sellerId = new Types.ObjectId(options.scopeSellerId);
+    }
+    if (options.clientOperationIds?.length) {
+      filter.clientOperationId = { $in: options.clientOperationIds };
+    }
+    if (options.status) filter.status = options.status;
+    return this.requireRegularizations()
+      .find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(100)
+      .populate('sellerId', 'name email')
+      .populate('decidedBy', 'name email')
+      .exec();
+  }
+
+  /**
+   * Approbation par un responsable (droits vérifiés par le contrôleur) :
+   * la vente est créée au nom du VENDEUR D'ORIGINE, sous la clé de son
+   * opération, avec revalidation complète (quantités, dates, éligibilité).
+   * Idempotente : une demande déjà approuvée est renvoyée telle quelle ;
+   * deux approbations concurrentes ne créent qu'une vente.
+   */
+  async approveRegularization(
+    organizationId: string,
+    requestId: string,
+    approverId: string,
+    reason: string,
+  ): Promise<SaleRegularizationRequestDocument> {
+    const model = this.requireRegularizations();
+    this.requireBatches().assertEnabled(organizationId);
+    const filter = {
+      _id: new Types.ObjectId(requestId),
+      organizationId: new Types.ObjectId(organizationId),
+    };
+    const request = await model.findOne(filter).exec();
+    if (!request) throw new NotFoundException(`Request ${requestId} not found`);
+    if (request.status === SaleRegularizationStatus.APPROVED) return request;
+    if (request.status === SaleRegularizationStatus.REJECTED) {
+      throw new ConflictException(
+        batchError(
+          'SALE_REGULARIZATION_DECIDED',
+          'Cette demande a déjà été traitée.',
+        ),
+      );
+    }
+    const input: NormalizedSaleInput = {
+      productId: request.productId.toHexString(),
+      quantity: request.quantity,
+      salePrice: request.salePrice,
+      buyerName: request.buyerName ?? null,
+      buyerContact: request.buyerContact ?? null,
+      occurredAt: request.declaredOccurredAt.toISOString(),
+      batchAllocations: request.batchAllocations.map((l) => ({
+        batchId: l.batchId.toHexString(),
+        quantity: l.quantity,
+      })),
+      unknownExpiryConfirmed: request.unknownExpiryConfirmed,
+      regularizationReason: reason.trim(),
+    };
+    try {
+      await this.createFresh(
+        organizationId,
+        input,
+        request.sellerId.toHexString(),
+        request.declaredOccurredAt,
+        {
+          clientOperationId: request.clientOperationId,
+          // Hash de l'opération D'ORIGINE : le rejeu de l'outbox du vendeur
+          // retrouve cette vente.
+          requestHash: request.requestHash,
+        },
+        {
+          requestId: request._id,
+          approverId,
+          reason: reason.trim(),
+          receivedAt: (request as unknown as { createdAt: Date }).createdAt,
+        },
+      );
+    } catch (error) {
+      // Approbation concurrente : l'autre a créé la vente sous la même clé.
+      const current = await model.findOne(filter).read('primary').exec();
+      if (current?.status === SaleRegularizationStatus.APPROVED) return current;
+      throw error;
+    }
+    return (await model.findOne(filter).read('primary').exec())!;
+  }
+
+  /** Rejet motivé : la demande reste consultable, aucune vente créée. */
+  async rejectRegularization(
+    organizationId: string,
+    requestId: string,
+    approverId: string,
+    reason: string,
+  ): Promise<SaleRegularizationRequestDocument> {
+    const model = this.requireRegularizations();
+    const filter = {
+      _id: new Types.ObjectId(requestId),
+      organizationId: new Types.ObjectId(organizationId),
+    };
+    const session = await this.connection.startSession();
+    let decided: SaleRegularizationRequestDocument | null = null;
+    try {
+      await session.withTransaction(async () => {
+        decided = await model
+          .findOneAndUpdate(
+            { ...filter, status: SaleRegularizationStatus.PENDING },
+            {
+              $set: {
+                status: SaleRegularizationStatus.REJECTED,
+                decidedBy: new Types.ObjectId(approverId),
+                decidedAt: new Date(),
+                decisionReason: reason.trim(),
+              },
+            },
+            { session, returnDocument: 'after' },
+          )
+          .exec();
+        if (!decided) return;
+        await this.auditService.log(
+          organizationId,
+          decided.productId.toHexString(),
+          AuditAction.SALE_REGULARIZATION_REJECTED,
+          approverId,
+          {
+            requestId: decided._id,
+            sellerId: decided.sellerId,
+            reason: reason.trim(),
+            declaredOccurredAt: decided.declaredOccurredAt,
+          },
+          session,
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
+    if (decided) return decided;
+    const current = await model.findOne(filter).exec();
+    if (!current) throw new NotFoundException(`Request ${requestId} not found`);
+    throw new ConflictException(
+      batchError(
+        'SALE_REGULARIZATION_DECIDED',
+        'Cette demande a déjà été traitée.',
+      ),
+    );
+  }
+
+  private async decideRegularizationInSession(
+    session: MongooseSession,
+    input: {
+      organizationId: string;
+      approval: RegularizationApproval;
+      saleId: Types.ObjectId;
+      sellerId: string;
+      occurredAt: Date;
+      references: string[];
+    },
+  ): Promise<void> {
+    const decided = await this.requireRegularizations()
+      .findOneAndUpdate(
+        {
+          _id: input.approval.requestId,
+          organizationId: new Types.ObjectId(input.organizationId),
+          status: SaleRegularizationStatus.PENDING,
+        },
+        {
+          $set: {
+            status: SaleRegularizationStatus.APPROVED,
+            decidedBy: new Types.ObjectId(input.approval.approverId),
+            decidedAt: new Date(),
+            decisionReason: input.approval.reason,
+            saleId: input.saleId,
+          },
+        },
+        { session, returnDocument: 'after' },
+      )
+      .exec();
+    if (!decided) {
+      throw new ConflictException(
+        batchError(
+          'SALE_REGULARIZATION_DECIDED',
+          'Cette demande a déjà été traitée.',
+        ),
+      );
+    }
+    await this.auditService.log(
+      input.organizationId,
+      decided.productId.toHexString(),
+      AuditAction.SALE_REGULARIZATION_APPROVED,
+      input.approval.approverId,
+      {
+        requestId: decided._id,
+        saleId: input.saleId,
+        // Vendeur d'origine ≠ approbateur (acteur de cette entrée).
+        sellerId: new Types.ObjectId(input.sellerId),
+        reason: input.approval.reason,
+        references: input.references,
+        declaredOccurredAt: input.occurredAt,
+        receivedAt: input.approval.receivedAt,
+      },
+      session,
+    );
+  }
+
+  // ─── Lot B : lots des ventes ──────────────────────────────────────────
+
+  private requireBatches(): ProductBatchesService {
+    if (!this.batches) {
+      throw new Error('ProductBatchesService indisponible');
+    }
+    return this.batches;
+  }
+
+  private trackingOf(
+    session: MongooseSession,
+    organizationId: string,
+    productId: string,
+  ): Promise<'batches' | 'none' | 'purged'> {
+    // Sans service de lots (tests unitaires) : aucun produit suivi.
+    if (!this.batches) return Promise.resolve('none');
+    return this.batches.trackingOf(session, organizationId, productId);
+  }
+
+  /**
+   * Correction d'une vente d'un produit suivi par lots (même transaction
+   * que la vente). Nouvelle quantité = quantité − retours aux lots
+   * d'origine − restitutions (unités d'origine inconnue) + ajouts. Aucune
+   * variation de quantité sans préciser les lots ; une correction du prix
+   * seul ne touche pas au stock. L'affectation d'origine et chaque
+   * correction (avant / après) restent sur la vente.
+   */
+  private async correctBatchSale(
+    session: MongooseSession,
+    input: {
+      organizationId: string;
+      sale: SaleDocument;
+      dto: UpdateSaleDto;
+      actorId: string;
+      tracking: 'batches' | 'none' | 'purged';
+      operationId: string;
+      changes: Record<string, unknown>;
+    },
+  ): Promise<void> {
+    const { organizationId, sale, dto, actorId } = input;
+    const productId = sale.productId.toString();
+    const target = dto.quantity ?? sale.quantity;
+    const returns = dto.batchReturns ?? [];
+    const additions = dto.batchAllocations ?? [];
+    const restitutions = dto.restitutions ?? [];
+    const historical = dto.historicalRestitution?.quantity ?? 0;
+    const stockTouched =
+      returns.length + additions.length + restitutions.length > 0 ||
+      historical > 0;
+    if (!stockTouched && target === sale.quantity) return;
+    const batches = this.requireBatches();
+    batches.assertEnabled(organizationId);
+    if (input.tracking === 'purged') {
+      throw new ConflictException(
+        batchError(
+          'SALE_PRODUCT_PURGED',
+          'Le produit a été supprimé définitivement : aucune restitution de stock possible.',
+        ),
+      );
+    }
+    const current = (sale.batchAllocations ?? []).map(plainAllocation);
+    const allocatedTotal = sumOf(current);
+    const unknownOrigin = sale.quantity - allocatedTotal;
+    // Retours : seulement vers les lots d'origine de CETTE vente, dans la
+    // limite de leurs unités.
+    const byBatch = new Map(current.map((a) => [a.batchId.toHexString(), a]));
+    for (const r of returns) {
+      const origin = byBatch.get(r.batchId.toLowerCase());
+      if (!origin || r.quantity > origin.quantity) {
+        throw new BadRequestException(
+          batchError(
+            'BATCH_ALLOCATION_MISMATCH',
+            "Un lot rendu ne correspond pas aux lots d'origine de la vente.",
+          ),
+        );
+      }
+    }
+    const restituted = sumOf(restitutions) + historical;
+    if (restituted > 0) {
+      if (restituted > unknownOrigin) {
+        throw new BadRequestException(
+          batchError(
+            'BATCH_ALLOCATION_MISMATCH',
+            "Les unités restituées dépassent celles dont le lot d'origine est inconnu.",
+          ),
+        );
+      }
+      assertRestitutionReason(dto.restitutionReason);
+    }
+    const computed =
+      sale.quantity - sumOf(returns) - restituted + sumOf(additions);
+    if (computed !== target) {
+      if (!stockTouched) {
+        // Ancien client : quantité seule.
+        throw new ConflictException(
+          target < sale.quantity && unknownOrigin > 0 && allocatedTotal === 0
+            ? batchError(
+                'SALE_BATCH_RESTITUTION_REQUIRED',
+                'Cette vente est antérieure au suivi par lots : indiquez dans quels lots restituer les unités, avec un motif.',
+              )
+            : batchError(
+                'SALE_BATCH_CORRECTION_REQUIRED',
+                'Ce produit est suivi par lots : précisez les lots concernés par la correction.',
+              ),
+        );
+      }
+      throw new BadRequestException(
+        batchError(
+          'BATCH_ALLOCATION_MISMATCH',
+          'Les lots indiqués ne correspondent pas à la nouvelle quantité.',
+        ),
+      );
+    }
+    if (target < 1) {
+      throw new BadRequestException(
+        batchError(
+          'BATCH_ALLOCATION_MISMATCH',
+          'La quantité vendue doit rester au moins égale à 1.',
+        ),
+      );
+    }
+    // Écritures : crédits d'abord (retours, restitutions), puis ajouts.
+    let before: number | null = null;
+    let last: BatchStockChange | null = null;
+    const track = (stock: BatchStockChange) => {
+      if (before === null) before = stock.remainingBefore;
+      last = stock;
+    };
+    let returned: SaleBatchSnapshot[] = [];
+    let nonSellableReturns: BatchCreditResult['nonSellable'] = [];
+    if (returns.length) {
+      const credit = await batches.creditBatches(session, {
+        organizationId,
+        productId,
+        entries: returns,
+        destinations: false,
+      });
+      track(credit.stock);
+      returned = credit.credited;
+      nonSellableReturns = credit.nonSellable;
+    }
+    const restitutionLog: RestitutionLog[] = [];
+    if (restituted > 0) {
+      const credit = await batches.creditBatches(session, {
+        organizationId,
+        productId,
+        entries: restitutions,
+        destinations: true,
+        historical: historical > 0 ? { quantity: historical, actorId } : null,
+      });
+      track(credit.stock);
+      restitutionLog.push(...restitutionEntries(credit));
+    }
+    let added: SaleBatchSnapshot[] = [];
+    if (additions.length) {
+      const consumed = await batches.consumeForSale(session, {
+        organizationId,
+        productId,
+        entries: additions,
+        unknownExpiryConfirmed: dto.unknownExpiryConfirmed === true,
+        // Unités ajoutées AUJOURD'HUI : règle du jour, jamais régularisée.
+        occurredAt: new Date(),
+        regularize: false,
+      });
+      track(consumed.stock);
+      added = consumed.allocations;
+    }
+    if (before !== null && last) {
+      const final: BatchStockChange = last;
+      await this.recordStockThresholds(
+        session,
+        organizationId,
+        productId,
+        { ...final, remainingBefore: before },
+        `sale-update:${input.operationId}`,
+      );
+    }
+    const next = mergeAllocations(current, returned, added);
+    sale.batchHistory = [
+      ...(sale.batchHistory ?? []).map((h) => h),
+      {
+        at: new Date(),
+        actorId: new Types.ObjectId(actorId),
+        quantityBefore: sale.quantity,
+        quantityAfter: target,
+        allocationsBefore: current,
+        allocationsAfter: next,
+        returned,
+        added,
+        restitutions: restitutionLog,
+        reason: restituted > 0 ? dto.restitutionReason!.trim() : null,
+      },
+    ];
+    sale.batchAllocations = next;
+    if (target !== sale.quantity) {
+      input.changes.quantity = { from: sale.quantity, to: target };
+      sale.quantity = target;
+    }
+    input.changes.batches = {
+      returned: allocationSummary(returned),
+      added: allocationSummary(added),
+      // Lot C : unités rendues à un lot non vendable (statut inchangé).
+      ...(nonSellableReturns.length ? { nonSellable: nonSellableReturns } : {}),
+      ...(restitutionLog.length
+        ? {
+            restitutions: restitutionLog.map((r) => ({
+              reference: r.reference,
+              quantity: r.quantity,
+              historical: r.historical,
+            })),
+            reason: dto.restitutionReason!.trim(),
+            originUnknown: true,
+          }
+        : {}),
+    };
+  }
+
+  /**
+   * Annulation d'une vente d'un produit suivi par lots : unités rendues
+   * EXACTEMENT aux lots d'origine enregistrés ; unités d'origine inconnue
+   * (vente antérieure à l'activation) restituées seulement vers des
+   * destinations explicites, avec motif. Produit purgé : vente annulée sans
+   * restitution de stock, comme pour un produit ordinaire.
+   */
+  private async restoreBatchSale(
+    session: MongooseSession,
+    input: {
+      organizationId: string;
+      sale: SaleDocument;
+      dto: CancelSaleDto;
+      actorId: string;
+      tracking: 'batches' | 'none' | 'purged';
+    },
+  ): Promise<Record<string, unknown>> {
+    const { organizationId, sale, dto, actorId } = input;
+    const productId = sale.productId.toString();
+    const batches = this.requireBatches();
+    batches.assertEnabled(organizationId);
+    if (input.tracking === 'purged') {
+      return { batches: { stockRestored: false, reason: 'product_purged' } };
+    }
+    const current = (sale.batchAllocations ?? []).map(plainAllocation);
+    const unknownOrigin = sale.quantity - sumOf(current);
+    const restitutions = dto.restitutions ?? [];
+    const historical = dto.historicalRestitution?.quantity ?? 0;
+    const restituted = sumOf(restitutions) + historical;
+    if (restituted !== unknownOrigin) {
+      throw new ConflictException(
+        restituted === 0
+          ? batchError(
+              'SALE_BATCH_RESTITUTION_REQUIRED',
+              'Cette vente est antérieure au suivi par lots : indiquez dans quels lots restituer les unités, avec un motif.',
+              { unknownOriginQuantity: unknownOrigin },
+            )
+          : batchError(
+              'BATCH_ALLOCATION_MISMATCH',
+              "Les unités restituées doivent correspondre exactement à celles dont le lot d'origine est inconnu.",
+              { unknownOriginQuantity: unknownOrigin },
+            ),
+      );
+    }
+    if (restituted > 0) assertRestitutionReason(dto.restitutionReason);
+    let returned: SaleBatchSnapshot[] = [];
+    let nonSellable: BatchCreditResult['nonSellable'] = [];
+    if (current.length) {
+      const credit = await batches.creditBatches(session, {
+        organizationId,
+        productId,
+        entries: current.map((a) => ({
+          batchId: a.batchId.toHexString(),
+          quantity: a.quantity,
+        })),
+        destinations: false,
+      });
+      returned = credit.credited;
+      nonSellable = credit.nonSellable;
+    }
+    const restitutionLog: RestitutionLog[] = [];
+    if (restituted > 0) {
+      const credit = await batches.creditBatches(session, {
+        organizationId,
+        productId,
+        entries: restitutions,
+        destinations: true,
+        historical: historical > 0 ? { quantity: historical, actorId } : null,
+      });
+      restitutionLog.push(...restitutionEntries(credit));
+    }
+    return {
+      batches: {
+        returned: allocationSummary(returned),
+        ...(nonSellable.length ? { nonSellable } : {}),
+        ...(restitutionLog.length
+          ? {
+              restitutions: restitutionLog.map((r) => ({
+                reference: r.reference,
+                quantity: r.quantity,
+                historical: r.historical,
+              })),
+              reason: dto.restitutionReason!.trim(),
+              originUnknown: true,
+            }
+          : {}),
+      },
+    };
   }
 
   /**
@@ -576,6 +1516,7 @@ export class SalesService {
     id: string,
     actorId: string,
     scopeSellerId?: string,
+    cancel: CancelSaleDto = {},
   ): Promise<{ productName: string | null }> {
     const session = await this.connection.startSession();
     let removedProductId: string | undefined;
@@ -597,19 +1538,35 @@ export class SalesService {
         removedProductId = productId;
         productName = sale.productName ?? sale.lastKnownProductName ?? null;
         const { quantity, salePrice } = sale;
-        await this.productsService.adjustStock(
+        const tracking = await this.trackingOf(
+          session,
           organizationId,
           productId,
-          quantity,
-          session,
         );
+        let batchDetails: Record<string, unknown> = {};
+        if (tracking === 'batches' || sale.batchAllocations?.length) {
+          batchDetails = await this.restoreBatchSale(session, {
+            organizationId,
+            sale,
+            dto: cancel,
+            actorId,
+            tracking,
+          });
+        } else {
+          await this.productsService.adjustStock(
+            organizationId,
+            productId,
+            quantity,
+            session,
+          );
+        }
         await sale.deleteOne({ session });
         await this.auditService.log(
           organizationId,
           productId,
           AuditAction.SALE_CANCELLED,
           actorId,
-          { saleId: id, quantity, salePrice },
+          { saleId: id, quantity, salePrice, ...batchDetails },
           session,
         );
       });

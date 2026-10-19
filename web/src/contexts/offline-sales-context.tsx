@@ -18,6 +18,8 @@ import { canRecordSalesFromContext } from "@/lib/api";
 import { readVerifiedIdentity } from "@/lib/offline-identity-db";
 import {
   applyOperationAction,
+  recordRegularization,
+  type OutboxRegularization,
   enqueueOfflineSale,
   expeditePartition,
   onOutboxChanged,
@@ -51,6 +53,11 @@ export interface SaleInput {
   salePrice: number;
   buyerName?: string;
   buyerContact?: string;
+  // Lot B : lots remis au client (produit suivi par lots).
+  batchAllocations?: { batchId: string; quantity: number }[];
+  unknownExpiryConfirmed?: boolean;
+  expiredBatchRegularization?: { reason: string };
+  batchLabels?: string[];
 }
 
 export type RecordSaleResult =
@@ -81,9 +88,14 @@ interface OfflineSalesValue {
   refresh: () => void;
   recordSale: (
     input: SaleInput,
-    options?: { replaces?: string },
+    options?: { replaces?: string; keepOccurredAt?: boolean },
   ) => Promise<RecordSaleResult>;
   act: (clientOperationId: string, action: OperationAction) => Promise<boolean>;
+  // Lot B : résultat d'une demande de régularisation (même opération).
+  markRegularization: (
+    clientOperationId: string,
+    regularization: Omit<OutboxRegularization, "checkedAt">,
+  ) => Promise<boolean>;
   syncNow: () => Promise<void>;
 }
 
@@ -334,12 +346,23 @@ export function OfflineSalesProvider({
           salePrice: input.salePrice,
           ...(input.buyerName ? { buyerName: input.buyerName } : {}),
           ...(input.buyerContact ? { buyerContact: input.buyerContact } : {}),
+          ...(input.batchAllocations
+            ? { batchAllocations: input.batchAllocations }
+            : {}),
+          ...(input.unknownExpiryConfirmed
+            ? { unknownExpiryConfirmed: true }
+            : {}),
+          ...(input.expiredBatchRegularization
+            ? { expiredBatchRegularization: input.expiredBatchRegularization }
+            : {}),
         },
         display: {
           productName: input.productName,
           unitPriceHint: input.unitPriceHint,
+          ...(input.batchLabels ? { batchLabels: input.batchLabels } : {}),
         },
         ...(options?.replaces ? { replaces: options.replaces } : {}),
+        ...(options?.keepOccurredAt ? { keepOccurredAt: true } : {}),
       });
       if (!result.ok) return { kind: "refused", reason: result.reason };
       if (typeof navigator === "undefined" || !navigator.onLine) {
@@ -375,6 +398,25 @@ export function OfflineSalesProvider({
     [userId, organizationId],
   );
 
+  const markRegularization = useCallback<
+    OfflineSalesValue["markRegularization"]
+  >(
+    async (clientOperationId, regularization) => {
+      if (!userId || !organizationId) return false;
+      const ok = await recordRegularization(
+        { userId, organizationId, token: getToken() },
+        clientOperationId,
+        regularization,
+      );
+      // Approuvée : renvoi de la MÊME opération (rejeu côté serveur).
+      if (ok && regularization.status === "approved") {
+        requestOfflineSalesSync();
+      }
+      return ok;
+    },
+    [userId, organizationId],
+  );
+
   const syncNow = useCallback(async () => {
     if (!userId || !organizationId) return;
     await expeditePartition({ userId, organizationId, token: getToken() });
@@ -397,6 +439,7 @@ export function OfflineSalesProvider({
       refresh,
       recordSale,
       act,
+      markRegularization,
       syncNow,
     }),
     [
@@ -412,6 +455,7 @@ export function OfflineSalesProvider({
       refresh,
       recordSale,
       act,
+      markRegularization,
       syncNow,
     ],
   );

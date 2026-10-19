@@ -180,6 +180,8 @@ describe('SalesController — transmission du tenant à la création (1-4C.1)', 
       ORG_A,
       VALID_OBJECT_ID,
       SELLER_ID,
+      undefined,
+      {},
     );
   });
 });
@@ -311,6 +313,7 @@ describe('SalesController — scope own/all (1-7B)', () => {
       VALID_OBJECT_ID,
       SELLER_ID,
       SELLER_ID,
+      {},
     );
   });
 
@@ -320,6 +323,8 @@ describe('SalesController — scope own/all (1-7B)', () => {
       ORG_A,
       VALID_OBJECT_ID,
       SELLER_ID,
+      undefined,
+      {},
     );
   });
 });

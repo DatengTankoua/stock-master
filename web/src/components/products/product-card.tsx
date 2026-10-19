@@ -48,6 +48,7 @@ const CARD_KEYS: readonly ProductInfoKey[] = [
   "salePrice",
   "stock",
   "expiryDate",
+  "stockTracking",
   "initialQuantity",
   "unitsSold",
   "purchasePrice",
@@ -99,6 +100,10 @@ export function ProductCard({
     serverLoadedAt,
   );
 
+  // Lot B : produit suivi vendable seulement avec l'identité de ses lots
+  // (annoncée par l'API quand la fonctionnalité est activée).
+  const batchSaleClosed =
+    product.stockTracking === "batches" && !product.batchSale;
   return (
     <>
       <Card className="overflow-hidden hover:shadow-md transition-shadow">
@@ -180,7 +185,12 @@ export function ProductCard({
               )}
             </div>
           )}
-          {canRecordSales && (
+          {canRecordSales && batchSaleClosed && (
+            <p className="text-xs text-muted-foreground">
+              {t("batches.saleUnavailable")}
+            </p>
+          )}
+          {canRecordSales && !batchSaleClosed && (
             <Button
               ref={sellButtonRef}
               size="sm"
@@ -210,6 +220,8 @@ export function ProductCard({
           remainingStock={product.remainingQuantity}
           serverLoadedAt={serverLoadedAt}
           finalFocus={sellButtonRef}
+          batchTracked={product.stockTracking === "batches"}
+          batchSale={product.batchSale}
         />
       )}
 

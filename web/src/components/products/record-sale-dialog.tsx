@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ShoppingCartIcon, WifiOffIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "next-i18next/client";
@@ -24,6 +24,19 @@ import {
 } from "@/contexts/offline-sales-context";
 import { describeOperationError } from "@/lib/offline-sales-policy";
 import { PendingSalesAnchor } from "@/components/sales/pending-sales-nav";
+import {
+  BatchAllocationPicker,
+  entriesOf,
+  labelsOf,
+  type BatchPickerValue,
+} from "@/components/products/batch-allocation-picker";
+import {
+  BATCH_REFRESH_CODES,
+  allocationProblem,
+  type BatchEntry,
+} from "@/lib/batch-sale";
+import { productBatchesEnabled, type ApiProductBatchSale } from "@/lib/api";
+import { useOrganizationShell } from "@/contexts/organization-shell-context";
 
 const TEXT_MAX = 100;
 
@@ -35,6 +48,9 @@ export interface SaleFormInitial {
   salePrice: number;
   buyerName?: string;
   buyerContact?: string;
+  // Lot B : affectation d'une vente en conflit corrigée.
+  batchAllocations?: BatchEntry[];
+  unknownExpiryConfirmed?: boolean;
 }
 
 interface SaleFormDialogProps {
@@ -60,6 +76,11 @@ interface SaleFormDialogProps {
   // juste avant la fermeture : distingue une fermeture après vente d'une
   // annulation (retour au détail du produit).
   onFinished?: () => void;
+  // Lot B : produit suivi par lots → choix des lots obligatoire. Vente
+  // indisponible si ni le cache (`batchSale`) ni le serveur (en ligne,
+  // fonctionnalité annoncée) ne permettent de choisir les lots.
+  batchTracked?: boolean;
+  batchSale?: ApiProductBatchSale;
 }
 
 // 1-11C.3 — Formulaire UNIQUE (en ligne / hors ligne / correction) : toute
@@ -79,10 +100,26 @@ export function SaleFormDialog({
   onSaleRecorded,
   finalFocus,
   onFinished,
+  batchTracked = false,
+  batchSale,
 }: SaleFormDialogProps) {
   const { t } = useT("sales");
   const format = useFormat();
-  const { online, canRecordSales, recordSale } = useOfflineSales();
+  const { online, canRecordSales, recordSale, operations } = useOfflineSales();
+  const { authContext } = useOrganizationShell();
+  // Vente par lots possible : cache des lots, ou serveur joignable qui
+  // annonce la fonctionnalité.
+  const batchSaleAvailable =
+    Boolean(batchSale) || (online && productBatchesEnabled(authContext));
+  const [batchValue, setBatchValue] = useState<BatchPickerValue | null>(null);
+  const [batchRefresh, setBatchRefresh] = useState(0);
+  // Opération refusée par le serveur pour un motif de lot : la nouvelle
+  // saisie la REMPLACE (jamais deux ventes pour le même geste).
+  const [replacing, setReplacing] = useState<string | undefined>(replaces);
+  const onBatchChange = useCallback(
+    (v: BatchPickerValue) => setBatchValue(v),
+    [],
+  );
   const indicative = useIndicativeStock(
     productId,
     remainingStock ?? 0,
@@ -141,6 +178,29 @@ export function SaleFormDialog({
       setFormError((tr) => tr("form.errors.buyerLength", { max: TEXT_MAX }));
       return null;
     }
+    if (batchTracked) {
+      const problem = batchValue
+        ? allocationProblem({
+            entries: entriesOf(batchValue),
+            quantity: q,
+            undatedIds: batchValue.undatedIds,
+            unknownConfirmed: batchValue.unknownConfirmed,
+            available: batchValue.available,
+          })
+        : "sum";
+      if (problem === "sum") {
+        setFormError((tr) => tr("batches.errors.sum"));
+        return null;
+      }
+      if (problem === "unknown-unconfirmed") {
+        setFormError((tr) => tr("batches.errors.unknownUnconfirmed"));
+        return null;
+      }
+      if (problem === "above-available") {
+        setFormError((tr) => tr("batches.errors.aboveAvailable"));
+        return null;
+      }
+    }
     return { quantity: q, salePrice: price };
   };
 
@@ -163,13 +223,36 @@ export function SaleFormDialog({
           salePrice: values.salePrice,
           buyerName: buyerName.trim() || undefined,
           buyerContact: buyerContact.trim() || undefined,
+          ...(batchTracked && batchValue
+            ? {
+                batchAllocations: entriesOf(batchValue),
+                unknownExpiryConfirmed: entriesOf(batchValue).some((e) =>
+                  batchValue.undatedIds.has(e.batchId),
+                ),
+                batchLabels: labelsOf(batchValue),
+              }
+            : {}),
         },
-        replaces ? { replaces } : undefined,
+        replacing ? { replaces: replacing } : undefined,
       );
       if (result.kind === "refused") {
         const reason: RefusalReason = result.reason;
         setLimitReached(reason === "limit");
         setFormError((tr) => tr(`form.refusal.${reason}`));
+        return;
+      }
+      // Lot B : refus d'un lot à la confirmation (en ligne) → le formulaire
+      // reste ouvert, les lots sont relus, la prochaine saisie remplace
+      // l'opération refusée. Aucune substitution automatique.
+      if (
+        batchTracked &&
+        result.kind === "conflict" &&
+        BATCH_REFRESH_CODES.has(result.operation.lastError?.code ?? "")
+      ) {
+        const key = describeOperationError(result.operation.lastError);
+        setReplacing(result.operation.clientOperationId);
+        setBatchRefresh((n) => n + 1);
+        setFormError((tr) => tr(`outbox.errors.${key ?? "refused"}`));
         return;
       }
       onFinished?.();
@@ -211,7 +294,11 @@ export function SaleFormDialog({
             </DialogDescription>
           )}
         </DialogHeader>
-        {!canRecordSales ? (
+        {batchTracked && !batchSaleAvailable ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t("form.batchTracked")}
+          </p>
+        ) : !canRecordSales ? (
           <p role="alert" className="text-sm text-destructive">
             {t("form.refusal.capability")}
           </p>
@@ -262,6 +349,26 @@ export function SaleFormDialog({
                 )}
               </div>
             </div>
+            {batchTracked && (
+              <BatchAllocationPicker
+                productId={productId}
+                quantity={
+                  /^\d+$/.test(quantity.trim()) && Number(quantity) > 0
+                    ? Number(quantity)
+                    : null
+                }
+                online={online}
+                batchSale={batchSale}
+                operations={operations}
+                excludeOperationId={replacing}
+                initial={initial?.batchAllocations}
+                initialUnknownConfirmed={initial?.unknownExpiryConfirmed}
+                refreshKey={batchRefresh}
+                disabled={submitting}
+                onChange={onBatchChange}
+                idPrefix="s-batch"
+              />
+            )}
             <div className="space-y-2">
               <Label htmlFor="s-buyer">{t("form.buyerName")}</Label>
               <Input
@@ -323,6 +430,8 @@ interface RecordSaleDialogProps {
   remainingStock: number;
   serverLoadedAt?: number;
   onSaleRecorded?: () => void;
+  batchTracked?: boolean;
+  batchSale?: ApiProductBatchSale;
 }
 
 export function RecordSaleDialog({
@@ -332,16 +441,24 @@ export function RecordSaleDialog({
   remainingStock,
   serverLoadedAt,
   onSaleRecorded,
+  batchTracked = false,
+  batchSale,
 }: RecordSaleDialogProps) {
   const { t } = useT("sales");
   const [open, setOpen] = useState(false);
   const { canRecordSales } = useOfflineSales();
+  const { authContext } = useOrganizationShell();
   const indicative = useIndicativeStock(
     productId,
     remainingStock,
     serverLoadedAt,
   );
   if (!canRecordSales) return null;
+  if (batchTracked && !batchSale && !productBatchesEnabled(authContext)) {
+    return (
+      <p className="text-sm text-muted-foreground">{t("form.batchTracked")}</p>
+    );
+  }
   return (
     <>
       <Button
@@ -361,6 +478,8 @@ export function RecordSaleDialog({
         remainingStock={remainingStock}
         serverLoadedAt={serverLoadedAt}
         onSaleRecorded={onSaleRecorded}
+        batchTracked={batchTracked}
+        batchSale={batchSale}
       />
     </>
   );
