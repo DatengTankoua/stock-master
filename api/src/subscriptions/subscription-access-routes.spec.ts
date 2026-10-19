@@ -151,6 +151,9 @@ describe('Matrice des routes — contrôle commercial (1-14C.1)', () => {
         // 1-16A : retrait de l'appareil de l'utilisateur courant (déconnexion
         // d'une session limitée ou d'une organisation expirée).
         'POST /notifications/push/subscription/remove',
+        // Correctif push : détachement de l'appareil à la déconnexion
+        // (préférences conservées), même exception que le retrait.
+        'POST /notifications/push/subscription/release',
         // 1-16G : langue du compte (e-mails, push), session limitée admise.
         'PUT /auth/me/locale',
       ].sort((a, b) => a.localeCompare(b)),
@@ -179,7 +182,7 @@ describe('Matrice des routes — contrôle commercial (1-14C.1)', () => {
     }
   });
 
-  it('notifications push (1-16A) : gestion métier par défaut, seul le retrait est exempté', () => {
+  it('notifications push (1-16A) : gestion métier par défaut, seuls le retrait et le détachement sont exemptés', () => {
     const push = collectRoutes().filter((r) =>
       r.route.split(' ')[1].startsWith('/notifications/push'),
     );
@@ -198,6 +201,17 @@ describe('Matrice des routes — contrôle commercial (1-14C.1)', () => {
         {
           route: 'POST /notifications/push/subscription',
           category: 'business',
+          skipsOrganizationContext: false,
+        },
+        {
+          // Correctif push : réconciliation, gardes complets.
+          route: 'POST /notifications/push/subscription/reconcile',
+          category: 'business',
+          skipsOrganizationContext: false,
+        },
+        {
+          route: 'POST /notifications/push/subscription/release',
+          category: 'identity',
           skipsOrganizationContext: false,
         },
         {
