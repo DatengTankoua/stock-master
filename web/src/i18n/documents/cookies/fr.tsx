@@ -238,8 +238,8 @@ const content: DocumentContent = {
         <ul>
           <li>
             Les photos de produits et les logos sont chargés depuis le service
-            de stockage du site (Supabase). Comme pour toute image en ligne, ce
-            service reçoit l&apos;adresse IP de l&apos;appareil.
+            de stockage du site (Cloudflare R2). Comme pour toute image en
+            ligne, ce service reçoit l&apos;adresse IP de l&apos;appareil.
           </li>
           <li>
             Si vous activez les notifications, le navigateur s&apos;inscrit

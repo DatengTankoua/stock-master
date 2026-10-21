@@ -226,8 +226,8 @@ const content: DocumentContent = {
         <ul>
           <li>
             Product photos and logos are loaded from the site&apos;s storage
-            service (Supabase). As with any online image, this service receives
-            the device&apos;s IP address.
+            service (Cloudflare R2). As with any online image, this service
+            receives the device&apos;s IP address.
           </li>
           <li>
             If you turn on notifications, the browser registers with its own

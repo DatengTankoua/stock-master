@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { MailLink } from "@/components/legal/mail-link";
-import { SITE } from "@/lib/legal/site-identity";
+import { SITE, WHATSAPP } from "@/lib/legal/site-identity";
 import { TRIAL_DAYS } from "@/lib/subscription-offers";
 
 // 1-16C — Guide d'utilisation. Chaque étape reprend les libellés réels de
 // l'interface et les limites mesurées dans le code (durées, droits,
-// hors ligne). Notifications push : aucun appareil Android ni iPhone réel
-// n'a encore été testé ; rien n'est présenté comme validé.
+// hors ligne). Lots, pertes et alertes de péremption activés pour tous les
+// commerces, notifications push testées sur de vrais téléphones : confirmé
+// par le propriétaire le 21 octobre 2026. Aucun nom de variable technique
+// dans ce texte destiné aux clients.
 import type { DocumentContent } from "@/i18n/documents/types";
 
 const registrationEnabled =
@@ -17,7 +19,7 @@ const registrationEnabled =
 const content: DocumentContent = {
   metaTitle: "Guide d'utilisation",
   metaDescription:
-    "Inscription, commerce et membres, produits, stock, ventes, analyses, corbeille, hors connexion, abonnement et notifications : le guide pas à pas de Stock Master.",
+    "Inscription, membres, produits, lots et péremption, pertes, ventes, analyses, corbeille, hors connexion, abonnement, notifications et assistance WhatsApp : le guide pas à pas de Stock Master.",
   title: "Guide d'utilisation",
   intro: (
     <>
@@ -86,6 +88,14 @@ const content: DocumentContent = {
               création du commerce.
             </li>
           </ol>
+          <h3>Se connecter</h3>
+          <p>
+            Ouvrez <Link href="/auth/login">Connexion</Link> et saisissez votre
+            adresse e-mail et votre mot de passe. Si vous appartenez à plusieurs
+            commerces, choisissez celui à ouvrir. Si l&apos;abonnement du
+            commerce a pris fin, un écran l&apos;indique : le propriétaire peut
+            renouveler depuis cet écran.
+          </p>
           <p>
             Pas d&apos;e-mail ? Vérifiez le dossier des indésirables, puis
             essayez de vous connecter : l&apos;écran de connexion propose alors
@@ -143,6 +153,21 @@ const content: DocumentContent = {
             </li>
           </ul>
           <p>
+            Les droits liés au stock se donnent aussi un par un : « Gérer les
+            dates de péremption », « Personnaliser les seuils de stock », «
+            Activer le suivi par lots et répartir le stock existant », « Mettre
+            un lot à l&apos;écart et le remettre à disposition », « Enregistrer
+            et corriger des pertes de stock » et « Régler le délai des alertes
+            de péremption ». Le propriétaire et l&apos;administrateur les ont
+            tous ; un vendeur n&apos;en a aucun tant que vous ne les cochez pas.
+          </p>
+          <p>
+            <strong>Une option manque ?</strong> Un bouton ou un champ
+            n&apos;apparaît que si votre rôle ou vos droits le permettent.
+            Demandez le droit correspondant au propriétaire ou à un
+            administrateur.
+          </p>
+          <p>
             Dans <strong>Organisation, puis Membres</strong>, choisissez «
             Modifier » sur un membre pour changer ses droits ou son statut : «
             Suspendue » retire l&apos;accès temporairement, « Révoquée » le
@@ -173,11 +198,12 @@ const content: DocumentContent = {
           <ul>
             <li>
               <strong>Date de péremption</strong> (droit « Gérer les dates de
-              péremption ») : une seule date pour toute la fiche, les lots ne
-              sont pas gérés. Une date déjà passée est acceptée avec un
-              avertissement ; la fiche indique alors « dépassée ». Les ventes ne
-              sont pas bloquées et aucune notification de péremption n&apos;est
-              envoyée.
+              péremption ») : une seule date pour toute la fiche d&apos;un
+              produit sans lots. Elle est indicative :{" "}
+              <strong>elle ne bloque jamais les ventes</strong>, même dépassée
+              (la fiche indique alors « dépassée »). Elle sert aux alertes de
+              péremption. Pour suivre plusieurs dates sur un même produit,
+              activez le <a href="#lots">suivi par lots</a>.
             </li>
             <li>
               <strong>Seuil de stock faible</strong> (droit « Personnaliser les
@@ -200,21 +226,34 @@ const content: DocumentContent = {
             </li>
             <li>
               Pour ajouter des marchandises, choisissez « Modifier » sur le
-              produit et indiquez la quantité ajoutée (droit « Ajuster le stock
-              »).
+              produit et remplissez « Stock supplémentaire à ajouter » (droit «
+              Ajuster le stock »).
+            </li>
+            <li>
+              Produit suivi par lots : ce champ n&apos;apparaît plus.
+              Enregistrez les nouvelles unités depuis la section « Lots » de la
+              fiche (voir <a href="#lots">Lots, péremption et pertes</a>).
             </li>
           </ul>
           <h3>Enregistrer une vente</h3>
           <ol>
             <li>Ouvrez le produit dans le catalogue.</li>
-            <li>Choisissez « Enregistrer une vente ».</li>
+            <li>
+              Choisissez « Vendre » : la fenêtre « Enregistrer une vente »
+              s&apos;ouvre.
+            </li>
             <li>
               Indiquez la quantité et le prix de vente réel. Le nom et le
               contact de l&apos;acheteur sont facultatifs : ne les saisissez que
               si votre commerce en a besoin.
             </li>
             <li>
-              Validez. La vente apparaît dans <strong>Ventes</strong>.
+              Produit suivi par lots : vérifiez aussi les « Lots remis au client
+              » (voir <a href="#lots">plus bas</a>).
+            </li>
+            <li>
+              Choisissez « Confirmer la vente ». La vente apparaît dans{" "}
+              <strong>Ventes</strong>.
             </li>
           </ol>
           <p>
@@ -277,6 +316,164 @@ const content: DocumentContent = {
       ),
     },
     {
+      id: "lots",
+      title: "Lots, péremption et pertes",
+      content: (
+        <>
+          <p>
+            Le suivi par lots sert aux produits dont les arrivages n&apos;ont
+            pas la même date de péremption. Chaque lot a sa quantité, sa date
+            (facultative) et son numéro. Tout se passe dans la section « Lots »
+            de la fiche produit.
+          </p>
+          <h3>Activer le suivi par lots</h3>
+          <ol>
+            <li>
+              Sur la fiche du produit, section « Lots », choisissez « Activer le
+              suivi par lots » (droit « Activer le suivi par lots et répartir le
+              stock existant »).
+            </li>
+            <li>
+              Répartissez le stock actuel : « Je connais la répartition : une
+              ligne par lot » (quantité, puis date de péremption et numéro de
+              lot fabricant facultatifs), ou « Je ne connais pas la répartition
+              : un lot historique, date inconnue ».
+            </li>
+            <li>
+              Le total doit être exactement le stock affiché. Cochez la
+              confirmation, puis « Valider la répartition ».
+            </li>
+          </ol>
+          <p>
+            Résultat : la fiche indique « Suivi du stock : Par lots ». Ce
+            n&apos;est ni une vente ni une entrée de stock : le total ne change
+            pas. Les dates des lots remplacent la date unique de la fiche («
+            Reprendre la date de la fiche » la propose ligne par ligne, jamais
+            automatiquement).{" "}
+            <strong>Le suivi par lots ne peut pas être désactivé.</strong> Si
+            une vente a eu lieu pendant la saisie, un message demande
+            d&apos;actualiser le produit et de répartir à nouveau.
+          </p>
+          <h3>Recevoir des marchandises</h3>
+          <ul>
+            <li>
+              « Nouveau lot » : quantité reçue, date de réception, date de
+              péremption et numéro fabricant (droits « Gérer les produits » et «
+              Ajuster le stock »).
+            </li>
+            <li>
+              « Recevoir » sur un lot existant : seule la quantité est ajoutée
+              (droit « Ajuster le stock »).
+            </li>
+          </ul>
+          <h3>Vendre un produit suivi par lots</h3>
+          <ol>
+            <li>
+              Dans « Enregistrer une vente », la partie « Lots remis au client »
+              propose une répartition, péremption la plus proche d&apos;abord.
+            </li>
+            <li>
+              Ajustez-la aux unités <strong>réellement remises</strong> : la
+              somme des lots doit être égale à la quantité vendue. Rien
+              n&apos;est réservé avant la confirmation.
+            </li>
+            <li>
+              « Confirmer la vente ». La vente garde les lots choisis ; le
+              serveur ne les remplace jamais. Si un lot n&apos;a plus assez
+              d&apos;unités, la fenêtre reste ouverte et propose une nouvelle
+              répartition.
+            </li>
+          </ol>
+          <ul>
+            <li>
+              <strong>Lots sans date</strong> : listés à part, jamais proposés
+              d&apos;office. Pour les vendre, cochez « Je confirme vendre des
+              unités dont la date de péremption est inconnue ».
+            </li>
+            <li>
+              <strong>Lot périmé</strong> : il n&apos;est plus proposé et{" "}
+              <strong>ne peut plus être vendu</strong>, même remis à
+              disposition.
+            </li>
+          </ul>
+          <h3>Stock physique et stock vendable</h3>
+          <p>
+            <strong>La péremption seule ne retire pas le stock.</strong> Les
+            unités d&apos;un lot périmé ou mis à l&apos;écart restent dans le
+            stock physique (le « Stock restant ») tant qu&apos;aucune perte
+            n&apos;est enregistrée. La section « Lots » distingue « Vendable
+            aujourd&apos;hui » et le stock non vendable. Le seuil de stock
+            faible se calcule sur le stock physique total, lots dépassés
+            compris.
+          </p>
+          <p>
+            Sur une fiche <strong>sans lots</strong>, au contraire, la date de
+            péremption ne bloque pas les ventes.
+          </p>
+          <h3>Mettre un lot à l&apos;écart</h3>
+          <p>
+            « Mettre à l&apos;écart » (droit « Mettre un lot à l&apos;écart et
+            le remettre à disposition ») retire le lot <strong>entier</strong>{" "}
+            de la vente, avec un motif obligatoire, par exemple en attendant un
+            contrôle. Aucune unité ne quitte le stock. « Remettre à disposition
+            » le rend de nouveau vendable, sauf s&apos;il est périmé.
+          </p>
+          <h3>Enregistrer et corriger une perte</h3>
+          <ol>
+            <li>
+              Sur un lot, « Enregistrer une perte » (droit « Enregistrer et
+              corriger des pertes de stock »).
+            </li>
+            <li>
+              Indiquez la quantité perdue et le motif : « Péremption », « Casse
+              ou dommage » ou « Autre » (commentaire obligatoire). Cochez la
+              confirmation, puis « Enregistrer la perte ».
+            </li>
+          </ol>
+          <p>
+            Résultat : les unités quittent le stock.{" "}
+            <strong>Une perte n&apos;est jamais une vente</strong> : ni chiffre
+            d&apos;affaires, ni unités vendues. Elle apparaît dans « Historique
+            des pertes » et dans l&apos;Analyse. Perdre tout le stock restant
+            d&apos;un lot le ferme (« Retiré »).
+          </p>
+          <p>
+            Erreur de saisie ? Dans l&apos;historique des pertes, « Corriger »
+            rend des unités au même lot, avec un motif. La perte d&apos;origine
+            reste visible, et le lot garde son état : une remise en vente se
+            fait explicitement.
+          </p>
+          <h3>Alertes de péremption</h3>
+          <ul>
+            <li>
+              Deux catégories de notifications : « Péremption proche » (le lot
+              ou le produit entre dans la période d&apos;alerte) et « Produits
+              périmés » (date dépassée). Chacune est envoyée une seule fois par
+              échéance, pour les produits encore en stock, aux membres qui ont
+              le droit « Voir le détail du stock ».
+            </li>
+            <li>
+              Elles concernent les lots et les produits sans lots qui ont une
+              date. Une date est valable le jour même ; elle est dépassée le
+              lendemain, selon le jour du commerce.
+            </li>
+            <li>
+              Le délai se règle dans <strong>Analyse</strong>, bloc « Péremption
+              et pertes », champ « Délai d&apos;alerte (jours) » (droit « Régler
+              le délai des alertes de péremption ») : de 0 à 365 jours, 30 par
+              défaut. 0 signifie une alerte le jour même de l&apos;échéance, pas
+              une désactivation.
+            </li>
+            <li>
+              Ce bloc liste aussi ce qui « Expire bientôt », les « Périmés » et
+              les « Pertes du mois ».
+            </li>
+          </ul>
+          <p>Mise à l&apos;écart et pertes demandent une connexion Internet.</p>
+        </>
+      ),
+    },
+    {
       id: "corbeille",
       title: "Corbeille, suppression définitive et historique des ventes",
       content: (
@@ -288,8 +485,11 @@ const content: DocumentContent = {
               n&apos;est encore effacé : vous pouvez le « Restaurer ».
             </li>
             <li>
-              Dans la corbeille, « Supprimer définitivement » efface le produit
-              et sa photo. Cette action ne peut pas être annulée.
+              Dans <strong>Corbeille</strong>, les catalogues et les produits
+              sont listés séparément. Cochez un ou plusieurs éléments, puis «
+              Restaurer » ou « Supprimer définitivement ». La suppression
+              définitive efface le produit et sa photo : elle ne peut pas être
+              annulée.
             </li>
             <li>
               L&apos;historique des ventes est conservé après une suppression
@@ -335,7 +535,8 @@ const content: DocumentContent = {
             <li>
               Le serveur vérifie chaque vente. Si l&apos;une est refusée (stock
               insuffisant, droit retiré…), elle reste dans « Ventes en attente »
-              pour que vous la corrigiez.
+              : « Corriger », « Réessayer » ou, après confirmation, « Abandonner
+              ». Une vente refusée ne bloque pas les autres.
             </li>
             <li>
               Un appareil garde au plus 200 ventes en attente, chacune pendant
@@ -343,6 +544,30 @@ const content: DocumentContent = {
               attente » pour voir la raison et les corriger ou les relancer.
             </li>
             <li>La déconnexion ne supprime pas les ventes en attente.</li>
+          </ul>
+          <h3>Produits suivis par lots</h3>
+          <ul>
+            <li>
+              Sans réseau, vous pouvez vendre un produit suivi par lots si ses
+              lots ont été chargés avec du réseau sur cet appareil. Les
+              quantités par lot ne sont pas vérifiées hors ligne : rien
+              n&apos;est réservé.
+            </li>
+            <li>
+              Si un lot choisi n&apos;a plus assez d&apos;unités ou n&apos;est
+              plus disponible à la synchronisation, la vente est refusée :
+              choisissez « Corriger » pour changer les lots.
+            </li>
+            <li>
+              Si la vente a été saisie avant la péremption du lot mais reçue
+              après, elle doit être régularisée. Avec le droit « Ajuster le
+              stock », choisissez « Régulariser ». Sinon, choisissez « Demander
+              une régularisation » : la demande apparaît dans la carte «
+              Régularisations à examiner » de la page <strong>Ventes</strong>,
+              où un responsable (droits « Ajuster le stock » et « Voir toutes
+              les ventes ») choisit « Approuver » ou « Rejeter ». Rien
+              n&apos;est enregistré avant son approbation.
+            </li>
           </ul>
         </>
       ),
@@ -371,10 +596,8 @@ const content: DocumentContent = {
               Money (MTN ou Orange) sur la page sécurisée de SasPay. Les frais
               de paiement sont pris en charge par Stock Master. De retour dans
               Stock Master, « Vérifier le paiement » confirme l&apos;abonnement.
-              Pour toute question : Organisation, puis Assistance (catégorie «
-              Abonnement »), ou{" "}
-              <MailLink to="support" subject="Renouvellement de l'abonnement" />
-              .
+              Pour toute question, écrivez-nous sur WhatsApp ou passez par{" "}
+              <a href="#aide">l&apos;assistance</a>.
             </li>
             <li>
               À l&apos;échéance sans renouvellement, l&apos;accès au commerce
@@ -393,9 +616,10 @@ const content: DocumentContent = {
           <h3>Centre de notifications</h3>
           <p>
             La cloche en haut de l&apos;application ouvre vos notifications :
-            stock épuisé ou presque épuisé, nouvelles ventes, fin d&apos;essai
-            ou d&apos;abonnement, paiement confirmé, bilan mensuel. Vous ne
-            recevez que celles qui correspondent à vos droits.
+            stock épuisé ou presque épuisé, nouvelles ventes, péremption proche,
+            produits périmés, régularisations à examiner, fin d&apos;essai ou
+            d&apos;abonnement, paiement confirmé, bilan mensuel. Vous ne recevez
+            que celles qui correspondent à vos droits.
           </p>
           <h3>Installer l&apos;application</h3>
           <ul>
@@ -429,11 +653,34 @@ const content: DocumentContent = {
             notifications ne sont proposées qu&apos;à l&apos;application ajoutée
             à l&apos;écran d&apos;accueil.
           </p>
+          <h3>Déconnexion et reconnexion</h3>
+          <ul>
+            <li>
+              À la déconnexion, l&apos;appareil cesse de recevoir vos
+              notifications ; vos choix de catégories sont conservés.
+            </li>
+            <li>
+              À la reconnexion sur le même appareil, elles reprennent sans
+              nouvelle demande du navigateur. Si l&apos;appareil a servi à un
+              autre compte, {SITE.name} propose « Relier cet appareil aux
+              notifications » : un clic suffit.
+            </li>
+            <li>
+              « Plus tard » repousse l&apos;invitation de 7 jours sur cet
+              appareil. Après « Désactiver les notifications », elle n&apos;est
+              plus proposée automatiquement.
+            </li>
+          </ul>
           <p>
-            <strong>Important :</strong> les notifications sur appareil
-            n&apos;ont pas encore été testées sur de vrais téléphones Android ou
-            iPhone. Elles peuvent ne pas arriver sur certains appareils : le
-            centre de notifications de l&apos;application reste la référence.
+            L&apos;« abonnement » d&apos;un appareil aux notifications désigne
+            seulement son inscription pour les recevoir.{" "}
+            <strong>Il ne correspond à aucun paiement</strong> et n&apos;a aucun
+            lien avec l&apos;abonnement du commerce.
+          </p>
+          <p>
+            Les messages restent généraux sur l&apos;écran verrouillé. Si une
+            notification n&apos;arrive pas sur un appareil, la cloche reste la
+            référence.
           </p>
         </>
       ),
@@ -443,10 +690,49 @@ const content: DocumentContent = {
       title: "Besoin d'aide ?",
       content: (
         <>
-          <h3>Depuis l&apos;application</h3>
+          <h3>Sur WhatsApp (recommandé)</h3>
+          <p>
+            Écrivez-nous sur WhatsApp à toute heure, au{" "}
+            <a
+              href={WHATSAPP.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              translate="no"
+            >
+              {WHATSAPP.display}
+            </a>
+            . Nous vous répondons dès que possible.
+          </p>
+          <ul>
+            <li>
+              Dans l&apos;application, le bouton WhatsApp en bas de l&apos;écran
+              ou <strong>Organisation, puis Assistance</strong> permettent de
+              préparer un sujet et un message, puis de choisir « Continuer sur
+              WhatsApp ». Sur le site, le même bouton est en bas à droite des
+              pages.
+            </li>
+            <li>
+              WhatsApp s&apos;ouvre avec votre texte : envoyez-le pour démarrer
+              la conversation. {SITE.name} n&apos;envoie rien à votre place et
+              n&apos;ajoute aucune information de votre compte.
+            </li>
+            <li>
+              La conversation se poursuit dans WhatsApp :{" "}
+              <strong>
+                elle n&apos;est ni enregistrée ni synchronisée dans {SITE.name}
+              </strong>
+              , et elle ne crée pas de demande d&apos;assistance.
+            </li>
+            <li>
+              Ne partagez jamais votre mot de passe ni un code reçu par SMS ou
+              par e-mail.
+            </li>
+          </ul>
+          <h3>Par e-mail, depuis l&apos;application</h3>
           <ol>
             <li>
-              Ouvrez <strong>Organisation, puis Assistance</strong>.
+              Ouvrez <strong>Organisation, puis Assistance</strong>, section «
+              Par e-mail ».
             </li>
             <li>
               Choisissez une catégorie (Utilisation, Abonnement, Problème
@@ -472,12 +758,12 @@ const content: DocumentContent = {
             un vendeur seulement si le droit « Contacter le service client » lui
             a été donné.
           </p>
-          <h3>Par e-mail</h3>
+          <h3>Sans accès à votre commerce</h3>
           <p>
-            Si vous ne pouvez pas accéder à votre commerce, écrivez à{" "}
-            <MailLink to="support" /> en précisant le nom de votre commerce,
-            l&apos;écran concerné et ce que vous avez essayé. Les autres
-            contacts sont sur la page <Link href="/contact">Contact</Link>.
+            Écrivez-nous sur WhatsApp, ou à <MailLink to="support" />, en
+            précisant le nom de votre commerce, l&apos;écran concerné et ce que
+            vous avez essayé. Les autres contacts sont sur la page{" "}
+            <Link href="/contact">Contact</Link>.
           </p>
         </>
       ),

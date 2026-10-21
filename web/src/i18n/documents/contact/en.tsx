@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SocialLinks } from "@/components/contact/social-links";
 import { MailLink } from "@/components/legal/mail-link";
 import { LOCATIONS, SITE, WHATSAPP } from "@/lib/legal/site-identity";
 import type { DocumentContent } from "@/i18n/documents/types";
@@ -110,6 +111,21 @@ const content: DocumentContent = {
             are detailed in the{" "}
             <Link href="/en/confidentialite">Privacy Policy</Link>.
           </p>
+        </>
+      ),
+    },
+    {
+      id: "reseaux",
+      title: "Follow us",
+      content: (
+        <>
+          <p>News, tips and demos of {SITE.name}:</p>
+          <SocialLinks
+            headingId="contact-reseaux"
+            showHeading={false}
+            className="mt-3"
+            linkClassName="text-(--brand-ink)"
+          />
         </>
       ),
     },

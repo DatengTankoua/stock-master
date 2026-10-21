@@ -72,6 +72,36 @@ export const WHATSAPP = Object.freeze({
 });
 
 /**
+ * Réseaux sociaux officiels (communiqués par le propriétaire le 21 octobre
+ * 2026). Simples liens : aucun flux, iframe, SDK ni requête avant un clic.
+ * Ordre d'affichage ; repris dans `sameAs` des données structurées.
+ */
+export const SOCIAL_LINKS = Object.freeze([
+  {
+    id: "facebook",
+    name: "Facebook",
+    url: "https://www.facebook.com/profile.php?id=61587629369907",
+  },
+  {
+    id: "instagram",
+    name: "Instagram",
+    url: "https://www.instagram.com/stockmasterapp/",
+  },
+  {
+    id: "youtube",
+    name: "YouTube",
+    url: "https://www.youtube.com/channel/UCJViGEtr1z2-6-gBfGkaAFw",
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    url: "https://www.tiktok.com/@stock.master88",
+  },
+] as const);
+
+export type SocialNetworkId = (typeof SOCIAL_LINKS)[number]["id"];
+
+/**
  * État des adresses : DÉCLARÉES fonctionnelles par le propriétaire le
  * 7 octobre 2026. Aucun envoi ni aucune réception n'a été testé par
  * l'équipe technique (validations 1-16C.1 : transport e-mail simulé).
@@ -112,10 +142,13 @@ export const PROVIDERS: ReadonlyArray<{
     status: "documenté, à confirmer",
   },
   {
+    // Prestataire confirmé par le propriétaire le 21 octobre 2026 (R2, bucket
+    // privé, URL signées : rapport 1-17A). Avant : « Supabase Storage »
+    // (D9), conservé dans les archives 0.3 à 0.5 de la confidentialité.
     role: "Stockage des images (logos, photos de produits)",
-    name: "Supabase Storage",
+    name: "Cloudflare R2",
     country: null,
-    status: "documenté, à confirmer",
+    status: "confirmé par le propriétaire",
   },
   {
     role: "Envoi des e-mails (confirmation, réinitialisation)",
@@ -152,11 +185,7 @@ const OCTOBER_7_2026 = { fr: "7 octobre 2026", en: "7 October 2026" };
 
 // Statut « projet » conservé (non indexé) tant que les validations
 // juridiques manquent ; la version affichée reste 0.x.
-const DRAFT = {
-  status: "projet",
-  version: "0.2",
-  updatedAt: OCTOBER_7_2026,
-} as const;
+// (Mentions légales 0.2 du 7 octobre 2026 ; remplacée par la 0.3 plus bas.)
 
 // 1-16C.2 — Documents soumis à acceptation (ou présentés à l'inscription) :
 // leur texte prérendu est archivé, avec son empreinte, dans
@@ -215,12 +244,7 @@ const DRAFT_1_21D = {
 // (pages publiques : langue de l'adresse, anglais sous /en). Document
 // non archivé (non soumis à acceptation) : numéro et date seulement. Si la
 // publication a lieu plus tard, reporter ici la date effective.
-const OCTOBER_15_2026 = { fr: "15 octobre 2026", en: "15 October 2026" };
-const DRAFT_COOKIES_0_7 = {
-  status: "projet",
-  version: "0.7",
-  updatedAt: OCTOBER_15_2026,
-} as const;
+// (Cookies 0.7 du 15 octobre 2026 ; remplacée par la 0.8 plus bas.)
 
 // 1-16G — Cookies 0.4 : ajout du cookie de langue `stockmaster.lang`.
 // 1-16H — Cookies 0.5 : clés de session renommées `stockmaster_token` /
@@ -228,12 +252,25 @@ const DRAFT_COOKIES_0_7 = {
 // non archivé (non soumis à acceptation) : seul le numéro change.
 // (0.5 du 8 octobre 2026 ; remplacée par la 0.6 en 1-21D.)
 
+// Stockage des images : Cloudflare R2 (confirmé par le propriétaire le
+// 21 octobre 2026) remplace « Supabase Storage » dans la liste des
+// prestataires. Confidentialité 0.6 (archivée, FR/EN) ; mentions légales 0.3
+// et cookies 0.8 (non archivés : numéro et date seulement). Les versions
+// antérieures restent dans l'archive sans changement. Si la publication a
+// lieu plus tard, reporter ici la date effective AVANT l'archivage.
+const OCTOBER_21_2026 = { fr: "21 octobre 2026", en: "21 October 2026" };
+const DRAFT_STORAGE_R2 = {
+  status: "projet",
+  updatedAt: OCTOBER_21_2026,
+} as const;
+
 /** Documents juridiques et contractuels, dans l'ordre d'affichage. */
 export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
   {
     id: "mentions-legales",
     href: "/mentions-legales",
-    ...DRAFT,
+    ...DRAFT_STORAGE_R2,
+    version: "0.3",
   },
   {
     id: "conditions-utilisation",
@@ -248,12 +285,14 @@ export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
   {
     id: "confidentialite",
     href: "/confidentialite",
-    ...DRAFT_1_21D,
+    ...DRAFT_STORAGE_R2,
+    version: "0.6",
   },
   {
     id: "cookies",
     href: "/cookies",
-    ...DRAFT_COOKIES_0_7,
+    ...DRAFT_STORAGE_R2,
+    version: "0.8",
   },
   {
     id: "traitement-donnees",

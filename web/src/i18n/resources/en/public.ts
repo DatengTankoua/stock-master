@@ -56,6 +56,10 @@ const publicEn: Translation<typeof publicFr> = {
     link: "View in English",
     dismiss: "Dismiss",
   },
+  social: {
+    title: "Follow us",
+    linkLabel: "{{network}} (new tab)",
+  },
   whatsapp: {
     lead: "Message us on WhatsApp at any time.",
     linkLabel: "WhatsApp: {{number}}",
@@ -128,7 +132,7 @@ const publicEn: Translation<typeof publicFr> = {
       title: "Everything you need to manage your shop day to day",
       stock: {
         title: "Manage your products and stock",
-        text: "Organise rice, oil and soap by catalogue, with photo, purchase price and selling price. Each sale updates stock, and low or out-of-stock products are flagged based on your rights.",
+        text: "Organise rice, oil and soap by catalogue, with photo, purchase price and selling price. Each sale updates stock, and low or out-of-stock products are flagged based on your rights. Set a low-stock threshold and an expiry date per product, or track your batches: the sale suggests the nearest date first, an expired batch is no longer sold, and losses are recorded separately from sales.",
       },
       sales: {
         title: "Track your sales",
@@ -148,7 +152,7 @@ const publicEn: Translation<typeof publicFr> = {
       },
       notifications: {
         title: "See alerts and get support",
-        text: "The bell shows notifications that match your rights. Need help with a sale? The owner, administrator or an authorised seller can write from Organisation → Support.",
+        text: "The bell shows notifications that match your rights, including expiry alerts. Need help? Message us on WhatsApp, or write from Organisation → Support (owner, administrator or authorised seller).",
       },
       alsoIncluded:
         "Make it yours: French or English, light or dark mode, logo and shop colours. Also included: trash and the euro ↔ CFA franc converter.",

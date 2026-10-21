@@ -708,6 +708,10 @@ VAPID). **L'envoi push réel n'est pas vérifié.**
 
 ## 11. Ajustements préparés pour les guides FR / EN (non publiés)
 
+> **Mis à jour** : guides et accueil publiés après activation pour tous les
+> commerces (information du propriétaire, 21 octobre 2026), voir [documentation-cleanup.md](documentation-cleanup.md).
+> Le texte ci-dessous reste la proposition d'origine.
+
 Les pages publiées (`i18n/documents/guide`, `gestion-stock-boutique`)
 **ne sont pas modifiées** tant que les fonctionnalités ne sont pas
 activées. Textes proposés, à insérer **au moment de l'activation** :

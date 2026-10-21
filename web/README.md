@@ -13,34 +13,20 @@ Interface utilisateur de l'application **Stock Master**.
 
 ---
 
-## Prérequis
+## Démarrer
 
-- Node.js 22+, pnpm 11+
-- L'API NestJS doit être en cours d'exécution (voir `../api/README.md`)
-
-## Lancer en dev
+Le parcours complet (API, MongoDB, MinIO, premier compte) est dans le
+[README racine](../README.md#démarrage-local). Depuis la racine :
 
 ```bash
-# Depuis la racine du monorepo
-pnpm --filter web dev
-
-# Ou depuis le dossier web/
-pnpm dev
+pnpm --filter web dev   # http://localhost:3000 (l'API doit tourner sur :4000)
 ```
 
-L'app est accessible sur [http://localhost:3000](http://localhost:3000).
-
-## Variables d'environnement
-
-```bash
-cp .env.example .env.local
-```
-
-| Variable | Défaut | Description |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:4000` | URL de l'API NestJS |
-
-> `NEXT_PUBLIC_API_URL` est injectée **au build**. En production Docker, elle est passée via l'`ARG` du Dockerfile.
+- **Variables.** Source de référence : [`.env.example`](.env.example), à
+  copier en `.env.local`. Seule `NEXT_PUBLIC_API_URL` est obligatoire.
+- **Lecture au build.** `NEXT_PUBLIC_*` et `S3_HOSTNAME` sont figées au build
+  et au lancement de `pnpm dev` : relancer après une modification.
+  `CSP_IMAGE_ORIGINS` est lue à l'exécution par `src/proxy.ts`.
 
 ---
 
@@ -128,18 +114,55 @@ L'application est installable sur mobile et desktop. Le manifest est généré d
 
 ```bash
 pnpm dev        # serveur de développement (http://localhost:3000)
-pnpm build      # build de production → .next/standalone
+pnpm build      # build de production (.next ; standalone seulement avec DOCKER_BUILD=true)
 pnpm start      # démarre le build de production
 pnpm lint       # ESLint
 ```
 
-## Build production (Docker)
+## Contrôles et tests
+
+Scripts Node sans navigateur ni serveur (doublures en mémoire), depuis la
+racine : `pnpm --filter web <script>`.
+
+| Script | Vérifie | En CI |
+|---|---|---|
+| `test:i18n` | Mêmes clés, variables, balises et pluriels en FR et EN ; rendu anglais sans repli | Oui |
+| `i18n:coverage` | Aucun texte visible écrit en dur | Oui |
+| `test:push-reconnect` | Reconnexion push : rattachement sans nouvelle demande, détachement à la déconnexion, « Plus tard », refus respectés | Oui |
+| `test:whatsapp-contact` | Numéro et réseaux centralisés ; encodage `wa.me` et `mailto:` (accents, retours à la ligne) ; aucun stockage ni SDK ; montage du bouton | Non |
+| `test:batch-sale` | Proposition FEFO et répartition d'une vente par lots | Non |
+| `test:security-headers` | En-têtes de sécurité et CSP | Non |
+| `test:tenant-brand` | Couleur et nom du commerce | Non |
+| `test:coordinator`, `test:catalog-refresh`, `test:products-pagination`, `test:image-renewal` | Rafraîchissement, catalogue, pagination, renouvellement des images | Non |
+
+Le build est aussi en CI, suivi de l'archive juridique :
 
 ```bash
-docker build \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.stock-master.app \
-  -t stock-master-web \
-  ./web
+pnpm --filter web build
+node web/scripts/legal-archive.mjs check --next-dir web/.next
 ```
 
-Le Dockerfile utilise un build multi-stage avec `output: 'standalone'` pour une image minimale.
+Ce contrôle compare le texte servi des documents soumis à acceptation à son
+archive ; il lance lui-même `next start`.
+
+Les parcours navigateur (CSP, push livré au service worker, temps réel) se
+lancent depuis la [recette isolée](../api/test/recipe/README.md#4-campagne-navigateur).
+Ils demandent Playwright, qui n'est pas une dépendance du dépôt.
+
+## Build production (Docker)
+
+Le contexte de build est la **racine du dépôt** : le Dockerfile copie le
+lockfile, `web/` et quelques fichiers partagés de `api/src`. Les variables
+publiques sont figées au build.
+
+```bash
+docker build -f web/Dockerfile --build-arg NEXT_PUBLIC_API_URL=http://localhost:4000 --build-arg S3_HOSTNAME=localhost -t stock-master-web .
+```
+
+Le build multi-stage active `output: "standalone"` (`DOCKER_BUILD=true`).
+
+`S3_HOSTNAME` est **obligatoire** pour ce build. Le Dockerfile la transmet
+même vide, et `next.config.ts` la garde alors comme nom d'hôte d'image : le
+build échoue en fin de génération avec « Expected a non-empty string ». Elle
+désigne l'hôte public des images (`localhost` pour un essai local).
+`docker-compose.prod.yml` l'exige déjà.

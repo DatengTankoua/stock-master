@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SocialLinks } from "@/components/contact/social-links";
 import { MailLink } from "@/components/legal/mail-link";
 import { LOCATIONS, SITE, WHATSAPP } from "@/lib/legal/site-identity";
 
@@ -126,6 +127,21 @@ const content: DocumentContent = {
             fonctionnement sont détaillés dans la{" "}
             <Link href="/confidentialite">politique de confidentialité</Link>.
           </p>
+        </>
+      ),
+    },
+    {
+      id: "reseaux",
+      title: "Suivez-nous",
+      content: (
+        <>
+          <p>Actualités, conseils et démonstrations de {SITE.name} :</p>
+          <SocialLinks
+            headingId="contact-reseaux"
+            showHeading={false}
+            className="mt-3"
+            linkClassName="text-(--brand-ink)"
+          />
         </>
       ),
     },

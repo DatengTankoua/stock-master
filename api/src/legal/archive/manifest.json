@@ -63,7 +63,7 @@
     },
     "confidentialite": {
       "route": "/confidentialite",
-      "current": "0.5",
+      "current": "0.6",
       "versions": {
         "0.3": {
           "publishedAt": "2026-10-07",
@@ -97,6 +97,19 @@
             "en": {
               "file": "confidentialite/0.5.en.txt",
               "sha256": "b7e07ea9169a2f9aa5dc27f8fb124bb6651fb5065a096b7183efb72e5c63c783"
+            }
+          }
+        },
+        "0.6": {
+          "publishedAt": "2026-10-21",
+          "locales": {
+            "fr": {
+              "file": "confidentialite/0.6.fr.txt",
+              "sha256": "6ce5927f66d222e1e3c49a99177a6fc4a06e6f3c7643b863190ff1205a283308"
+            },
+            "en": {
+              "file": "confidentialite/0.6.en.txt",
+              "sha256": "e38e9af6d3981d3a62bb893435bc365f5877cd147c0a49ce059c5e64633e49cc"
             }
           }
         }

@@ -126,7 +126,8 @@ const catalogEn: Translation<typeof catalogFr> = {
     current: "Current: {{amount}}",
     additionalStock: "Additional stock to add",
     expiryDate: "Expiry date (optional)",
-    expiryHelp: "One date for the whole product: batches are not tracked.",
+    expiryHelp:
+      "One date for the whole product, for information: it does not block sales. For several dates, use batch tracking.",
     expiryPastWarning:
       "This date has already passed: the product will be recorded as expired. Sales remain possible.",
     expiryClear: "Remove the date",
@@ -267,7 +268,7 @@ const catalogEn: Translation<typeof catalogFr> = {
     notTracked:
       "This product is not tracked by batches: its stock has a single expiry date at most.",
     enableWarning:
-      "Once batch tracking is enabled, it cannot be turned off, and this product cannot be sold until selling by batch becomes available.",
+      "Once enabled, batch tracking cannot be turned off: every sale of this product will state the batches given to the customer.",
     enable: "Enable batch tracking",
     enableTitle: "Split the existing stock into batches",
     enableText:

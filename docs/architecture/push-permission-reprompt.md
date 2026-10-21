@@ -191,6 +191,10 @@ détaché.
 
 ## 5. Validation restante sur appareil réel
 
+> **Mis à jour** : push activé en production et testé sur de vrais téléphones
+> (information du propriétaire, 21 octobre 2026 ; parcours exact non
+> détaillé). Le guide ne porte plus la mise en garde « non testé » : [documentation-cleanup.md](documentation-cleanup.md).
+
 **Aucun push réel n'a été reçu** : tous les contrôles ci-dessus sont
 simulés. À faire en recette, sur un vrai navigateur (Chrome/Android,
 Safari iOS avec l'application installée), avec les clés VAPID de recette

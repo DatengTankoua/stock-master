@@ -224,3 +224,29 @@ test("application : bouton réservé au droit support.contact, hors Assistance",
     /!pathname\.startsWith\("\/app\/organization\/support"\)/,
   );
 });
+
+test("réseaux sociaux : URL officielles centralisées, sans paramètres", () => {
+  const { SOCIAL_LINKS } = load("legal/site-identity.ts");
+  assert.deepEqual(
+    SOCIAL_LINKS.map((n) => n.id),
+    ["facebook", "instagram", "youtube", "tiktok"],
+  );
+  for (const { url } of SOCIAL_LINKS) {
+    const parsed = new URL(url);
+    assert.equal(parsed.protocol, "https:");
+    assert.ok(!parsed.hash, url);
+  }
+  const tiktok = SOCIAL_LINKS.find((n) => n.id === "tiktok").url;
+  assert.equal(tiktok, "https://www.tiktok.com/@stock.master88");
+  // Seul le registre contient les URL ; le JSON-LD les reprend (`sameAs`).
+  const offenders = sources(SRC)
+    .filter((file) => rel(file) !== "lib/legal/site-identity.ts")
+    .filter((file) =>
+      /facebook\.com|instagram\.com|youtube\.com|tiktok\.com/.test(
+        readFileSync(file, "utf8"),
+      ),
+    )
+    .map(rel);
+  assert.deepEqual(offenders, []);
+  assert.match(read("app/page.tsx"), /sameAs: SOCIAL_LINKS\.map/);
+});

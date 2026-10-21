@@ -131,7 +131,7 @@ const catalogFr = {
     additionalStock: "Stock supplémentaire à ajouter",
     expiryDate: "Date de péremption (facultatif)",
     expiryHelp:
-      "Une seule date pour toute la fiche : les lots ne sont pas gérés.",
+      "Une seule date pour toute la fiche, indicative : elle ne bloque pas les ventes. Pour plusieurs dates, utilisez le suivi par lots.",
     expiryPastWarning:
       "Cette date est déjà passée : le produit sera enregistré comme périmé. Les ventes restent possibles.",
     expiryClear: "Retirer la date",
@@ -282,7 +282,7 @@ const catalogFr = {
     notTracked:
       "Ce produit n'est pas suivi par lots : son stock a au plus une seule date de péremption.",
     enableWarning:
-      "Une fois activé, le suivi par lots ne peut pas être désactivé, et ce produit ne pourra pas être vendu tant que la vente par lots n'est pas disponible.",
+      "Une fois activé, le suivi par lots ne peut pas être désactivé : chaque vente de ce produit indiquera les lots remis au client.",
     enable: "Activer le suivi par lots",
     enableTitle: "Répartir le stock existant en lots",
     enableText:

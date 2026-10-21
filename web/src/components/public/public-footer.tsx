@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Wordmark } from "@/components/brand/wordmark";
 import { LocaleLinks } from "@/components/i18n/locale-links";
 import { LANDING_NAV } from "@/components/landing/landing-nav";
+import { SocialLinks } from "@/components/contact/social-links";
 import { WhatsAppIcon } from "@/components/contact/whatsapp-icon";
 import { WhatsAppWidget } from "@/components/contact/whatsapp-widget";
 import {
@@ -84,6 +85,12 @@ export async function PublicFooter({
                 {t("whatsapp.linkLabel", { number: WHATSAPP.display })}
               </span>
             </a>
+            <SocialLinks
+              headingId="pied-reseaux"
+              className="mt-4"
+              headingClassName="text-sm font-bold text-(--brand-ink)"
+              linkClassName="text-(--public-muted) hover:text-(--brand-ink)"
+            />
           </div>
           <Column title="Stock Master" id="pied-produit">
             {LANDING_NAV.map((item) => (

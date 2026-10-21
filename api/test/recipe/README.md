@@ -1,4 +1,10 @@
-# Recette locale des paiements (1-14D.2H)
+# Recette locale isolée
+
+Créée pour les paiements (1-14D.2H), elle sert aujourd'hui de **pile de
+recette générale**. Elle fournit des comptes fictifs, les lots et alertes à
+la demande, le push simulé, des campagnes navigateur et des suites Jest
+isolées. Pour le développement avec données persistantes, voir le
+[README racine](../../../README.md#démarrage-local).
 
 Stack **strictement locale** et relançable pour éprouver à la main (ou par la
 campagne Playwright) le parcours de paiement d'abonnement, le webhook et le
@@ -42,13 +48,31 @@ Terminal 1 (reste au premier plan) :
 ```bash
 node api/test/recipe/recipe.js start                    # fournisseur simulé (contrat D.2C)
 node api/test/recipe/recipe.js start --provider=campay  # vrai adaptateur CamPay sur faux CamPay local
-# option : --keep-logs (journaux conservés après l'arrêt)
+node api/test/recipe/recipe.js start --provider=saspay  # adaptateur SasPay sur faux SasPay local
 ```
 
-Le lanceur affiche les URLs, le mot de passe et les comptes, puis attend.
-Ordre : copie isolée et build web (environ 30 s, refaits à chaque
-démarrage) → `MongoMemoryReplSet` (127.0.0.1, port aléatoire) →
-4 migrations → fixtures → simulateurs → API → web.
+Options combinables :
+
+| Option | Effet |
+|---|---|
+| `--product-batches` | Lots activés pour tous les commerces de la recette (`PRODUCT_BATCHES_ENABLED=true`, portée `all`) |
+| `--expiry-alerts` | Alertes de péremption activées de même |
+| `--anti-bot=simulated` | Inscription et défi de connexion simulés (API en `NODE_ENV=development`) |
+| `--keep-logs` | Journaux conservés après l'arrêt |
+
+Exemple, lots et alertes :
+`node api/test/recipe/recipe.js start --product-batches --expiry-alerts`.
+
+Le lanceur affiche les URL, le mot de passe et les comptes, puis attend.
+Ordre de démarrage :
+
+1. Copie isolée et build web (environ 30 s, refaits à chaque démarrage).
+2. `MongoMemoryReplSet` (127.0.0.1, port aléatoire, base
+   `stockmaster_recipe`).
+3. Migrations (liste `MIGRATIONS` de `launcher.js`). S'y ajoutent
+   `expiry-alerts.js --apply` et `product-batches.js --install --apply` avec
+   les options correspondantes.
+4. Fixtures, simulateurs, API, puis web.
 
 ## 2. Ouvrir le web et se connecter
 
@@ -67,6 +91,11 @@ seule origine autorisée par le CORS de l'API). Mot de passe commun :
 | `proprietaire.rapprochement@recette.local` | owner | Initiation incertaine puis rapprochement (mode `campay`) |
 | `proprietaire.revue@recette.local` | owner | `review` puis rapprochement (mode `campay`) |
 | `proprietaire.suspendu@recette.local` | owner, expiré | Suspension prioritaire |
+
+`$R accounts` réaffiche ces comptes et le mot de passe. Les commerces actifs
+servent aussi aux parcours hors paiement : catalogue, ventes, lots, pertes et
+alertes (avec les options ci-dessus), notifications, assistance et WhatsApp.
+Aucun message réel n'est envoyé.
 
 Un compte ne peut avoir qu'un paiement ouvert : pour rejouer un parcours,
 créer un propriétaire neuf : `recipe.js owner --label=essai2 [--expired]`.
@@ -206,7 +235,23 @@ scénario (limiteur de connexion en mémoire).
   `.stockmaster-recipe-web/` est supprimée au démarrage suivant, et le
   dossier de données `%TEMP%/mongo-mem-*` de cette instance peut rester.
 
-## 6. Contrôles d'isolement `.env`
+## 6. Suites Jest isolées
+
+Elles s'exécutent sans la recette démarrée, isolées des `.env` réels :
+
+```bash
+$R isolated api-unit [motifs]           # ex. predeploy-migrations
+$R isolated api-e2e [motifs]            # ex. rate-limit-index ; sans motif : suite complète (longue)
+$R isolated api-e2e --tz=Africa/Douala monthly-boundaries-douala
+$R isolated web-build                   # next build isolé + contrôle des archives juridiques (recette arrêtée)
+```
+
+Les dossiers `mongo-mem-*` laissés dans le répertoire temporaire par
+MongoDB en mémoire se suppriment comme indiqué dans
+[api/README.md](../../README.md#tests), une fois aucune recette ni suite e2e
+en cours.
+
+## 7. Contrôles d'isolement `.env`
 
 ```bash
 $R env-guard-selftest                 # garde JavaScript : canaris, témoin sans garde

@@ -3,6 +3,13 @@
 Branche `feature/product-expiry-stock-threshold` (depuis `origin/dev`,
 `f4e36c8`). Aucune donnée de production touchée ; aucun commit.
 
+> **Évolutions ultérieures** (rapport conservé tel quel) : suivi par lots,
+> vente par lots et pertes dans [product-batches-foundation.md](product-batches-foundation.md),
+> [product-batches-sales.md](product-batches-sales.md) et
+> [product-batches-expiry-losses.md](product-batches-expiry-losses.md) ; les
+> alertes de péremption couvrent aussi la date des produits sans lots (qui ne
+> bloque toujours pas les ventes). Guides alignés : [documentation-cleanup.md](documentation-cleanup.md).
+
 ## 1. Modèle et validation
 
 | Champ (`products`) | Stockage | Valeurs | Absent |

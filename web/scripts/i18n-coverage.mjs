@@ -10,8 +10,7 @@
 // - littéraux de chaîne contenant une lettre accentuée française.
 //
 // Exclusions (documentées) : ressources de traduction et contenus de
-// documents (`src/i18n/`), composants hérités `components/objects/` (code
-// mort : importés nulle part, jamais affichés), commentaires, imports,
+// documents (`src/i18n/`), commentaires, imports,
 // clés de stockage et codes techniques, noms propres listés ci-dessous, et
 // le registre français `lib/legal/site-identity.ts` (données éditoriales
 // sources, traduites dans les contenus anglais).
@@ -26,10 +25,7 @@ import ts from "typescript";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = path.join(ROOT, "src");
-const EXCLUDED_DIRS = [
-  path.join(SRC, "i18n"),
-  path.join(SRC, "components", "objects"),
-];
+const EXCLUDED_DIRS = [path.join(SRC, "i18n")];
 const EXCLUDED_FILES = [path.join(SRC, "lib", "legal", "site-identity.ts")];
 // Textes volontairement non traduits : noms propres, marque, unités.
 const ALLOWED = new Set([

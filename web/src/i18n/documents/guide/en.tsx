@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MailLink } from "@/components/legal/mail-link";
-import { SITE } from "@/lib/legal/site-identity";
+import { SITE, WHATSAPP } from "@/lib/legal/site-identity";
 import { TRIAL_DAYS } from "@/lib/subscription-offers";
 import type { DocumentContent } from "@/i18n/documents/types";
 
@@ -12,7 +12,7 @@ const registrationEnabled =
 const content: DocumentContent = {
   metaTitle: "User guide",
   metaDescription:
-    "Sign-up, shop and members, products, stock, sales, analytics, trash, offline, subscription and notifications: the Stock Master step-by-step guide.",
+    "Sign-up, members, products, batches and expiry, losses, sales, analytics, trash, offline, subscription, notifications and WhatsApp support: the Stock Master step-by-step guide.",
   title: "User guide",
   intro: (
     <>
@@ -70,6 +70,13 @@ const content: DocumentContent = {
               {TRIAL_DAYS}-day free trial started when the shop was created.
             </li>
           </ol>
+          <h3>Log in</h3>
+          <p>
+            Open <Link href="/auth/login">Log in</Link> and enter your email
+            address and password. If you belong to several shops, choose the one
+            to open. If the shop&apos;s subscription has ended, a screen says
+            so: the owner can renew from that screen.
+          </p>
           <p>
             No email? Check your spam folder, then try to log in: the login
             screen then offers to send the link again. If you forget your
@@ -124,6 +131,19 @@ const content: DocumentContent = {
             </li>
           </ul>
           <p>
+            Stock-related rights are also given one by one: “Manage expiry
+            dates”, “Customise stock thresholds”, “Enable batch tracking and
+            split existing stock”, “Set a batch aside and make it available
+            again”, “Record and correct stock losses” and “Set the expiry alert
+            lead time”. The owner and administrators have them all; a seller has
+            none until you tick them.
+          </p>
+          <p>
+            <strong>An option is missing?</strong> A button or a field only
+            appears if your role or rights allow it. Ask the owner or an
+            administrator for the matching right.
+          </p>
+          <p>
             In <strong>Organisation, then Members</strong>, choose “Edit” on a
             member to change their rights or status: “Suspended” removes access
             temporarily, “Revoked” removes it permanently. The owner can also
@@ -152,10 +172,11 @@ const content: DocumentContent = {
           <ul>
             <li>
               <strong>Expiry date</strong> (“Manage expiry dates” right): one
-              date for the whole product, batches are not tracked. A date that
-              has already passed is accepted with a warning; the product page
-              then shows it as “passed”. Sales are not blocked and no expiry
-              notification is sent.
+              date for the whole product, for a product without batches. It is
+              for information: <strong>it never blocks sales</strong>, even once
+              passed (the product page then shows it as “passed”). It is used
+              for expiry alerts. To track several dates for one product, enable{" "}
+              <a href="#lots">batch tracking</a>.
             </li>
             <li>
               <strong>Low-stock threshold</strong> (“Customise stock thresholds”
@@ -177,21 +198,31 @@ const content: DocumentContent = {
               applied (custom or default).
             </li>
             <li>
-              To add goods, choose “Edit” on the product and enter the quantity
-              added (“Adjust stock” right).
+              To add goods, choose “Edit” on the product and fill in “Additional
+              stock to add” (“Adjust stock” right).
+            </li>
+            <li>
+              Product tracked by batches: this field no longer appears. Record
+              new units from the product&apos;s “Batches” section (see{" "}
+              <a href="#lots">Batches, expiry and losses</a>).
             </li>
           </ul>
           <h3>Record a sale</h3>
           <ol>
             <li>Open the product in the catalogue.</li>
-            <li>Choose “Record a sale”.</li>
+            <li>Choose “Sell”: the “Record a sale” window opens.</li>
             <li>
               Enter the quantity and the actual sale price. The buyer&apos;s
               name and contact details are optional: only enter them if your
               shop needs them.
             </li>
             <li>
-              Confirm. The sale appears in <strong>Sales</strong>.
+              Product tracked by batches: also check the “Batches given to the
+              customer” (see <a href="#lots">below</a>).
+            </li>
+            <li>
+              Choose “Confirm the sale”. The sale appears in{" "}
+              <strong>Sales</strong>.
             </li>
           </ol>
           <p>
@@ -250,6 +281,157 @@ const content: DocumentContent = {
       ),
     },
     {
+      id: "lots",
+      title: "Batches, expiry and losses",
+      content: (
+        <>
+          <p>
+            Batch tracking is for products whose deliveries do not share the
+            same expiry date. Each batch has its quantity, its date (optional)
+            and its number. Everything happens in the product&apos;s “Batches”
+            section.
+          </p>
+          <h3>Enable batch tracking</h3>
+          <ol>
+            <li>
+              On the product page, “Batches” section, choose “Enable batch
+              tracking” (“Enable batch tracking and split existing stock”
+              right).
+            </li>
+            <li>
+              Split the current stock: “I know the split: one line per batch”
+              (quantity, then optional expiry date and manufacturer batch
+              number), or “I don&apos;t know the split: one historical batch,
+              unknown date”.
+            </li>
+            <li>
+              The total must be exactly the stock shown. Tick the confirmation,
+              then “Confirm the split”.
+            </li>
+          </ol>
+          <p>
+            Result: the product page shows “Stock tracking: By batches”. This is
+            neither a sale nor a stock entry: the total does not change. The
+            batches&apos; dates replace the product&apos;s single date (“Use the
+            product sheet date” offers it line by line, never automatically).{" "}
+            <strong>Batch tracking cannot be turned off.</strong> If a sale
+            happened while you were entering the split, a message asks you to
+            refresh the product and split again.
+          </p>
+          <h3>Receive goods</h3>
+          <ul>
+            <li>
+              “New batch”: quantity received, date received, expiry date and
+              manufacturer number (“Manage products” and “Adjust stock” rights).
+            </li>
+            <li>
+              “Receive” on an existing batch: only the quantity is added
+              (“Adjust stock” right).
+            </li>
+          </ul>
+          <h3>Sell a product tracked by batches</h3>
+          <ol>
+            <li>
+              In “Record a sale”, the “Batches given to the customer” part
+              suggests a split, nearest expiry first.
+            </li>
+            <li>
+              Adjust it to the units <strong>actually handed over</strong>: the
+              batches must add up to the quantity sold. Nothing is reserved
+              before confirmation.
+            </li>
+            <li>
+              “Confirm the sale”. The sale keeps the batches chosen; the server
+              never replaces them. If a batch no longer has enough units, the
+              window stays open and suggests a new split.
+            </li>
+          </ol>
+          <ul>
+            <li>
+              <strong>Batches without a date</strong>: listed separately, never
+              suggested. To sell them, tick “I confirm selling units whose
+              expiry date is unknown.”
+            </li>
+            <li>
+              <strong>Expired batch</strong>: no longer offered and{" "}
+              <strong>can no longer be sold</strong>, even if made available
+              again.
+            </li>
+          </ul>
+          <h3>Physical stock and sellable stock</h3>
+          <p>
+            <strong>Expiry alone does not remove stock.</strong> Units of an
+            expired or set-aside batch stay in the physical stock (the
+            “Remaining stock”) until a loss is recorded. The “Batches” section
+            separates “Sellable today” from the stock that cannot be sold. The
+            low-stock threshold is calculated on the total physical stock,
+            expired batches included.
+          </p>
+          <p>
+            On a product <strong>without batches</strong>, on the other hand,
+            the expiry date does not block sales.
+          </p>
+          <h3>Set a batch aside</h3>
+          <p>
+            “Set aside” (“Set a batch aside and make it available again” right)
+            takes the <strong>whole</strong> batch out of sale, with a required
+            reason, for example while waiting for a check. No unit leaves the
+            stock. “Make available” makes it sellable again, unless it has
+            expired.
+          </p>
+          <h3>Record and correct a loss</h3>
+          <ol>
+            <li>
+              On a batch, “Record a loss” (“Record and correct stock losses”
+              right).
+            </li>
+            <li>
+              Enter the quantity lost and the reason: “Expiry”, “Breakage or
+              damage” or “Other” (comment required). Tick the confirmation, then
+              “Record the loss”.
+            </li>
+          </ol>
+          <p>
+            Result: the units leave the stock.{" "}
+            <strong>A loss is never a sale</strong>: no revenue, no units sold.
+            It appears in “Loss history” and in Analytics. Losing all the
+            remaining stock of a batch closes it (“Withdrawn”).
+          </p>
+          <p>
+            Entered by mistake? In the loss history, “Correct” gives units back
+            to the same batch, with a reason. The original loss stays visible,
+            and the batch keeps its state: putting it back on sale is a separate
+            step.
+          </p>
+          <h3>Expiry alerts</h3>
+          <ul>
+            <li>
+              Two notification categories: “Expiry approaching” (the batch or
+              product enters the alert period) and “Expired products” (date
+              passed). Each is sent once per expiry date, for products still in
+              stock, to members with the “See stock details” right.
+            </li>
+            <li>
+              They cover batches and products without batches that have a date.
+              A date is valid on the day itself; it has passed the next day,
+              according to the shop&apos;s day.
+            </li>
+            <li>
+              The lead time is set in <strong>Analytics</strong>, “Expiry and
+              losses” block, “Alert lead time (days)” field (“Set the expiry
+              alert lead time” right): 0 to 365 days, 30 by default. 0 means an
+              alert on the expiry day itself, not turning alerts off.
+            </li>
+            <li>
+              This block also lists what is “Expiring soon”, what has “Expired”
+              and the “Losses this month”.
+            </li>
+          </ul>
+          <p>Setting batches aside and losses need an Internet connection.</p>
+        </>
+      ),
+    },
+    {
       id: "corbeille",
       title: "Trash, permanent deletion and sales history",
       content: (
@@ -261,8 +443,10 @@ const content: DocumentContent = {
               you can “Restore” it.
             </li>
             <li>
-              In the trash, “Delete permanently” erases the product and its
-              photo. This action cannot be undone.
+              In <strong>Trash</strong>, catalogues and products are listed
+              separately. Tick one or more items, then “Restore” or “Delete
+              permanently”. Permanent deletion erases the product and its photo:
+              it cannot be undone.
             </li>
             <li>
               The sales history is kept after a permanent deletion: past sales
@@ -306,8 +490,9 @@ const content: DocumentContent = {
             </li>
             <li>
               The server checks each sale. If one is refused (not enough stock,
-              right removed…), it stays in “Pending sales” so that you can
-              correct it.
+              right removed…), it stays in “Pending sales”: “Correct”, “Try
+              again” or, after confirmation, “Abandon”. A refused sale does not
+              block the others.
             </li>
             <li>
               A device keeps at most 200 pending sales, each for 14 days at
@@ -315,6 +500,28 @@ const content: DocumentContent = {
               reason and correct them or send them again.
             </li>
             <li>Logging out does not delete pending sales.</li>
+          </ul>
+          <h3>Products tracked by batches</h3>
+          <ul>
+            <li>
+              Without network, you can sell a product tracked by batches if its
+              batches were loaded with network on this device. Quantities per
+              batch are not checked offline: nothing is reserved.
+            </li>
+            <li>
+              If a chosen batch no longer has enough units or is no longer
+              available when syncing, the sale is refused: choose “Correct” to
+              change the batches.
+            </li>
+            <li>
+              If the sale was entered before the batch expired but received
+              after, it must be regularised. With the “Adjust stock” right,
+              choose “Regularise”. Otherwise, choose “Request a regularisation”:
+              the request appears in the “Regularisations to review” card on the{" "}
+              <strong>Sales</strong> page, where a manager (“Adjust stock” and
+              “See all sales” rights) chooses “Approve” or “Reject”. Nothing is
+              recorded before approval.
+            </li>
           </ul>
         </>
       ),
@@ -338,8 +545,8 @@ const content: DocumentContent = {
             Subscription, and pays once by Mobile Money (MTN or Orange) on
             SasPay&apos;s secure page. Payment fees are covered by Stock Master.
             Back in Stock Master, “Check payment” confirms the subscription. For
-            any question: Organisation, then Support (“Subscription” category),
-            or <MailLink to="support" subject="Subscription renewal" />.
+            any question, message us on WhatsApp or use{" "}
+            <a href="#aide">support</a>.
           </li>
           <li>
             When the subscription ends without renewal, access to the shop is
@@ -357,8 +564,9 @@ const content: DocumentContent = {
           <h3>Notification centre</h3>
           <p>
             The bell at the top of the application opens your notifications:
-            product out of stock or nearly out of stock, new sales, end of trial
-            or subscription, payment confirmed, monthly summary. You only
+            product out of stock or nearly out of stock, new sales, expiry
+            approaching, expired products, regularisations to review, end of
+            trial or subscription, payment confirmed, monthly summary. You only
             receive those that match your rights.
           </p>
           <h3>Install the application</h3>
@@ -392,11 +600,32 @@ const content: DocumentContent = {
             notifications are only offered to the application added to the home
             screen.
           </p>
+          <h3>Logging out and back in</h3>
+          <ul>
+            <li>
+              When you log out, the device stops receiving your notifications;
+              your category choices are kept.
+            </li>
+            <li>
+              When you log back in on the same device, they resume without a new
+              browser request. If the device was used for another account,{" "}
+              {SITE.name} offers “Link this device to notifications”: one click
+              is enough.
+            </li>
+            <li>
+              “Later” postpones the invitation for 7 days on this device. After
+              “Turn off notifications”, it is no longer offered automatically.
+            </li>
+          </ul>
           <p>
-            <strong>Important:</strong> notifications on the device have not yet
-            been tested on real Android phones or iPhones. They may not arrive
-            on some devices: the application&apos;s notification centre remains
-            the reference.
+            A device&apos;s “subscription” to notifications only means it is
+            registered to receive them.{" "}
+            <strong>It does not involve any payment</strong> and has nothing to
+            do with the shop&apos;s subscription.
+          </p>
+          <p>
+            Messages stay general on the lock screen. If a notification does not
+            arrive on a device, the bell remains the reference.
           </p>
         </>
       ),
@@ -406,10 +635,49 @@ const content: DocumentContent = {
       title: "Need help?",
       content: (
         <>
-          <h3>From the application</h3>
+          <h3>On WhatsApp (recommended)</h3>
+          <p>
+            Message us on WhatsApp at any time, on{" "}
+            <a
+              href={WHATSAPP.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              translate="no"
+            >
+              {WHATSAPP.display}
+            </a>
+            . We reply as soon as we can.
+          </p>
+          <ul>
+            <li>
+              In the application, the WhatsApp button at the bottom of the
+              screen or <strong>Organisation, then Support</strong> lets you
+              prepare a subject and a message, then choose “Continue on
+              WhatsApp”. On the website, the same button is at the bottom right
+              of the pages.
+            </li>
+            <li>
+              WhatsApp opens with your text: send it to start the conversation.{" "}
+              {SITE.name} sends nothing for you and adds no information about
+              your account.
+            </li>
+            <li>
+              The conversation continues in WhatsApp:{" "}
+              <strong>
+                it is neither saved nor synchronised in {SITE.name}
+              </strong>
+              , and it does not create a support request.
+            </li>
+            <li>
+              Never share your password or a code received by text message or
+              email.
+            </li>
+          </ul>
+          <h3>By email, from the application</h3>
           <ol>
             <li>
-              Open <strong>Organisation, then Support</strong>.
+              Open <strong>Organisation, then Support</strong>, “By email”
+              section.
             </li>
             <li>
               Choose a category (Using the app, Subscription, Technical problem,
@@ -431,9 +699,9 @@ const content: DocumentContent = {
             administrators have access to Support; a seller only if they have
             been given the “Contact customer support” right.
           </p>
-          <h3>By email</h3>
+          <h3>No access to your shop</h3>
           <p>
-            If you cannot access your shop, write to <MailLink to="support" />{" "}
+            Message us on WhatsApp, or write to <MailLink to="support" />,
             stating the name of your shop, the screen concerned and what you
             tried. The other contacts are on the{" "}
             <Link href="/en/contact">Contact</Link> page.
