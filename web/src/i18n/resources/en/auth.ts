@@ -82,7 +82,6 @@ const authEn: Translation<typeof authFr> = {
   },
   verify: {
     metaTitle: "Confirm my email address",
-    confirmToAccess: "Confirm your email address to access your account.",
     linkSent: "A confirmation link has been sent to {{email}}.",
     missingToken:
       "Incomplete confirmation link. Open the link you received by email again, in full.",

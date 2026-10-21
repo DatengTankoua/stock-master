@@ -10,10 +10,12 @@ import { REORDER_EXAMPLE, STOCK_EXAMPLE } from "./example";
 // Guide pratique « gérer le stock d'une boutique ». Sections 1 à 6 : bonnes
 // pratiques GÉNÉRALES, valables sans logiciel. Section 8 : opérations de
 // Stock Master VÉRIFIÉES dans le code (produits, date de péremption et
-// seuil de stock faible facultatifs, ajout de stock, ventes, correction des
-// erreurs de saisie, statuts et alertes de stock, Analyse, droits), puis un
-// seul bloc « À noter à part » pour ce qui ne s'y enregistre pas (retours,
-// pertes, lots, comptages). Essai : attribué
+// seuil de stock faible facultatifs, ajout de stock, lots et pertes,
+// ventes, correction des erreurs de saisie, statuts et alertes de stock,
+// Analyse, droits), puis un seul bloc « À noter à part » pour ce qui ne s'y
+// enregistre pas (retours, pertes des produits sans lots, comptages). Lots,
+// pertes et alertes de péremption : activés pour tous les commerces
+// (confirmé par le propriétaire le 21 octobre 2026). Essai : attribué
 // à la création du commerce, donc à l'inscription d'un nouveau compte
 // (`OrganizationsService.createOwnerOrganization`), jamais à un membre
 // invité. Les noms de boutons sont ceux de l'interface française.
@@ -340,11 +342,15 @@ const content: ArticleContent = {
               comme à l&apos;étape 1.
             </li>
             <li>
-              Une date de péremption facultative peut être indiquée sur la fiche
-              ; une date dépassée est signalée sur la fiche, sans bloquer les
-              ventes. Elle vaut pour toute la fiche : si deux arrivages
-              n&apos;ont pas la même date, les lots ne sont pas suivis
-              séparément.
+              Une date de péremption facultative peut être indiquée sur la
+              fiche. Elle vaut pour toute la fiche et ne bloque pas les ventes,
+              même dépassée ; elle déclenche les alertes de péremption.
+            </li>
+            <li>
+              Si deux arrivages n&apos;ont pas la même date, activez le{" "}
+              <Link href="/guide#lots">suivi par lots</Link> : chaque lot garde
+              sa date, la vente propose d&apos;abord la péremption la plus
+              proche, et un lot périmé ne peut plus être vendu.
             </li>
           </ul>
 
@@ -359,6 +365,15 @@ const content: ArticleContent = {
             <li>
               <strong>Entrées</strong> : « Modifier » sur le produit, puis «
               Stock supplémentaire à ajouter » (droit « Ajuster le stock »).
+              Pour un produit suivi par lots : « Nouveau lot » ou « Recevoir »
+              dans la section « Lots » de la fiche.
+            </li>
+            <li>
+              <strong>Pertes</strong> (produit suivi par lots) : « Enregistrer
+              une perte » sur le lot, avec le motif (péremption, casse, autre).
+              Une perte fait baisser le stock sans être une vente ; une erreur
+              se corrige avec « Corriger ». Voir le{" "}
+              <Link href="/guide#lots">guide d&apos;utilisation</Link>.
             </li>
             <li>
               <strong>Ventes</strong> : « Enregistrer une vente » sur le
@@ -462,18 +477,18 @@ const content: ArticleContent = {
               n&apos;est pas un suivi des retours.
             </li>
             <li>
-              Les pertes : produits abîmés, périmés, testeurs ouverts, vols
-              constatés.
+              Les pertes d&apos;un produit <strong>sans lots</strong> (produits
+              abîmés, périmés, testeurs ouverts, vols constatés) : elles ne
+              s&apos;enregistrent que sur un lot.
             </li>
-            <li>
-              Les lots ayant des dates de péremption différentes et les
-              résultats de vos comptages.
-            </li>
+            <li>Les résultats de vos comptages.</li>
           </ul>
           <p>
-            Le stock affiché ne baisse que par une vente : dans l&apos;exemple
-            ci-dessus, l&apos;application indique {ex.afterSales} unités pour{" "}
-            {ex.remaining} sur l&apos;étagère. Tenez compte de ces notes lors de
+            Pour un produit sans lots, le stock affiché ne baisse que par une
+            vente : dans l&apos;exemple ci-dessus, l&apos;application indique{" "}
+            {ex.afterSales} unités pour {ex.remaining} sur l&apos;étagère. Pour
+            un produit suivi par lots, enregistrez la perte : le stock affiché
+            rejoint alors l&apos;étagère. Tenez compte de ces notes lors de
             chaque comptage.
           </p>
         </>

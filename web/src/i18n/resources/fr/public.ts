@@ -56,6 +56,10 @@ const publicFr = {
   },
   // Contact WhatsApp : pied de page et fenêtre flottante. Aucune promesse
   // de réponse immédiate ni de présence permanente.
+  social: {
+    title: "Suivez-nous",
+    linkLabel: "{{network}} (nouvel onglet)",
+  },
   whatsapp: {
     lead: "Écrivez-nous sur WhatsApp à toute heure.",
     linkLabel: "WhatsApp : {{number}}",
@@ -131,7 +135,7 @@ const publicFr = {
       title: "Tout pour gérer votre boutique au quotidien",
       stock: {
         title: "Gérer vos produits et votre stock",
-        text: "Rangez le riz, l'huile et les savons par catalogue, avec photo, prix d'achat et prix de vente. Chaque vente met à jour le stock ; les produits presque épuisés ou en rupture sont signalés selon vos droits.",
+        text: "Rangez le riz, l'huile et les savons par catalogue, avec photo, prix d'achat et prix de vente. Chaque vente met à jour le stock ; les produits presque épuisés ou en rupture sont signalés selon vos droits. Fixez un seuil de stock faible et une date de péremption par produit, ou suivez vos lots : la vente propose d'abord la date la plus proche, un lot périmé n'est plus vendu, et les pertes sont enregistrées à part des ventes.",
       },
       sales: {
         title: "Suivre vos ventes",
@@ -151,7 +155,7 @@ const publicFr = {
       },
       notifications: {
         title: "Retrouver les alertes et l'aide",
-        text: "La cloche rassemble les notifications correspondant à vos droits. Besoin d'aide sur une vente ? Le propriétaire, l'administrateur ou un vendeur autorisé peut écrire depuis Organisation → Assistance.",
+        text: "La cloche rassemble les notifications correspondant à vos droits, dont les alertes de péremption. Besoin d'aide ? Écrivez-nous sur WhatsApp, ou depuis Organisation → Assistance (propriétaire, administrateur ou vendeur autorisé).",
       },
       alsoIncluded:
         "À votre façon : français ou anglais, mode clair ou sombre, logo et couleurs du commerce. Aussi inclus : corbeille et convertisseur euro ↔ franc CFA.",

@@ -310,10 +310,15 @@ const content: ArticleContent = {
               as in step 1.
             </li>
             <li>
-              An optional expiry date can be entered on the product; a passed
-              date is flagged on the product page, without blocking sales. It
-              applies to the whole product: if two deliveries have different
-              dates, batches are not tracked separately.
+              An optional expiry date can be entered on the product. It applies
+              to the whole product and does not block sales, even once passed;
+              it triggers expiry alerts.
+            </li>
+            <li>
+              If two deliveries have different dates, enable{" "}
+              <Link href="/en/guide#lots">batch tracking</Link>: each batch
+              keeps its date, the sale suggests the nearest expiry first, and an
+              expired batch can no longer be sold.
             </li>
           </ul>
 
@@ -327,7 +332,16 @@ const content: ArticleContent = {
           <ul>
             <li>
               <strong>Deliveries</strong>: “Edit” on the product, then
-              “Additional stock to add” (“Adjust stock” right).
+              “Additional stock to add” (“Adjust stock” right). For a product
+              tracked by batches: “New batch” or “Receive” in the product&apos;s
+              “Batches” section.
+            </li>
+            <li>
+              <strong>Losses</strong> (product tracked by batches): “Record a
+              loss” on the batch, with the reason (expiry, breakage, other). A
+              loss lowers the stock without being a sale; a mistake is fixed
+              with “Correct”. See the{" "}
+              <Link href="/en/guide#lots">user guide</Link>.
             </li>
             <li>
               <strong>Sales</strong>: “Record a sale” on the product. Each sale
@@ -426,17 +440,18 @@ const content: ArticleContent = {
               track returns.
             </li>
             <li>
-              Losses: damaged or expired products, opened testers, theft found.
+              Losses on a product <strong>without batches</strong> (damaged or
+              expired products, opened testers, theft found): losses can only be
+              recorded on a batch.
             </li>
-            <li>
-              Batches with different expiry dates, and the results of your
-              counts.
-            </li>
+            <li>The results of your counts.</li>
           </ul>
           <p>
-            The stock shown only goes down through a sale: in the example above,
-            the app shows {ex.afterSales} units while the shelf holds{" "}
-            {ex.remaining}. Take these notes into account at every count.
+            For a product without batches, the stock shown only goes down
+            through a sale: in the example above, the app shows {ex.afterSales}{" "}
+            units while the shelf holds {ex.remaining}. For a product tracked by
+            batches, record the loss: the stock shown then matches the shelf.
+            Take these notes into account at every count.
           </p>
         </>
       ),

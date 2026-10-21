@@ -8,13 +8,15 @@ Application collaborative de gestion des ventes et du stock pour **Stock Master*
 
 1. [Fonctionnalités](#fonctionnalités)
 2. [Stack technique](#stack-technique)
-3. [Prérequis](#prérequis)
-4. [Démarrage rapide](#démarrage-rapide-dev)
-5. [Structure du monorepo](#structure-du-monorepo)
-6. [Rôles utilisateurs](#rôles-utilisateurs)
-7. [Commandes utiles](#commandes-utiles)
-8. [Déploiement production](#déploiement-production)
-9. [CI/CD et rollback](#cicd-et-rollback)
+3. [Carte du dépôt](#carte-du-dépôt)
+4. [Démarrage local](#démarrage-local)
+5. [Variables et services externes](#variables-et-services-externes)
+6. [Tests et recette](#tests-et-recette)
+7. [Rôles utilisateurs](#rôles-utilisateurs)
+8. [Conventions et circuit de travail](#conventions-et-circuit-de-travail)
+9. [Dépannage](#dépannage)
+10. [Déploiement production](#déploiement-production)
+11. [CI/CD et rollback](#cicd-et-rollback)
 
 ---
 
@@ -27,181 +29,371 @@ Application collaborative de gestion des ventes et du stock pour **Stock Master*
 - **Convertisseur EUR ↔ FCFA** intégré (taux fixe officiel : 1 EUR = 655,957 XOF)
 - **Notifications temps réel** via WebSocket (Socket.IO) à chaque création/modification
 - **PWA** installable sur Android, iOS et desktop
-- Authentification JWT (register / login) avec deux rôles : Admin et Vendeur
+- **Commerces multi-membres** : rôles Propriétaire, Administrateur et Vendeur,
+  droits délégables un par un, invitations par lien
+- **Péremption et stock** : date de péremption et seuil de stock faible par
+  produit, suivi par lots (vente FEFO, lots remis au client), mise à l'écart,
+  pertes et alertes de péremption — lots et alertes activables par commerce
+  ([voir plus bas](#fonctionnalités-activables-par-commerce))
+- **Ventes hors connexion** avec file locale, conflits visibles et
+  régularisation par un responsable
+- **Notifications push** sur l'appareil, centre de notifications
+- **Contact WhatsApp** prioritaire (lien `wa.me`, sans API), réseaux sociaux
+  officiels et assistance par e-mail
 
 ## Stack technique
 
 | Couche | Technologie |
 |---|---|
 | API | NestJS 11 · TypeScript · Mongoose · `@nestjs/jwt` · Socket.IO |
-| Web | Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS · `@base-ui/react` |
-| Base de données | MongoDB 7 |
-| Stockage images | MinIO (S3-compatible) en dev · Supabase Storage en prod |
-| Reverse proxy | Nginx (prod uniquement) |
+| Web | Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · `@base-ui/react` |
+| Base de données | MongoDB 7 (replica set, requis par les transactions) |
+| Stockage images | S3 compatible, bucket privé et URL signées : MinIO en dev, Cloudflare R2 en production |
+| Reverse proxy | Nginx (pile Docker de production uniquement) |
 | Monorepo | pnpm workspaces |
 | Qualité | Husky + lint-staged + ESLint + Prettier |
 
-## Prérequis
+## Carte du dépôt
 
-| Outil | Version minimale | Installation |
+| Chemin | Contenu | Points d'entrée |
 |---|---|---|
-| Node.js | 22+ | [nodejs.org](https://nodejs.org) |
-| pnpm | 11+ | `corepack enable` |
-| Docker Desktop | — | [docker.com](https://www.docker.com/products/docker-desktop) |
-| Git | — | [git-scm.com](https://git-scm.com) |
-
-## Démarrage rapide (dev)
-
-### 1 · Cloner le dépôt
-
-```bash
-git clone <repo-url>
-cd heyama-test
-```
-
-### 2 · Installer les dépendances
-
-```bash
-pnpm install
-```
-
-### 3 · Démarrer MongoDB et MinIO
-
-```bash
-docker compose up -d
-```
-
-Services lancés :
-- **MongoDB** → `mongodb://localhost:27017`
-- **MinIO (S3)** → `http://localhost:9000`
-- **MinIO Console** → `http://localhost:9001` (admin : `minioadmin` / `minioadmin123`)
-- **Mongo Express** → `http://localhost:8081`
-
-### 4 · Créer le bucket MinIO
-
-1. Ouvrir [http://localhost:9001](http://localhost:9001)
-2. Se connecter avec `minioadmin` / `minioadmin123`
-3. **Buckets → Create Bucket** → nom : `stockmaster-objects`
-4. Aller dans le bucket → **Access Policy** → passer en `public`
-
-> Cette étape est nécessaire pour que les images des produits soient accessibles publiquement.
-
-### 5 · Configurer les variables d'environnement
-
-```bash
-cp api/.env.example api/.env       # Les valeurs par défaut fonctionnent avec docker-compose.yml
-cp web/.env.example web/.env.local # NEXT_PUBLIC_API_URL=http://localhost:4000
-```
-
-### 6 · Lancer les serveurs de développement
-
-Dans deux terminaux séparés :
-
-```bash
-# Terminal 1 — API NestJS (http://localhost:4000)
-pnpm --filter api start:dev
-
-# Terminal 2 — Web Next.js (http://localhost:3000)
-pnpm --filter web dev
-```
-
-Ou depuis les dossiers respectifs :
-
-```bash
-cd api && pnpm start:dev
-cd web && pnpm dev
-```
-
-### 7 · Créer le premier compte Admin
-
-L'API étant lancée, créer un compte via `curl` ou [Postman](https://www.postman.com) :
-
-```bash
-curl -X POST http://localhost:4000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Admin", "email": "admin@example.com", "password": "motdepasse"}'
-```
-
-> Le premier utilisateur enregistré aura le rôle `admin` par défaut. Modifiable directement en base via Mongo Express.
+| `api/src/` | API NestJS, un dossier par domaine (`auth`, `organizations`, `products`, `sales`, `subscriptions`, `push`, `notifications`, `support`, `legal`, `trash`…) | `main.ts`, `app.module.ts` ; gardes globales dans `guards/` et `common/` |
+| `api/src/migrations/` | Migrations idempotentes et outils opérateur | `predeploy-migrations.ts` (liste `PREDEPLOY_MIGRATIONS`) |
+| `api/test/` | E2E Jest (MongoDB éphémère) ; `recipe/` = recette isolée | [api/README.md](api/README.md#tests), [api/test/recipe/README.md](api/test/recipe/README.md) |
+| `web/src/app/` | Pages Next.js : publiques (FR, et EN sous `/en`), `auth/`, application sous `app/` | `layout.tsx` (racine), `app/layout.tsx` (shell connecté), `proxy.ts` (langue, CSP) |
+| `web/src/i18n/` | Textes FR/EN : `resources/` (interface), `documents/` (guides, pages juridiques) | `resources/index.ts` |
+| `web/src/lib/` | Client API, hors ligne, push, règles partagées | `api.ts`, `legal/site-identity.ts` (coordonnées, documents publics) |
+| `web/scripts/` | Contrôles web (i18n, archive juridique, tests ciblés) | [web/README.md](web/README.md#contrôles-et-tests) |
+| `docs/architecture/` | Un rapport par lot : règles métier, migrations, limites | Rapport du lot concerné |
+| `docker-compose.yml` | Services de dev : MongoDB (`rs0`), MinIO, Mongo Express | — |
+| `scripts/mongo/init-replica-set.js` | Initialisation idempotente du replica set | Lancé par le service `mongo-rs-init` |
 
 ---
 
-## Structure du monorepo
+## Démarrage local
 
+### Trois façons de faire tourner Stock Master
+
+| Usage | Données | Commande de départ | Où |
+|---|---|---|---|
+| **Développement** | Persistantes, dans les volumes Docker | `docker compose up -d` puis API et web en mode dev | Ci-dessous |
+| **Recette isolée** | Fictives, MongoDB en mémoire, supprimées à l'arrêt | `node api/test/recipe/recipe.js start` | [api/test/recipe/README.md](api/test/recipe/README.md) |
+| **Tests automatisés** | Éphémères, jamais la base de dev | `pnpm --filter api test`, `pnpm --filter api test:e2e` | [Tests et recette](#tests-et-recette) |
+
+La recette et les tests n'utilisent pas Docker et ne touchent jamais la base
+de développement.
+
+### Prérequis
+
+| Outil | Version | Remarque |
+|---|---|---|
+| Node.js | 22 | Version de la CI |
+| pnpm | 11.18.0 | Fixée par `packageManager` : `corepack enable` suffit |
+| Docker Desktop | avec Docker Compose | Développement uniquement |
+| Git | — | — |
+
+Les commandes se lancent depuis la racine du dépôt. Quand la syntaxe
+PowerShell diffère de Bash/WSL, les deux sont données.
+
+### 1 · Installer
+
+```bash
+git clone https://github.com/DatengTankoua/stock-master.git
+cd stock-master
+pnpm install
 ```
-heyama-test/
-├── api/                        # Backend NestJS
-│   ├── src/
-│   │   ├── auth/               # JWT, guards, stratégies Passport
-│   │   ├── users/              # Schéma User, rôles Admin/Seller
-│   │   ├── sections/           # Catégories hiérarchiques (CRUD admin)
-│   │   ├── products/           # Catalogue + métriques calculées
-│   │   ├── sales/              # Enregistrement ventes, décrémentation stock
-│   │   ├── audit/              # Journal immuable de chaque modification
-│   │   ├── analytics/          # Agrégations MongoDB : KPIs, classements
-│   │   ├── events/             # Passerelle WebSocket (Socket.IO)
-│   │   ├── s3/                 # Upload/suppression images (MinIO/S3)
-│   │   └── trash/              # Suppression douce + restauration
-│   ├── .env.example
-│   └── Dockerfile
-├── web/                        # Frontend Next.js
-│   ├── src/
-│   │   ├── app/                # Pages Next.js App Router
-│   │   ├── components/         # Composants UI réutilisables
-│   │   ├── hooks/              # useProducts, useSections, useSocket, useTrash…
-│   │   └── lib/                # api.ts, auth.ts, currency.ts, utils.ts
-│   ├── .env.example
-│   └── Dockerfile
-├── nginx/nginx.conf            # Reverse proxy (prod)
-├── docker-compose.yml          # Infra dev (MongoDB + MinIO)
-├── docker-compose.prod.yml     # Stack complète de production
-├── .github/workflows/
-│   ├── deploy.yml              # Contrôle de santé après déploiement (sans rollback auto)
-│   └── rollback.yml            # Rollback manuel à cible explicite (workflow_dispatch)
-└── pnpm-workspace.yaml
+
+### 2 · Créer les fichiers d'environnement
+
+Sans écraser un fichier existant :
+
+```bash
+# Bash / WSL
+cp -n api/.env.example api/.env
+cp -n web/.env.example web/.env.local
 ```
+
+```powershell
+# PowerShell
+if (-not (Test-Path api/.env)) { Copy-Item api/.env.example api/.env }
+if (-not (Test-Path web/.env.local)) { Copy-Item web/.env.example web/.env.local }
+```
+
+Les valeurs d'exemple pointent vers les services locaux et suffisent pour
+démarrer. Leur détail est dans les `.env.example` eux-mêmes (voir
+[Variables et services externes](#variables-et-services-externes)).
+
+### 3 · Démarrer MongoDB (replica set) et MinIO
+
+```bash
+docker compose up -d
+docker compose ps -a
+```
+
+- `mongo` démarre avec `--replSet rs0`. Le service ponctuel `mongo-rs-init`
+  initialise le replica set une seule fois : il doit être `Exited (0)`.
+  Détails : [phase-0b7c-local-mongodb-replica-set.md](docs/infrastructure/phase-0b7c-local-mongodb-replica-set.md).
+- L'URI d'exemple (`replicaSet=rs0&directConnection=true`) est celle qui
+  convient depuis l'hôte.
+
+### 4 · Créer le bucket MinIO (une seule fois)
+
+En ligne de commande, avec le client `mc` inclus dans l'image MinIO
+(identifiants de dev de `docker-compose.yml`) :
+
+```bash
+docker compose exec minio mc alias set local http://localhost:9000 minioadmin minioadmin123
+docker compose exec minio mc mb local/stockmaster-objects
+docker compose exec minio mc anonymous get local/stockmaster-objects   # attendu : private
+```
+
+Ou depuis la console [http://localhost:9001](http://localhost:9001)
+(`minioadmin` / `minioadmin123`) : **Buckets → Create Bucket** →
+`stockmaster-objects` (valeur de `S3_BUCKET`).
+
+Le bucket reste **privé** : l'API signe une URL à chaque lecture d'image.
+Sans bucket, l'ajout de photo échoue, donc la création de produit aussi.
+
+### 5 · Appliquer les migrations locales
+
+Elles créent les mêmes index qu'en production et installent la garde des lots
+et les index des alertes (sans rien activer). Le script ne lit pas `.env` :
+l'URI se passe dans le shell.
+
+```bash
+# Bash / WSL
+pnpm --filter api build
+MONGODB_URI='mongodb://localhost:27017/stockmaster?replicaSet=rs0&directConnection=true' \
+  pnpm --filter api migrate:predeploy
+```
+
+```powershell
+# PowerShell
+pnpm --filter api build
+$env:MONGODB_URI = 'mongodb://localhost:27017/stockmaster?replicaSet=rs0&directConnection=true'
+pnpm --filter api migrate:predeploy
+Remove-Item Env:MONGODB_URI
+```
+
+Idempotentes : à relancer sans risque après chaque `git pull` qui ajoute une
+migration.
+
+### 6 · Lancer l'API et le web
+
+Deux terminaux :
+
+```bash
+pnpm --filter api start:dev   # API, rechargement automatique
+pnpm --filter web dev         # web
+```
+
+L'API lit `api/.env` **au démarrage** : redémarrer après une modification.
+Le web lit les `NEXT_PUBLIC_*` au lancement de `pnpm dev` (et au build).
+
+### 7 · URL et ports
+
+| Service | URL |
+|---|---|
+| Web | http://localhost:3000 |
+| API (santé : `/health`) | http://localhost:4000 |
+| MongoDB | `mongodb://localhost:27017` (replica set `rs0`) |
+| MinIO API / console | http://localhost:9000 · http://localhost:9001 |
+| Mongo Express | http://localhost:8081 |
+
+### 8 · Premier compte
+
+**Option A — compte de développement persistant.** L'inscription locale fonctionne
+sans réseau grâce à la vérification anti-robot simulée (acceptée seulement
+quand toutes les origines configurées sont locales).
+
+1. Dans `api/.env` : `PUBLIC_REGISTRATION_ENABLED=true` et
+   `TURNSTILE_SIMULATED=true`. Dans `web/.env.local` :
+   `NEXT_PUBLIC_REGISTRATION_ENABLED=true` et
+   `NEXT_PUBLIC_TURNSTILE_SIMULATED=true`. Redémarrer l'API et le web.
+2. S'inscrire sur http://localhost:3000/auth/register : le commerce est créé,
+   vous en êtes propriétaire (essai gratuit).
+3. Sans `RESEND_API_KEY`, aucun e-mail ne part et la connexion refuse une
+   adresse non confirmée. Confirmer **votre** compte local à la main :
+
+   ```bash
+   docker compose exec mongo mongosh stockmaster --quiet --eval 'db.users.updateOne({ email: "vous@exemple.test" }, { $set: { emailVerifiedAt: new Date() } })'
+   ```
+
+   Résultat attendu : `matchedCount: 1, modifiedCount: 1`. La commande est la
+   même en PowerShell 7.3 ou plus récent. Ou via Mongo Express : base
+   `stockmaster`, collection `users`, champ `emailVerifiedAt`.
+
+**Option B — comptes fictifs prêts** (propriétaire, administrateur, vendeur,
+commerces expirés…) : la [recette isolée](api/test/recipe/README.md). Rien
+n'est conservé après l'arrêt.
+
+### 9 · Arrêter, redémarrer, effacer
+
+| Action | Commande | Données |
+|---|---|---|
+| Arrêter API et web | `Ctrl+C` dans chaque terminal | Conservées |
+| Arrêter les conteneurs | `docker compose stop` | Conservées |
+| Arrêter et retirer les conteneurs | `docker compose down` | **Conservées** (volumes gardés) |
+| Redémarrer | `docker compose up -d`, puis l'étape 6 | Retrouvées ; `mongo-rs-init` ne réinitialise rien |
+
+Les données de dev vivent dans les volumes Docker `mongo_data` et
+`minio_data`, préfixés par le nom du projet Compose (le nom du dossier) :
+`docker volume ls`.
+
+> **Effacer toutes les données locales** (irréversible, hors parcours
+> normal) : `docker compose down -v` supprime ces volumes. Ne jamais
+> l'utiliser pour « réparer » un démarrage : voir [Dépannage](#dépannage).
+
+### Activer les lots et les alertes en local
+
+Après l'étape 5, dans `api/.env`, puis redémarrer l'API :
+
+```env
+PRODUCT_BATCHES_ENABLED=true
+PRODUCT_BATCHES_ORGANIZATIONS=all
+EXPIRY_ALERTS_ENABLED=true
+EXPIRY_ALERTS_ORGANIZATIONS=all
+```
+
+`all` vaut pour tous les commerces **de votre base locale**. Pour un seul
+commerce, mettre son identifiant d'organisation. Règles complètes :
+[Fonctionnalités activables par commerce](#fonctionnalités-activables-par-commerce).
+
+---
+
+## Variables et services externes
+
+Source de référence : les commentaires de
+[api/.env.example](api/.env.example) et [web/.env.example](web/.env.example)
+(obligatoire ou facultatif, bornes, défauts). Résumé :
+
+| Besoin | Variables | Sans configuration |
+|---|---|---|
+| **Démarrer** | API : `MONGODB_URI`, `JWT_SECRET`, `CORS_ORIGIN`, `PUBLIC_APP_URL` · web : `NEXT_PUBLIC_API_URL` | Les exemples suffisent en local |
+| Photos et logos | `S3_*` (MinIO local) | Ajout de photo, donc de produit, impossible |
+| Inscription | `PUBLIC_REGISTRATION_ENABLED`, Turnstile (`TURNSTILE_*`, `NEXT_PUBLIC_TURNSTILE_*`) | Inscription refusée (403 ou 503). Simulation locale : `TURNSTILE_SIMULATED=true` |
+| E-mails | `RESEND_API_KEY`, `EMAIL_FROM` | Comptes créés non confirmés ; réinitialisation du mot de passe indisponible |
+| Push | `WEB_PUSH_ENABLED`, `WEB_PUSH_VAPID_*` | Push désactivé ; le centre de notifications fonctionne |
+| Lots, alertes | `PRODUCT_BATCHES_*`, `EXPIRY_ALERTS_*` | Désactivés (aucun commerce) |
+| Paiements | `PAYMENT_PROVIDER_ACTIVE`, `SASPAY_*` | `none` : 503. Fournisseurs simulés : recette isolée seulement |
+| Proxy | `TRUST_PROXY_*` | Aucun proxy approuvé (correct en local) |
+
+- **Moment de lecture.** L'API lit ses variables au démarrage. Côté web,
+  `NEXT_PUBLIC_*` et `S3_HOSTNAME` sont figées au build (et au lancement de
+  `pnpm dev`) ; `CSP_IMAGE_ORIGINS` est lue à l'exécution.
+- **Aucune valeur de production** ne figure dans les exemples ni ne doit y
+  être copiée.
+
+---
+
+## Tests et recette
+
+| Quoi | Commande | Référence |
+|---|---|---|
+| Tests unitaires API (tous / ciblés) | `pnpm --filter api test` · `pnpm --filter api test -- <motif>` | [api/README.md](api/README.md#tests) |
+| E2E API (MongoDB éphémère, sans Docker) | `node api/test/recipe/recipe.js isolated api-e2e <motif>` | [api/README.md](api/README.md#tests) |
+| Contrôles web (i18n, WhatsApp, push…) | `pnpm --filter web test:i18n`, `test:whatsapp-contact`… | [web/README.md](web/README.md#contrôles-et-tests) |
+| Recette manuelle (comptes fictifs, lots, alertes, paiements simulés) | `node api/test/recipe/recipe.js start --product-batches --expiry-alerts` | [api/test/recipe/README.md](api/test/recipe/README.md) |
+
+**En CI** (`.github/workflows/ci.yml`, sur push et PR vers `main` et `dev`) :
+
+- API : `pnpm lint`, `pnpm test` (unitaires), `pnpm build` ;
+- web : `pnpm lint`, `test:i18n`, `i18n:coverage`, `test:push-reconnect`,
+  `pnpm build`, puis `legal-archive.mjs check`.
+
+**Hors CI, à lancer à la main** : les e2e API, les autres scripts
+`web/scripts/test-*.mjs` (dont `test:whatsapp-contact`), la recette et ses
+campagnes navigateur (Playwright non installé par le dépôt), et les
+vérifications sur vrais téléphones.
+
+---
 
 ## Rôles utilisateurs
 
-| Rôle | Permissions |
+| Rôle | Droits |
 |---|---|
-| **Admin** | CRUD complet : sections, produits, consultation analytics |
-| **Seller** | Enregistrement des ventes uniquement |
+| **Propriétaire** | Tous les droits, abonnement et transfert de propriété |
+| **Administrateur** | Tous les droits délégables |
+| **Vendeur** | Enregistrer des ventes et voir les siennes ; autres droits ajoutés un par un |
 
-## Commandes utiles
+Les droits effectifs sont recalculés par l'API à chaque requête
+(`effectivePermissions`) ; détails :
+[phase-1-7a-permission-infrastructure.md](docs/architecture/phase-1-7a-permission-infrastructure.md).
+
+---
+
+## Conventions et circuit de travail
+
+- **FR/EN.**
+  - Aucun texte visible en dur : interface dans
+    `web/src/i18n/resources/{fr,en}`, guides et pages juridiques dans
+    `web/src/i18n/documents/`.
+  - Les pages publiques ont une URL par langue (anglais sous `/en`).
+  - `test:i18n` et `i18n:coverage` doivent passer.
+- **Textes juridiques archivés.** Toute modification d'un texte soumis à
+  acceptation exige une nouvelle version et son archivage
+  ([Documents juridiques versionnés](#documents-juridiques-versionnés-1-16c2)).
+- **Permissions.**
+  - L'API est seule juge : gardes et `effectivePermissions` à chaque requête.
+    Le web ne fait que masquer.
+  - Une nouvelle permission passe par les catalogues de permissions
+    ([phase-1-7b](docs/architecture/phase-1-7b-permission-application.md)).
+- **Isolation des commerces.**
+  - L'organisation vient toujours du contexte authentifié, jamais du corps de
+    la requête.
+  - Un objet d'un autre commerce répond 404
+    ([phase-1-4e](docs/architecture/phase-1-4e-multitenant-isolation-gate.md)).
+- **Migrations.**
+  - Idempotentes, sans activation de fonctionnalité.
+  - Celles qu'exige le démarrage entrent dans `PREDEPLOY_MIGRATIONS`.
+- **Tests.**
+  - Unitaires `*.spec.ts` à côté du code ; e2e `api/test/*.e2e-spec.ts` ;
+    scripts web `web/scripts/test-*.mjs`.
+  - Chaque lot documente ses règles et ses contrôles dans
+    `docs/architecture/`.
+
+**Circuit des branches.**
+
+1. Créer une branche de travail (`feature/…`, `fix/…`, `chore/…`) depuis
+   `origin/dev`.
+2. Ouvrir une PR vers `dev`.
+3. Ouvrir ensuite une PR de `dev` vers `main`. Un push sur `main` déploie
+   (Railway, Vercel) : voir [CI/CD et rollback](#cicd-et-rollback).
+
+**Avant une PR :**
 
 ```bash
-# Lancer toute l'infra dev (MongoDB + MinIO)
-docker compose up -d
-
-# Arrêter l'infra dev
-docker compose down
-
-# Installer toutes les dépendances du monorepo
-pnpm install
-
-# Lancer l'API en dev (http://localhost:4000)
-pnpm --filter api start:dev
-
-# Lancer le web en dev (http://localhost:3000)
-pnpm --filter web dev
-
-# Linter les deux packages
 pnpm lint
-
-# Formatter tout le monorepo
-pnpm format
-
-# Build de l'API
-pnpm --filter api build
-
-# Build du web
-pnpm --filter web build
-
-# Tests API
-pnpm --filter api test
-pnpm --filter api test:e2e
+pnpm --filter api test && pnpm --filter api build
+pnpm --filter web test:i18n && pnpm --filter web i18n:coverage && pnpm --filter web build
+node web/scripts/legal-archive.mjs check --next-dir web/.next   # si une page publique a changé
 ```
+
+Ajouter les e2e et les scripts web du domaine touché, ainsi qu'un rapport
+dans `docs/architecture/` pour tout changement de règle.
+
+---
+
+## Dépannage
+
+| Symptôme | Cause probable | Action |
+|---|---|---|
+| `EADDRINUSE`, ou Compose « port is already allocated » | Port 3000, 4000, 27017, 9000/9001 ou 8081 déjà pris | Trouver le processus : `netstat -ano \| findstr :4000` (Windows) ou `lsof -i :4000`. Autres ports : `PORT` (API), `pnpm --filter web exec next dev -p 3001` (web, puis ajuster `CORS_ORIGIN`, `PUBLIC_APP_URL` et `NEXT_PUBLIC_API_URL`), `MONGO_SERVICE_HOST_PORT` (MongoDB, puis `MONGODB_URI`) |
+| « Cannot connect to the Docker daemon », erreur 500 de `dockerDesktopLinuxEngine` | Docker Desktop arrêté ou en cours de démarrage | Démarrer Docker Desktop, attendre « Engine running », relancer `docker compose up -d` |
+| API bloquée à la connexion MongoDB, ou « Transaction numbers are only allowed on a replica set member » | Replica set non initialisé, ou URI sans `replicaSet=rs0` | `docker compose ps -a` (`mongo-rs-init` doit être `Exited (0)`), `docker compose logs mongo-rs-init`, puis `docker compose up -d mongo-rs-init`. Contrôle : `docker compose exec mongo mongosh --quiet --eval "rs.status().ok"` → `1`. **Ne pas** supprimer le volume |
+| Index absent, activation des lots refusée, ou démarrage refusé en production | Migrations non appliquées | Étape 5 (`migrate:predeploy`) ; contrôles `--check` dans [Migrations](#migrations-à-exécuter-avant-lactivation-dune-version) |
+| `MONGODB_URI requis.` | Migration lancée sans l'URI dans le shell | Le script ne lit pas `.env` : étape 5 |
+| Inscription 403 ou 503, invitation 503 `INVITATION_LINK_UNAVAILABLE`, connexion « adresse non confirmée » | Variable absente | Étape 8 et [Variables et services externes](#variables-et-services-externes) |
+| Photo refusée, image absente | Bucket MinIO manquant ou MinIO arrêté | Étape 4 ; `docker compose ps` |
+| Seconde installation sur la même machine (ports ou noms de conteneur déjà pris) | MongoDB et Mongo Express sont paramétrables (`MONGO_SERVICE_CONTAINER_NAME`, `MONGO_SERVICE_HOST_PORT`, `MONGO_EXPRESS_CONTAINER_NAME`, `MONGO_EXPRESS_HOST_PORT`) ; MinIO ne l'est pas (nom `stockmaster-minio`, ports 9000/9001 fixes) | Nom de projet distinct (`docker compose -p <nom>`) et fichier de surcharge pour MinIO (`container_name`, `ports: !override`). Reporter les ports dans `MONGODB_URI` et `S3_ENDPOINT`. Côté web, si MinIO n'est pas sur 9000 : `CSP_IMAGE_ORIGINS=http://localhost:<port>`, sinon les photos sont bloquées par la CSP |
+| « Another next dev server is already running » | Next 16 refuse un second `next dev` dans le même dossier `web/` | Utiliser le serveur déjà lancé, ou l'arrêter d'abord |
+| Changement de `.env` sans effet | Lecture au démarrage ou au build | Redémarrer l'API ; relancer `pnpm dev`, ou reconstruire le web |
+
+Règles métier détaillées : rapports de `docs/architecture/` (un par lot,
+par exemple
+[product-batches-expiry-losses.md](docs/architecture/product-batches-expiry-losses.md)).
+
+---
 
 ## Déploiement production
 
@@ -212,7 +404,7 @@ Les services sont déployés séparément sur des plateformes managées :
 | `web/` (Next.js) | Vercel | Push sur `main` (intégration GitHub native) |
 | `api/` (NestJS) | Railway | Push sur `main` (intégration GitHub native) |
 | Base de données | MongoDB Atlas | Managé |
-| Stockage images | Supabase Storage | Managé |
+| Stockage images | Cloudflare R2 (bucket privé, URL signées) | Managé |
 
 ### Variables d'environnement production
 
@@ -335,6 +527,17 @@ Elle lance dans l'ordre, et s'arrête au premier échec :
 | `create-legal-acceptance-indexes.js` | 1-16C.2 | Collections `legal_acceptances` et `legal_document_versions`, index `{ userId, acceptedAt }`. Non bloquante au démarrage |
 | `create-rate-limit-indexes.js` | 1-18C | Index TTL `expiresAt_1_ttl` de `rate_limit_buckets` (plafonds persistants par compte et par destinataire d'invitation). Migration d'index uniquement. Nettoyage : non bloquante au démarrage, l'exactitude des plafonds n'en dépend pas. Lecture seule : `--check` |
 | `create-invitation-account-token-index.js` | 1-18B | Index partiel `accountTokenHash_1` de `organizationinvitations` (lien de création de compte d'un invité). Migration d'index uniquement, aucune donnée. Index de performance, non bloquant au démarrage ; aussi déclaré dans le schéma (mêmes nom et options), donc compatible avec `autoIndex`. Lecture seule : `--check` |
+| `create-sale-history-indexes.js` | 1-20E | Historique paginé des ventes. Performance, non bloquant |
+| `create-product-page-indexes.js` | 1-20F | Liste paginée des produits. Performance, non bloquant |
+| `install-product-batches.js` | Lots A à C | Garde du suivi par lots (validateur, index des lots, des pertes et des régularisations). Équivaut à `migrate:product-batches -- --install --apply`. **N'active rien** |
+| `install-expiry-alerts.js` | Lot C | Index des alertes de péremption et première date de contrôle des cibles datées. Équivaut à `migrate:expiry-alerts -- --apply`. **N'active rien** |
+
+L'ordre réel est celui de `PREDEPLOY_MIGRATIONS`
+(`api/src/migrations/predeploy-migrations.ts`). Ces migrations sont
+idempotentes : Railway les rejoue à chaque déploiement sans effet si tout est
+en place. Les migrations des lots et des alertes ont été exécutées avec succès
+en production (information du propriétaire, 21 octobre 2026) : aucune
+exécution manuelle n'est nécessaire.
 
 **Échec partiel :** chaque migration s'exécute à part et s'arrête au premier
 échec. Les index déjà créés par les étapes précédentes **restent en place**
@@ -397,6 +600,47 @@ MONGODB_URI=<uri-atlas> node api/dist/migrations/create-support-request-indexes.
 Les autres migrations du dépôt (`migrate:*` dans `api/package.json`) sont
 décrites dans les rapports de leurs lots (`docs/architecture/`).
 
+### Fonctionnalités activables par commerce
+
+**Installer n'est pas activer.** Le pré-déploiement installe les structures
+(validateurs, index) ; il n'ouvre aucune fonctionnalité. L'activation passe par
+des variables du service API, lues à chaque requête :
+
+| Drapeau | Portée | Couvre |
+|---|---|---|
+| `PRODUCT_BATCHES_ENABLED` | `PRODUCT_BATCHES_ORGANIZATIONS` | Suivi par lots, vente par lots, mise à l'écart, pertes, régularisations |
+| `EXPIRY_ALERTS_ENABLED` | `EXPIRY_ALERTS_ORGANIZATIONS` | Alertes de péremption (lots et produits sans lots), réglage du délai |
+
+- Drapeau à `true` **et** portée explicite : liste d'identifiants
+  d'organisation (pilotes) ou `all`. Portée absente, vide ou invalide :
+  **aucun** commerce. Changer la portée demande un redémarrage de l'API.
+- Le web n'a pas de règle propre : il suit `features` de `/auth/context`.
+- État en production (information du propriétaire, 21 octobre 2026) : lots
+  et alertes activés pour **tous** les commerces ; push activé et testé sur
+  de vrais téléphones.
+- Détails :
+  [product-batches-expiry-losses.md § 6](docs/architecture/product-batches-expiry-losses.md).
+
+**Retour arrière après des pertes.** Désactiver un drapeau ou retirer un
+commerce de la portée est sûr et se fait sans changer de version (un commerce
+qui a déjà des produits suivis ne peut alors plus les vendre). En revanche,
+**dès qu'une perte est enregistrée, redéployer une API antérieure aux pertes
+n'est pas sûr** : sa purge écrirait un ajustement de stock faux et définitif.
+Corriger en avançant (nouvelle version compatible). Procédure et conditions :
+[product-batches-expiry-losses.md § 8](docs/architecture/product-batches-expiry-losses.md).
+
+**Limites connues.**
+
+- Hors ligne : seules les ventes ; pertes, mise à l'écart et réceptions
+  exigent une connexion. Les quantités par lot ne sont pas vérifiées hors
+  ligne ; un refus à la synchronisation devient un conflit visible
+  ([product-batches-sales.md § 4](docs/architecture/product-batches-sales.md)).
+- Push : messages génériques ; à la déconnexion, l'appareil est détaché
+  (préférences conservées) et rattaché sans nouvelle demande à la
+  reconnexion du même utilisateur
+  ([push-permission-reprompt.md](docs/architecture/push-permission-reprompt.md)).
+  Le centre de notifications reste la référence.
+
 ### Documents juridiques versionnés (1-16C.2)
 
 Les conditions d'utilisation, les conditions d'abonnement et la politique de
@@ -450,56 +694,4 @@ variables → Actions**) :
 | `VERCEL_PROJECT_ID` | Champ `projectId` dans `web/.vercel/project.json` |
 | `API_HEALTH_URL` | URL du endpoint `/health` de l'API Railway |
 | `WEB_HEALTH_URL` | URL de production du frontend Vercel |
-
-# 3. Install dependencies
-pnpm install
-
-# 4. Configure environment variables
-cp api/.env.example api/.env
-cp web/.env.example web/.env.local
-# defaults already match the docker-compose services, no edits needed for local dev
-
-# 5. Run the API and the web app (two terminals)
-pnpm --filter api start:dev   # http://localhost:4000
-pnpm --filter web dev         # http://localhost:3000
-```
-
-Open http://localhost:3000, create an object with an image — it appears
-instantly (via Socket.IO) on every open tab, including the one you're not
-using.
-
-## Environment variables
-
-See `api/.env.example` and `web/.env.example` for the full list. Local
-defaults are pre-wired to the `docker-compose.yml` services (MongoDB on
-`27017`, MinIO on `9000`).
-
-## Project structure
-
-```
-api/    NestJS REST API + WebSocket gateway
-web/    Next.js frontend
-```
-
-## Scripts
-
-From the repo root:
-
-```bash
-pnpm lint     # lint api + web
-pnpm format   # prettier --write on the whole repo
-```
-
-Per package:
-
-```bash
-pnpm --filter api test    # jest unit tests
-pnpm --filter api build   # nest build
-pnpm --filter web build   # next build
-```
-
-## CI
-
-GitHub Actions (`.github/workflows/ci.yml`) runs lint, tests and build for
-`api` and `web` on every push/PR to `main`/`dev`.
 

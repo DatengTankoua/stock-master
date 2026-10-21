@@ -84,8 +84,6 @@ const authFr = {
   },
   verify: {
     metaTitle: "Confirmer mon adresse email",
-    confirmToAccess:
-      "Confirmez votre adresse email pour accéder à votre compte.",
     linkSent: "Un lien de confirmation a été envoyé à {{email}}.",
     missingToken:
       "Lien de confirmation incomplet. Ouvre à nouveau le lien reçu par email, en entier.",
