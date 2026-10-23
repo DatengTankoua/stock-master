@@ -61,6 +61,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (typeof code === 'string' && NO_STORE_ERROR_CODES.has(code)) {
       response.setHeader('Cache-Control', 'no-store');
     }
+    // Administration de la plateforme : erreurs privées, jamais en cache.
+    if (
+      typeof request.path === 'string' &&
+      request.path.toLowerCase().startsWith('/platform-admin')
+    ) {
+      response.setHeader('Cache-Control', 'no-store, private');
+      response.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    }
 
     // 1-14D.2F : notifications de paiement (toute casse, comme le routeur) →
     // `no-store`, chemin seul (jamais la query : signature, téléphone, URL de

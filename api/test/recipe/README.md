@@ -59,6 +59,7 @@ Options combinables :
 | `--expiry-alerts` | Alertes de péremption activées de même |
 | `--anti-bot=simulated` | Inscription et défi de connexion simulés (API en `NODE_ENV=development`) |
 | `--keep-logs` | Journaux conservés après l'arrêt |
+| `--platform-admin` | Administration `/admin` ouverte avec des clés FICTIVES (API et BFF) ; aucun accès accordé |
 
 Exemple, lots et alertes :
 `node api/test/recipe/recipe.js start --product-batches --expiry-alerts`.
@@ -269,3 +270,19 @@ route de sonde :
 - T4, copie isolée sans autre protection.
 
 La commande sort en code 0 si les quatre cas sont conformes.
+
+## Administration de la plateforme
+
+Démarrer avec `start --platform-admin`. Aucun compte n'a l'accès au départ.
+
+- Attribution (commande opérateur RÉELLE, base de la recette) :
+  `$R platform-admin grant --email=proprietaire.actif@recette.local --reason="Recette locale" --operator=moi`
+  (lecture seule), puis la même commande avec `--apply`. `--email` est une
+  commodité de la recette, traduite en `--user-id`.
+- Navigateur : `http://127.0.0.1:3200/admin/login`, mot de passe commun,
+  puis enrôlement avec une application d'authentification.
+- Parcours automatisé par le serveur web (cookie, anti-CSRF, enrôlement,
+  consultation, déconnexion, code de récupération, révocation) :
+  `$R platform-admin-flow`. Il laisse l'accès révoqué.
+
+Rapport : [platform-admin-mfa.md](../../../docs/architecture/platform-admin-mfa.md).

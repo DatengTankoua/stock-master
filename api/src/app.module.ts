@@ -20,6 +20,7 @@ import { SupportModule } from './support/support.module';
 import { ReportsModule } from './reports/reports.module';
 import { LegalModule } from './legal/legal.module';
 import { StorageQuotaModule } from './storage-quota/storage-quota.module';
+import { PlatformAdminModule } from './platform-admin/platform-admin.module';
 import {
   APP_CONFIG_OPTIONS,
   appMongooseOptions,
@@ -59,6 +60,8 @@ import {
     LegalModule,
     // 1-17B : quotas de stockage par organisation.
     StorageQuotaModule,
+    // Administration de la plateforme (fermée sans configuration explicite).
+    PlatformAdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

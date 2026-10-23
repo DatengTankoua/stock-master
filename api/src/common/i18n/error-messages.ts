@@ -540,6 +540,42 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     },
   'Le message n’a pas pu être transmis pour le moment.': {
     en: 'The message could not be sent at the moment.',
+  }, // Administration de la plateforme.
+  "L'administration de la plateforme n'est pas disponible.": {
+    en: 'Platform administration is not available.',
+  },
+  'Accès refusé.': {
+    en: 'Access denied.',
+  },
+  "Ce compte n'a pas accès à l'administration de la plateforme.": {
+    en: 'This account has no access to platform administration.',
+  },
+  'Session administrative expirée. Reconnectez-vous.': {
+    en: 'Administration session expired. Sign in again.',
+  },
+  'Validez la double authentification.': {
+    en: 'Complete two-factor authentication.',
+  },
+  'Configurez la double authentification.': {
+    en: 'Set up two-factor authentication.',
+  },
+  'La double authentification est déjà configurée.': {
+    en: 'Two-factor authentication is already set up.',
+  },
+  'Vérification expirée ou déjà utilisée. Recommencez.': {
+    en: 'Verification expired or already used. Start again.',
+  },
+  'Code incorrect.': {
+    en: 'Incorrect code.',
+  },
+  'Confirmez votre mot de passe et votre second facteur.': {
+    en: 'Confirm your password and your second factor.',
+  },
+  'Trop de tentatives. Réessayez plus tard.': {
+    en: 'Too many attempts. Try again later.',
+  },
+  'Introuvable.': {
+    en: 'Not found.',
   },
 });
 

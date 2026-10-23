@@ -10,6 +10,8 @@ const isDockerBuild = process.env.DOCKER_BUILD === "true";
 const NOINDEX_PATHS = [
   "/app",
   "/app/:path*",
+  "/admin",
+  "/admin/:path*",
   "/auth/:path*",
   "/access",
   "/offline",
@@ -46,6 +48,15 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex" },
         ],
       },
+      // Administration de la plateforme : pages privées, jamais en cache
+      // (navigateur, CDN, service worker) ni transmises en référent.
+      ...["/admin", "/admin/:path*"].map((source) => ({
+        source,
+        headers: [
+          { key: "Cache-Control", value: "no-store, private, max-age=0" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      })),
       // 1-13B : lien de réinitialisation du mot de passe (même règle).
       {
         source: "/auth/reset-password",

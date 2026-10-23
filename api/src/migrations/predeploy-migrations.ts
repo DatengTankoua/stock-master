@@ -54,6 +54,9 @@ export const PREDEPLOY_MIGRATIONS: readonly string[] = Object.freeze([
   'create-sale-history-indexes.js',
   // 1-20F : liste paginée des produits (performance, non bloquant).
   'create-product-page-indexes.js',
+  // Administration de la plateforme : index seuls (espace fermé sans eux).
+  // N'accorde JAMAIS d'accès : l'attribution reste une commande opérateur.
+  'create-platform-admin-indexes.js',
   // Lots A à C : garde du suivi par lots (= migrate:product-batches --
   // --install --apply). N'active rien : drapeaux et portées séparés.
   'install-product-batches.js',

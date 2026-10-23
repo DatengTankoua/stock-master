@@ -18,9 +18,10 @@ const A = require('./actions');
 const HELP = `Recette locale des paiements (1-14D.2H) — tout est fictif, aucun appel CamPay réel.
 
 Stack (terminal 1, reste au premier plan ; Ctrl+C nettoie) :
-  start [--provider=simulated|campay|saspay] [--keep-logs] [--anti-bot=simulated] [--product-batches] [--expiry-alerts]
+  start [--provider=simulated|campay|saspay] [--keep-logs] [--anti-bot=simulated] [--product-batches] [--expiry-alerts] [--platform-admin]
         (--anti-bot=simulated : inscription et défi de connexion simulés ;
          API en NODE_ENV=development, la simulation étant refusée en production)
+        (--platform-admin : administration /admin ouverte avec des clés FICTIVES)
 
 Pilotage (terminal 2, recette démarrée) :
   status                          état, URLs, fournisseur
@@ -40,6 +41,8 @@ Pilotage (terminal 2, recette démarrée) :
   webhook --replay                rejoue exactement la dernière notification
   reconcile-sim <arguments du CLI D.2G>   rapprochement SIMULÉ (faux CamPay local)
   real-cli <arguments du CLI D.2G>        VRAI CLI (fournisseur indisponible : simulation bloquée)
+  platform-admin <commande> [--email=<e>|--user-id=<id>] ...   commande opérateur RÉELLE (lecture seule sans --apply)
+  platform-admin-flow             parcours complet de l'administration via le BFF (start --platform-admin)
 
 Campagne navigateur (stack démarrée en mode simulated) :
   scenarios [ids...] --playwright=<dossier contenant node_modules/playwright> [--chromium=<chrome.exe>] [--out=<dossier>]
@@ -260,6 +263,8 @@ async function main(argv) {
         }
         process.env.RECIPE_ANTI_BOT = 'simulated';
       }
+      // Administration de la plateforme : clés FICTIVES, recette seulement.
+      if (flags['platform-admin']) process.env.RECIPE_PLATFORM_ADMIN = '1';
       await require('./launcher').start({
         provider: flags.provider,
         keepLogs: Boolean(flags['keep-logs']),
@@ -396,6 +401,34 @@ async function main(argv) {
         C.WORK_DIR,
       );
     }
+    case 'platform-admin': {
+      // Commande opérateur RÉELLE sur la base de la recette ; `--email=` est
+      // une commodité de la recette, traduite en `--user-id=`.
+      const state = C.requireRunningState();
+      process.env.RECIPE_PLATFORM_ADMIN = '1';
+      const forwarded = [];
+      for (const arg of args) {
+        const email = /^--email=(.+)$/.exec(arg);
+        forwarded.push(
+          email
+            ? `--user-id=${(await withDb((db) => D.account(db, email[1]))).userId}`
+            : arg,
+        );
+      }
+      return runInherited(
+        path.join(C.DIST, 'migrations', 'platform-admin-cli.js'),
+        forwarded,
+        C.apiEnv(state.mongodbUri),
+        C.WORK_DIR,
+      );
+    }
+    case 'platform-admin-flow':
+      return runInherited(
+        path.join(__dirname, 'platform-admin-flow.js'),
+        [],
+        process.env,
+        C.WORK_DIR,
+      );
     case 'real-cli': {
       const state = C.requireRunningState();
       process.stderr.write(
