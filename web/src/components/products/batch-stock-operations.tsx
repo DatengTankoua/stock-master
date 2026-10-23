@@ -102,7 +102,7 @@ export function BatchStatusDialog({
   };
   return (
     <Dialog open onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {tr(
@@ -226,7 +226,7 @@ export function BatchLossDialog({
   };
   return (
     <Dialog open onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {tr("batches.ops.lossTitle", { reference: batch.reference })}
@@ -466,7 +466,7 @@ function CorrectLossDialog({
   };
   return (
     <Dialog open onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {tr("batches.ops.correctTitle", { reference: loss.batchReference })}

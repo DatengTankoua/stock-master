@@ -453,7 +453,7 @@ export function EditSaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("edit.title")}</DialogTitle>
           </DialogHeader>
@@ -614,7 +614,7 @@ export function EditSaleDialog({
       </Dialog>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("edit.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>

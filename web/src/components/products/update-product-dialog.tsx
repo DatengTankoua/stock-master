@@ -9,7 +9,9 @@ import { getApiErrorCode, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -228,211 +230,225 @@ export function UpdateProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent layout="form">
         <DialogHeader>
           <DialogTitle>{t("product.updateTitle")}</DialogTitle>
         </DialogHeader>
         {product && !canEditAnything && (
-          <p className="text-sm text-muted-foreground">
-            {t("product.noPermission")}
-          </p>
+          <DialogBody>
+            <p className="text-sm text-muted-foreground">
+              {t("product.noPermission")}
+            </p>
+          </DialogBody>
         )}
         {product && canEditAnything && (
-          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            {canManageDescription && (
-              <div className="space-y-2">
-                <Label htmlFor="u-name">{t("product.nameShort")}</Label>
-                <Input
-                  id="u-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-            {canManageDescription && (
-              <fieldset className="space-y-2" disabled={loading}>
-                <legend className="text-sm font-medium">
-                  {product.imageUrl
-                    ? t("product.photoReplace")
-                    : t("product.photoAdd")}
-                </legend>
-                <div className="flex items-start gap-3">
-                  <figure className="shrink-0 space-y-1">
-                    <div className="relative h-20 w-20 overflow-hidden rounded-md bg-muted">
-                      {photoPreview ? (
-                        <Image
-                          src={photoPreview}
-                          alt={t("product.photoPreview")}
-                          fill
-                          sizes="80px"
-                          className="object-cover"
-                          unoptimized
-                        />
-                      ) : (
-                        <StoredImage
-                          src={product.imageUrl}
-                          alt={t("product.photoCurrent")}
-                          lazy={false}
-                        />
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <DialogBody>
+              {canManageDescription && (
+                <div className="space-y-2">
+                  <Label htmlFor="u-name">{t("product.nameShort")}</Label>
+                  <Input
+                    id="u-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+              {canManageDescription && (
+                <fieldset className="space-y-2" disabled={loading}>
+                  <legend className="text-sm font-medium">
+                    {product.imageUrl
+                      ? t("product.photoReplace")
+                      : t("product.photoAdd")}
+                  </legend>
+                  <div className="flex items-start gap-3">
+                    <figure className="shrink-0 space-y-1">
+                      <div className="relative h-20 w-20 overflow-hidden rounded-md bg-muted">
+                        {photoPreview ? (
+                          <Image
+                            src={photoPreview}
+                            alt={t("product.photoPreview")}
+                            fill
+                            sizes="80px"
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <StoredImage
+                            src={product.imageUrl}
+                            alt={t("product.photoCurrent")}
+                            lazy={false}
+                          />
+                        )}
+                      </div>
+                      <figcaption className="w-20 text-center text-[11px] text-muted-foreground">
+                        {photoPreview
+                          ? t("product.photoPreview")
+                          : product.imageUrl
+                            ? t("product.photoCurrent")
+                            : t("product.photoNone")}
+                      </figcaption>
+                    </figure>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Input
+                        ref={photoInput}
+                        id="u-photo"
+                        type="file"
+                        accept={PRODUCT_PHOTO_ACCEPT}
+                        disabled={!online || loading}
+                        aria-describedby="u-photo-help"
+                        aria-invalid={photoError ? true : undefined}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          if (!file) {
+                            setPhoto(null);
+                            return;
+                          }
+                          // Pré-contrôle de confort ; l'API contrôle le
+                          // contenu réel (format, décodage, dimensions).
+                          const problem = productPhotoProblem(file);
+                          if (problem) {
+                            setPhoto(null);
+                            e.target.value = "";
+                            setPhotoError(
+                              problem === "size"
+                                ? t("product.photoTooLarge")
+                                : t("product.photoInvalidType"),
+                            );
+                            return;
+                          }
+                          setPhotoError(null);
+                          setPhoto(file);
+                        }}
+                      />
+                      {photo && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearPhoto}
+                        >
+                          {t("product.photoCancel")}
+                        </Button>
                       )}
                     </div>
-                    <figcaption className="w-20 text-center text-[11px] text-muted-foreground">
-                      {photoPreview
-                        ? t("product.photoPreview")
-                        : product.imageUrl
-                          ? t("product.photoCurrent")
-                          : t("product.photoNone")}
-                    </figcaption>
-                  </figure>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <Input
-                      ref={photoInput}
-                      id="u-photo"
-                      type="file"
-                      accept={PRODUCT_PHOTO_ACCEPT}
-                      disabled={!online || loading}
-                      aria-describedby="u-photo-help"
-                      aria-invalid={photoError ? true : undefined}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] ?? null;
-                        if (!file) {
-                          setPhoto(null);
-                          return;
-                        }
-                        // Pré-contrôle de confort ; l'API contrôle le
-                        // contenu réel (format, décodage, dimensions).
-                        const problem = productPhotoProblem(file);
-                        if (problem) {
-                          setPhoto(null);
-                          e.target.value = "";
-                          setPhotoError(
-                            problem === "size"
-                              ? t("product.photoTooLarge")
-                              : t("product.photoInvalidType"),
-                          );
-                          return;
-                        }
-                        setPhotoError(null);
-                        setPhoto(file);
-                      }}
-                    />
-                    {photo && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearPhoto}
-                      >
-                        {t("product.photoCancel")}
-                      </Button>
-                    )}
                   </div>
-                </div>
-                <p id="u-photo-help" className="text-xs text-muted-foreground">
-                  {online ? t("product.photoHelp") : t("product.photoOffline")}
-                </p>
-                {photoError && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {photoError}
+                  <p
+                    id="u-photo-help"
+                    className="text-xs text-muted-foreground"
+                  >
+                    {online
+                      ? t("product.photoHelp")
+                      : t("product.photoOffline")}
                   </p>
-                )}
-              </fieldset>
-            )}
-            {canAdjustStock && (
-              <>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {purchasePriceVisible && (
+                  {photoError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {photoError}
+                    </p>
+                  )}
+                </fieldset>
+              )}
+              {canAdjustStock && (
+                <>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {purchasePriceVisible && (
+                      <div className="space-y-2">
+                        <Label htmlFor="u-buy">
+                          {t("product.purchasePrice")}
+                        </Label>
+                        <Input
+                          id="u-buy"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={purchasePrice}
+                          onChange={(e) => setPurchasePrice(e.target.value)}
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {t("product.current", {
+                            amount: format.fcfa(product.purchasePrice ?? 0),
+                          })}
+                        </p>
+                      </div>
+                    )}
                     <div className="space-y-2">
-                      <Label htmlFor="u-buy">
-                        {t("product.purchasePrice")}
-                      </Label>
+                      <Label htmlFor="u-sell">{t("product.salePrice")}</Label>
                       <Input
-                        id="u-buy"
+                        id="u-sell"
                         type="number"
                         min="0"
                         step="1"
-                        value={purchasePrice}
-                        onChange={(e) => setPurchasePrice(e.target.value)}
+                        value={salePrice}
+                        onChange={(e) => setSalePrice(e.target.value)}
                         required
                       />
                       <p className="text-xs text-muted-foreground">
                         {t("product.current", {
-                          amount: format.fcfa(product.purchasePrice ?? 0),
+                          amount: format.fcfa(product.salePrice),
                         })}
                       </p>
                     </div>
+                  </div>
+                  {batchTracked ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t("batches.stockInBatches")}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="u-stock">
+                        {t("product.additionalStock")}
+                      </Label>
+                      <Input
+                        id="u-stock"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={additionalStock}
+                        onChange={(e) => setAdditionalStock(e.target.value)}
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {t("product.remaining", {
+                          count: product.remainingQuantity,
+                        })}
+                        {product.unitsSold !== undefined &&
+                          ` · ${t("product.sold", { count: product.unitsSold })}`}
+                      </p>
+                    </div>
                   )}
-                  <div className="space-y-2">
-                    <Label htmlFor="u-sell">{t("product.salePrice")}</Label>
-                    <Input
-                      id="u-sell"
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={salePrice}
-                      onChange={(e) => setSalePrice(e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {t("product.current", {
-                        amount: format.fcfa(product.salePrice),
-                      })}
-                    </p>
-                  </div>
-                </div>
-                {batchTracked ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t("batches.stockInBatches")}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="u-stock">
-                      {t("product.additionalStock")}
-                    </Label>
-                    <Input
-                      id="u-stock"
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={additionalStock}
-                      onChange={(e) => setAdditionalStock(e.target.value)}
-                      placeholder="0"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {t("product.remaining", {
-                        count: product.remainingQuantity,
-                      })}
-                      {product.unitsSold !== undefined &&
-                        ` · ${t("product.sold", { count: product.unitsSold })}`}
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
-            <ProductOptionalFields
-              idPrefix="u"
-              showExpiry={showExpiry}
-              showThreshold={showThreshold}
-              expiryDate={expiryDate}
-              onExpiryDateChange={setExpiryDate}
-              threshold={threshold}
-              onThresholdChange={setThreshold}
-              clearable
-              disabled={loading}
-            />
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-              aria-busy={loading}
-            >
-              {loading
-                ? photo
-                  ? t("product.photoUploading")
-                  : t("updating")
-                : t("actions.save")}
-            </Button>
+                </>
+              )}
+              <ProductOptionalFields
+                idPrefix="u"
+                showExpiry={showExpiry}
+                showThreshold={showThreshold}
+                expiryDate={expiryDate}
+                onExpiryDateChange={setExpiryDate}
+                threshold={threshold}
+                onThresholdChange={setThreshold}
+                clearable
+                disabled={loading}
+              />
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading}
+                aria-busy={loading}
+              >
+                {loading
+                  ? photo
+                    ? t("product.photoUploading")
+                    : t("updating")
+                  : t("actions.save")}
+              </Button>
+            </DialogFooter>
           </form>
         )}
       </DialogContent>

@@ -5,6 +5,10 @@ import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  DIALOG_VIEWPORT_CLASSES,
+  DialogViewportSync,
+} from "@/components/ui/dialog-viewport";
 
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
@@ -41,6 +45,7 @@ function AlertDialogOverlay({
 function AlertDialogContent({
   className,
   size = "default",
+  children,
   ...props
 }: AlertDialogPrimitive.Popup.Props & {
   size?: "default" | "sm";
@@ -52,11 +57,16 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         data-size={size}
         className={cn(
-          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "group/alert-dialog-content fixed z-50 grid w-full grid-cols-[minmax(0,1fr)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 break-words text-popover-foreground ring-1 ring-foreground/10 transition-none duration-100 outline-none",
+          DIALOG_VIEWPORT_CLASSES,
+          "data-[size=default]:max-w-[min(20rem,calc(var(--dialog-vv-width,100%)-2rem))] data-[size=sm]:max-w-[min(20rem,calc(var(--dialog-vv-width,100%)-2rem))] data-[size=default]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className,
         )}
         {...props}
-      />
+      >
+        <DialogViewportSync />
+        {children}
+      </AlertDialogPrimitive.Popup>
     </AlertDialogPortal>
   );
 }

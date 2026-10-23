@@ -9,8 +9,10 @@ import { useMessage } from "@/i18n/use-message";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -279,7 +281,7 @@ export function SaleFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !submitting && onOpenChange(v)}>
-      <DialogContent finalFocus={finalFocus}>
+      <DialogContent finalFocus={finalFocus} layout="form">
         <DialogHeader>
           <DialogTitle>
             {replaces ? t("form.titleFix") : t("form.title")} — {productName}
@@ -295,127 +297,139 @@ export function SaleFormDialog({
           )}
         </DialogHeader>
         {batchTracked && !batchSaleAvailable ? (
-          <p role="alert" className="text-sm text-destructive">
-            {t("form.batchTracked")}
-          </p>
+          <DialogBody>
+            <p role="alert" className="text-sm text-destructive">
+              {t("form.batchTracked")}
+            </p>
+          </DialogBody>
         ) : !canRecordSales ? (
-          <p role="alert" className="text-sm text-destructive">
-            {t("form.refusal.capability")}
-          </p>
+          <DialogBody>
+            <p role="alert" className="text-sm text-destructive">
+              {t("form.refusal.capability")}
+            </p>
+          </DialogBody>
         ) : (
-          <form onSubmit={handleSubmit} className="mt-2 space-y-4" noValidate>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="s-qty">{t("form.quantity")}</Label>
-                <Input
-                  id="s-qty"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  step="1"
-                  max={maxQuantity}
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col"
+            noValidate
+          >
+            <DialogBody>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="s-qty">{t("form.quantity")}</Label>
+                  <Input
+                    id="s-qty"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    max={maxQuantity}
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    required
+                  />
+                  {maxQuantity !== undefined && (
+                    <p className="text-xs text-muted-foreground">
+                      {indicative.hasReservation
+                        ? t("form.indicativeStock", { count: maxQuantity })
+                        : t("form.stock", { count: maxQuantity })}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="s-price">{t("form.actualPrice")}</Label>
+                  <Input
+                    id="s-price"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="1"
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(e.target.value)}
+                    required
+                  />
+                  {salePrice && Number.isFinite(Number(salePrice)) && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("form.total", {
+                        amount: format.fcfa(
+                          Number(salePrice) * (Number(quantity) || 1),
+                        ),
+                      })}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {batchTracked && (
+                <BatchAllocationPicker
+                  productId={productId}
+                  quantity={
+                    /^\d+$/.test(quantity.trim()) && Number(quantity) > 0
+                      ? Number(quantity)
+                      : null
+                  }
+                  online={online}
+                  batchSale={batchSale}
+                  operations={operations}
+                  excludeOperationId={replacing}
+                  initial={initial?.batchAllocations}
+                  initialUnknownConfirmed={initial?.unknownExpiryConfirmed}
+                  refreshKey={batchRefresh}
+                  disabled={submitting}
+                  onChange={onBatchChange}
+                  idPrefix="s-batch"
                 />
-                {maxQuantity !== undefined && (
-                  <p className="text-xs text-muted-foreground">
-                    {indicative.hasReservation
-                      ? t("form.indicativeStock", { count: maxQuantity })
-                      : t("form.stock", { count: maxQuantity })}
-                  </p>
-                )}
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="s-buyer">{t("form.buyerName")}</Label>
+                <Input
+                  id="s-buyer"
+                  maxLength={TEXT_MAX}
+                  value={buyerName}
+                  onChange={(e) => setBuyerName(e.target.value)}
+                  placeholder={t("form.buyerNamePlaceholder")}
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="s-price">{t("form.actualPrice")}</Label>
+                <Label htmlFor="s-contact">{t("form.buyerContact")}</Label>
                 <Input
-                  id="s-price"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="1"
-                  value={salePrice}
-                  onChange={(e) => setSalePrice(e.target.value)}
-                  required
+                  id="s-contact"
+                  maxLength={TEXT_MAX}
+                  value={buyerContact}
+                  onChange={(e) => setBuyerContact(e.target.value)}
+                  placeholder={t("form.buyerContactPlaceholder")}
                 />
-                {salePrice && Number.isFinite(Number(salePrice)) && (
-                  <p className="text-xs text-muted-foreground">
-                    {t("form.total", {
-                      amount: format.fcfa(
-                        Number(salePrice) * (Number(quantity) || 1),
-                      ),
-                    })}
-                  </p>
-                )}
               </div>
-            </div>
-            {batchTracked && (
-              <BatchAllocationPicker
-                productId={productId}
-                quantity={
-                  /^\d+$/.test(quantity.trim()) && Number(quantity) > 0
-                    ? Number(quantity)
-                    : null
-                }
-                online={online}
-                batchSale={batchSale}
-                operations={operations}
-                excludeOperationId={replacing}
-                initial={initial?.batchAllocations}
-                initialUnknownConfirmed={initial?.unknownExpiryConfirmed}
-                refreshKey={batchRefresh}
-                disabled={submitting}
-                onChange={onBatchChange}
-                idPrefix="s-batch"
-              />
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="s-buyer">{t("form.buyerName")}</Label>
-              <Input
-                id="s-buyer"
-                maxLength={TEXT_MAX}
-                value={buyerName}
-                onChange={(e) => setBuyerName(e.target.value)}
-                placeholder={t("form.buyerNamePlaceholder")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="s-contact">{t("form.buyerContact")}</Label>
-              <Input
-                id="s-contact"
-                maxLength={TEXT_MAX}
-                value={buyerContact}
-                onChange={(e) => setBuyerContact(e.target.value)}
-                placeholder={t("form.buyerContactPlaceholder")}
-              />
-            </div>
-            {indicative.hasReservation && (
-              <p className="text-xs text-muted-foreground">
-                {t("form.indicativeNote")}
-              </p>
-            )}
-            {formError && (
-              <p role="alert" className="text-sm text-destructive">
-                {formError}{" "}
-                {limitReached && (
-                  <PendingSalesAnchor
-                    href={pendingLink.href}
-                    offline={pendingLink.offline}
-                  >
-                    {t("form.seePending")}
-                  </PendingSalesAnchor>
-                )}
-              </p>
-            )}
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting
-                ? online
-                  ? t("form.sending")
-                  : t("form.saving")
-                : replaces
-                  ? t("form.saveFix")
-                  : t("form.confirm")}
-            </Button>
+              {indicative.hasReservation && (
+                <p className="text-xs text-muted-foreground">
+                  {t("form.indicativeNote")}
+                </p>
+              )}
+            </DialogBody>
+            <DialogFooter>
+              {formError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {formError}{" "}
+                  {limitReached && (
+                    <PendingSalesAnchor
+                      href={pendingLink.href}
+                      offline={pendingLink.offline}
+                    >
+                      {t("form.seePending")}
+                    </PendingSalesAnchor>
+                  )}
+                </p>
+              )}
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting
+                  ? online
+                    ? t("form.sending")
+                    : t("form.saving")
+                  : replaces
+                    ? t("form.saveFix")
+                    : t("form.confirm")}
+              </Button>
+            </DialogFooter>
           </form>
         )}
       </DialogContent>
