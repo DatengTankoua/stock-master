@@ -3,8 +3,10 @@ import {
   IsEmail,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
+  ValidateIf,
   Matches,
   Max,
   MaxLength,
@@ -69,6 +71,67 @@ export class AdminStepUpDto {
   @IsOptional()
   @Matches(RECOVERY)
   recoveryCode?: string;
+
+  /**
+   * Action à confirmer (preuve liée) : validée et mise en forme canonique
+   * par `normalizeIntent` (400 si incomplète ou hors bornes).
+   */
+  @IsOptional()
+  @IsObject()
+  intent?: Record<string, unknown>;
+}
+
+const OPERATION_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** Champs communs : identifiant d'opération et preuve renforcée liée. */
+class AdminActionDto {
+  @Matches(OPERATION_ID)
+  operationId: string;
+
+  @Matches(TOKEN)
+  stepUpToken: string;
+}
+
+export class AdminSuspendDto extends AdminActionDto {
+  /** Motif INTERNE à la plateforme (jamais montré au commerce). */
+  @IsString()
+  @MaxLength(600)
+  internalReason: string;
+
+  /** Message affiché au propriétaire du commerce. */
+  @IsString()
+  @MaxLength(600)
+  clientMessage: string;
+}
+
+export class AdminReactivateDto extends AdminActionDto {
+  @IsString()
+  @MaxLength(600)
+  reason: string;
+}
+
+export class AdminExtendDto extends AdminActionDto {
+  @IsInt()
+  days: number;
+
+  @IsString()
+  @MaxLength(600)
+  reason: string;
+
+  /** Fin de couverture présentée dans l'aperçu confirmé (`null` : aucune). */
+  @ValidateIf((dto: AdminExtendDto) => dto.expectedCoverageEndsAt !== null)
+  @IsString()
+  @MaxLength(40)
+  expectedCoverageEndsAt: string | null;
+}
+
+export class AdminExtensionPreviewQuery {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(90)
+  days: number;
 }
 
 export class AdminStepUpTokenDto {
@@ -90,6 +153,7 @@ export class AdminPageQuery {
 export const ORGANIZATION_SUBSCRIPTION_FILTERS = [
   'trial',
   'paid',
+  'offered',
   'manual',
   'scheduled',
   'expired',

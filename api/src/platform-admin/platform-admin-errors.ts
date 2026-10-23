@@ -25,6 +25,10 @@ export const PlatformAdminErrorCode = Object.freeze({
   STEP_UP_REQUIRED: 'PLATFORM_ADMIN_STEP_UP_REQUIRED',
   RATE_LIMITED: 'PLATFORM_ADMIN_RATE_LIMITED',
   NOT_FOUND: 'PLATFORM_ADMIN_NOT_FOUND',
+  CAPABILITY_REQUIRED: 'PLATFORM_ADMIN_CAPABILITY_REQUIRED',
+  OPERATION_CONFLICT: 'PLATFORM_ADMIN_OPERATION_CONFLICT',
+  STATE_CHANGED: 'PLATFORM_ADMIN_STATE_CHANGED',
+  EXTENSION_REFUSED: 'PLATFORM_ADMIN_EXTENSION_REFUSED',
 });
 
 const body = (code: string, message: string) => ({ code, message });
@@ -113,4 +117,44 @@ export const adminRateLimited = (retryAfterSeconds: number) =>
       message: 'Trop de tentatives. Réessayez plus tard.',
     },
     retryAfterSeconds,
+  );
+
+export const adminCapabilityRequired = () =>
+  new ForbiddenException(
+    body(
+      PlatformAdminErrorCode.CAPABILITY_REQUIRED,
+      'Votre accès ne permet pas cette action.',
+    ),
+  );
+
+/** Même identifiant d'opération, contenu différent. */
+export const adminOperationConflict = () =>
+  new HttpException(
+    body(
+      PlatformAdminErrorCode.OPERATION_CONFLICT,
+      'Identifiant d’opération déjà utilisé pour une autre demande.',
+    ),
+    HttpStatus.CONFLICT,
+  );
+
+/** L'état a changé depuis la confirmation (autre administrateur, paiement). */
+export const adminStateChanged = () =>
+  new HttpException(
+    body(
+      PlatformAdminErrorCode.STATE_CHANGED,
+      'La situation a changé depuis votre confirmation. Vérifiez puis recommencez.',
+    ),
+    HttpStatus.CONFLICT,
+  );
+
+export const adminExtensionRefused = (refusal: string) =>
+  new HttpException(
+    {
+      ...body(
+        PlatformAdminErrorCode.EXTENSION_REFUSED,
+        'Prolongation impossible sans réécrire les périodes existantes.',
+      ),
+      refusal,
+    },
+    HttpStatus.CONFLICT,
   );

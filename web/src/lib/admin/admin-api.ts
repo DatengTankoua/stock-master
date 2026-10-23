@@ -51,6 +51,67 @@ export async function adminRequest<T>(
   return data as T;
 }
 
+/**
+ * Marqueur « déconnexion d'administration en attente » (aucun secret : une
+ * simple valeur `1`). Posé quand la requête n'a pas pu atteindre le serveur
+ * web (hors ligne, délai dépassé) : le cookie HttpOnly reste alors sur
+ * l'appareil. Retiré dès qu'une réponse du serveur web arrive (le BFF efface
+ * toujours le cookie à la déconnexion).
+ */
+export const ADMIN_LOGOUT_PENDING_KEY = "stockmaster.admin.logout-pending";
+
+function setLogoutPending(pending: boolean): void {
+  try {
+    if (pending) localStorage.setItem(ADMIN_LOGOUT_PENDING_KEY, "1");
+    else localStorage.removeItem(ADMIN_LOGOUT_PENDING_KEY);
+  } catch {
+    // Stockage indisponible (navigation privée) : aucune relance possible.
+  }
+}
+
+export function adminLogoutPending(): boolean {
+  try {
+    return localStorage.getItem(ADMIN_LOGOUT_PENDING_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Déconnexion d'administration (déconnexion générale d'un commerce ou
+ * bouton de la console). Jamais bloquante (3 s au plus), aucune erreur
+ * remontée. Renvoie `pending` si le serveur web n'a pas été atteint : le
+ * marqueur est posé et la déconnexion sera rejouée au retour du réseau, au
+ * prochain chargement et avant toute ouverture de la console.
+ */
+export async function endAdminSessionQuietly(): Promise<"done" | "pending"> {
+  let reached = false;
+  try {
+    await fetch("/api/admin/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE,
+        "content-type": "application/json",
+      },
+      body: "{}",
+      signal: AbortSignal.timeout(3_000),
+    });
+    // Toute réponse HTTP vient du serveur web, qui a effacé le cookie.
+    reached = true;
+  } catch {
+    // Hors ligne ou délai dépassé : le cookie est toujours là.
+  }
+  setLogoutPending(!reached);
+  return reached ? "done" : "pending";
+}
+
+/** Rejoue une déconnexion restée en attente (sans effet sinon). */
+export async function retryPendingAdminLogout(): Promise<void> {
+  if (adminLogoutPending()) await endAdminSessionQuietly();
+}
+
 /** Session à refaire : retour à la connexion de l'administration. */
 export function needsSignIn(error: unknown): boolean {
   return (
@@ -76,6 +137,10 @@ export type AdminErrorKey =
   | "errors.stepUpRequired"
   | "errors.alreadyEnrolled"
   | "errors.notFound"
+  | "errors.capabilityRequired"
+  | "errors.operationConflict"
+  | "errors.stateChanged"
+  | "errors.extensionRefused"
   | "errors.generic";
 
 /** Clé de traduction d'une erreur (jamais le texte brut de l'API). */
@@ -102,6 +167,10 @@ export function adminErrorKey(error: unknown): {
     PLATFORM_ADMIN_STEP_UP_REQUIRED: "errors.stepUpRequired",
     PLATFORM_ADMIN_ALREADY_ENROLLED: "errors.alreadyEnrolled",
     PLATFORM_ADMIN_NOT_FOUND: "errors.notFound",
+    PLATFORM_ADMIN_CAPABILITY_REQUIRED: "errors.capabilityRequired",
+    PLATFORM_ADMIN_OPERATION_CONFLICT: "errors.operationConflict",
+    PLATFORM_ADMIN_STATE_CHANGED: "errors.stateChanged",
+    PLATFORM_ADMIN_EXTENSION_REFUSED: "errors.extensionRefused",
     EMAIL_NOT_VERIFIED: "errors.emailNotVerified",
   };
   if (error.code && byCode[error.code])
@@ -121,6 +190,8 @@ export interface AdminStatus {
   user: { name: string; email: string };
   session: { idleExpiresAt: string; absoluteExpiresAt: string };
   recoveryCodesRemaining?: number;
+  /** Capacités plateforme (session complète seulement). */
+  capabilities?: PlatformCapability[];
 }
 
 export interface AdminChallenge {
@@ -136,7 +207,7 @@ export interface AdminPage<T> {
 }
 
 export type SubscriptionClass =
-  "trial" | "paid" | "manual" | "scheduled" | "expired" | "none";
+  "trial" | "paid" | "offered" | "manual" | "scheduled" | "expired" | "none";
 
 export interface AdminOverview {
   generatedAt: string;
@@ -210,6 +281,14 @@ export interface AdminOrganizationDetail {
   };
   features: { productBatches: boolean; expiryAlerts: boolean };
   recentPayments: AdminPaymentRow[];
+  /** Suspension administrative : motif interne et message, séparés. */
+  suspension: {
+    suspendedAt: string | null;
+    suspendedBy: string | null;
+    internalReason: string | null;
+    clientMessage: string | null;
+  } | null;
+  actions: AdminActionHistoryEntry[];
 }
 
 export interface AdminAuditRow {
@@ -229,4 +308,52 @@ export interface AdminProvisioning {
   uri: string;
   manualKey: string;
   challenge: AdminChallenge;
+}
+
+export type PlatformCapability =
+  | "platform.read"
+  | "platform.organizations.suspend"
+  | "platform.subscriptions.extend";
+
+export type AdminActionKind =
+  "organization_suspend" | "organization_reactivate" | "subscription_extend";
+
+export interface AdminActionHistoryEntry {
+  operationId: string;
+  action: AdminActionKind;
+  at: string;
+  actor: string | null;
+  reason: string;
+  result: Record<string, unknown>;
+}
+
+export interface AdminExtensionPreview {
+  organizationId: string;
+  days: number;
+  organizationStatus: string;
+  state: {
+    state: "none" | "active" | "expired" | "scheduled";
+    currentPeriodKind: string | null;
+    coverageEndsAt: string | null;
+  };
+  plan:
+    | {
+        ok: true;
+        basis: "extend-coverage" | "start-now";
+        previousCoverageEndsAt: string | null;
+        startsAt: string;
+        endsAt: string;
+        scheduledPeriods: number;
+      }
+    | {
+        ok: false;
+        refusal: "SCHEDULED_WITHOUT_CURRENT" | "DISCONTINUOUS_COVERAGE";
+      };
+}
+
+export interface AdminActionOutcome {
+  operationId: string;
+  action: AdminActionKind;
+  replayed: boolean;
+  result: Record<string, unknown>;
 }

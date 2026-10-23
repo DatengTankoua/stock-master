@@ -86,6 +86,12 @@ export const PLATFORM_ADMIN_INDEXES: readonly PlatformAdminIndexSpec[] =
       name: 'action_1_at_-1',
       key: { action: 1, at: -1 },
     },
+    // Historique des actions d'une organisation (fiche), plus récentes d'abord.
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.operations,
+      name: 'organizationId_1_createdAt_-1',
+      key: { organizationId: 1, createdAt: -1 },
+    },
     // Liste des organisations (tri par inscription) et inscriptions
     // récentes de la vue d'ensemble : seul index ajouté à une collection
     // métier.

@@ -55,6 +55,14 @@ const ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp }> = [
   { method: "GET", pattern: /^overview$/ },
   { method: "GET", pattern: /^organizations$/ },
   { method: "GET", pattern: /^organizations\/[0-9a-f]{24}$/ },
+  {
+    method: "GET",
+    pattern: /^organizations\/[0-9a-f]{24}\/extension-preview$/,
+  },
+  {
+    method: "POST",
+    pattern: /^organizations\/[0-9a-f]{24}\/(suspend|reactivate|extend)$/,
+  },
   { method: "GET", pattern: /^payments$/ },
   { method: "GET", pattern: /^audit$/ },
 ];
@@ -81,6 +89,7 @@ const QUERY_KEYS = new Set([
   "organizationId",
   "action",
   "outcome",
+  "days",
 ]);
 
 export function filterAdminQuery(search: URLSearchParams): string {
@@ -117,13 +126,30 @@ export function checkAdminRequest(input: {
   return "ok";
 }
 
-/** Adresse du client posée par la plateforme d'hébergement (jamais le corps). */
-export function clientAddress(headers: {
-  get(name: string): string | null;
-}): string | null {
-  const real = headers.get("x-real-ip")?.trim();
-  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const value = real || forwarded || "";
+/**
+ * En-têtes d'adresse acceptés : uniquement ceux que l'hébergeur ÉCRASE à
+ * chaque requête (Vercel : `x-real-ip`, `x-vercel-forwarded-for` ; nginx du
+ * dépôt : `x-real-ip` = `$remote_addr`). Jamais `x-forwarded-for` (une
+ * valeur envoyée par le client peut y subsister).
+ */
+export const TRUSTED_CLIENT_IP_HEADERS = [
+  "x-real-ip",
+  "x-vercel-forwarded-for",
+] as const;
+export type TrustedClientIpHeader = (typeof TRUSTED_CLIENT_IP_HEADERS)[number];
+
+/**
+ * Adresse du client, lue SEULEMENT dans l'en-tête déclaré de confiance
+ * (`PLATFORM_ADMIN_CLIENT_IP_HEADER`). Sans déclaration : `null`, aucune
+ * adresse transmise (un en-tête que le serveur web reçoit tel quel du client
+ * permettrait de contourner les plafonds par adresse).
+ */
+export function clientAddress(
+  headers: { get(name: string): string | null },
+  trusted: TrustedClientIpHeader | null,
+): string | null {
+  if (!trusted) return null;
+  const value = headers.get(trusted)?.split(",")[0]?.trim() ?? "";
   return /^[0-9a-fA-F:.]{2,45}$/.test(value) ? value : null;
 }
 
@@ -132,6 +158,8 @@ export interface AdminBffConfig {
   proxySecret: string;
   allowedOrigin: string;
   secureCookie: boolean;
+  /** En-tête d'adresse de confiance, ou `null` (aucune adresse relayée). */
+  clientIpHeader: TrustedClientIpHeader | null;
 }
 
 /**
@@ -157,6 +185,15 @@ export function resolveAdminBffConfig(
     return null;
   }
   if (origin.origin !== allowedOrigin) return null;
+  const ipHeader = (env.PLATFORM_ADMIN_CLIENT_IP_HEADER ?? "")
+    .trim()
+    .toLowerCase();
+  if (
+    ipHeader !== "" &&
+    !(TRUSTED_CLIENT_IP_HEADERS as readonly string[]).includes(ipHeader)
+  ) {
+    return null;
+  }
   // HTTPS exigé en production, sauf pile entièrement locale (recette
   // isolée : web ET API sur la boucle locale).
   const production = env.NODE_ENV === "production";
@@ -171,6 +208,8 @@ export function resolveAdminBffConfig(
     proxySecret,
     allowedOrigin,
     secureCookie: origin.protocol === "https:",
+    clientIpHeader:
+      ipHeader === "" ? null : (ipHeader as TrustedClientIpHeader),
   };
 }
 
@@ -180,6 +219,16 @@ export const ADMIN_RESPONSE_HEADERS: Readonly<Record<string, string>> = {
   Pragma: "no-cache",
   "X-Robots-Tag": "noindex, nofollow",
 };
+
+/**
+ * Déconnexion : le cookie est effacé dans TOUS les cas (réponse de l'API,
+ * erreur, API injoignable). Le navigateur perd le jeton même si la
+ * révocation côté serveur n'a pas pu être faite ; la session serveur expire
+ * alors à son délai d'inactivité (30 min au plus).
+ */
+export function clearsCookieAlways(path: string): boolean {
+  return path === "auth/logout";
+}
 
 /** Codes après lesquels le cookie de session est effacé. */
 export const SESSION_CLEARING_CODES = new Set([
@@ -200,14 +249,24 @@ export function extractSession(body: unknown): {
     return { body, token: null, clear: false };
   }
   const record = { ...(body as Record<string, unknown>) };
-  const session = record.session as { token?: unknown } | undefined;
-  const token =
-    session &&
-    typeof session.token === "string" &&
-    /^[A-Za-z0-9_-]{43}$/.test(session.token)
-      ? session.token
-      : null;
-  delete record.session;
+  const session = record.session;
+  let token: string | null = null;
+  if (
+    typeof session === "object" &&
+    session !== null &&
+    !Array.isArray(session)
+  ) {
+    // Seul le JETON est retiré (et posé en cookie) ; les autres informations
+    // de session (échéances renvoyées par `auth/status`) restent visibles.
+    const { token: raw, ...rest } = session as Record<string, unknown>;
+    if (typeof raw === "string" && /^[A-Za-z0-9_-]{43}$/.test(raw)) {
+      token = raw;
+    }
+    if (Object.keys(rest).length > 0) record.session = rest;
+    else delete record.session;
+  } else {
+    delete record.session;
+  }
   const clear =
     record.sessionCleared === true ||
     (typeof record.code === "string" &&

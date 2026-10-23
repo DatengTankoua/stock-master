@@ -31,6 +31,15 @@ import {
 } from './platform-admin-indexes';
 import { auditDocument } from './platform-admin-store';
 import { parseCliArguments } from '../migrations/platform-admin-cli';
+import {
+  planOfferedExtension,
+  DAY_MS,
+} from '../subscriptions/subscription-terms';
+import {
+  actionContentHash,
+  normalizeIntent,
+} from './platform-admin-action-intent';
+import { effectiveCapabilities } from './platform-admin-capabilities';
 
 const key = () => randomBytes(32).toString('base64');
 const PROXY = randomBytes(32).toString('base64url');
@@ -269,9 +278,13 @@ describe('Administration de la plateforme — audit et index', () => {
         'actorLabel',
         'actorType',
         'actorUserId',
+        'after',
         'at',
+        'before',
+        'capability',
         'clientKeyHash',
         'detail',
+        'operationId',
         'outcome',
         'sessionId',
         'targetId',
@@ -356,5 +369,208 @@ describe('Administration de la plateforme — commande opérateur', () => {
   it('l’erreur ne recopie jamais une valeur reçue', () => {
     const message = parseCliArguments(['grant', '--password=hunter2']);
     expect(message).not.toContain('hunter2');
+  });
+});
+
+describe('Administration de la plateforme — capacités', () => {
+  it('autorisation antérieure (sans champ) : lecture seule', () => {
+    expect([...effectiveCapabilities({})]).toEqual(['platform.read']);
+  });
+  it('valeurs inconnues ignorées (jamais une permission de commerce)', () => {
+    expect([
+      ...effectiveCapabilities({
+        capabilities: [
+          'platform.organizations.suspend',
+          'products.edit',
+          'admin',
+        ],
+      }),
+    ]).toEqual(['platform.organizations.suspend']);
+  });
+  it('liste vide : aucune capacité, pas même la lecture', () => {
+    expect(effectiveCapabilities({ capabilities: [] }).size).toBe(0);
+  });
+});
+
+describe('Administration de la plateforme — commande : capacités', () => {
+  const id = '0123456789abcdef01234567';
+  const base = [
+    `--user-id=${id}`,
+    '--reason=Astreinte support niveau 2',
+    '--operator=ops',
+  ];
+  it('capacité connue exigée, lecture seule par défaut', () => {
+    expect(
+      parseCliArguments([
+        'capability-add',
+        ...base,
+        '--capability=platform.subscriptions.extend',
+      ]),
+    ).toMatchObject({
+      command: 'capability-add',
+      apply: false,
+      capability: 'platform.subscriptions.extend',
+    });
+    expect(
+      typeof parseCliArguments([
+        'capability-add',
+        ...base,
+        '--capability=products.edit',
+      ]),
+    ).toBe('string');
+    expect(typeof parseCliArguments(['capability-add', ...base])).toBe(
+      'string',
+    );
+    expect(
+      typeof parseCliArguments([
+        'grant',
+        ...base,
+        '--capability=platform.read',
+      ]),
+    ).toBe('string');
+  });
+});
+
+describe('Administration de la plateforme — contenu confirmé d’une action', () => {
+  const organizationId = '0123456789abcdef01234567';
+  const operationId = '3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b';
+  const extend = {
+    action: 'subscription_extend',
+    organizationId,
+    operationId,
+    days: 14,
+    reason: '  Geste commercial après incident  ',
+    expectedCoverageEndsAt: '2026-11-01T10:00:00.000Z',
+  };
+
+  it('forme canonique : espaces de bord retirés, date ISO', () => {
+    const intent = normalizeIntent(extend);
+    expect(intent).toMatchObject({ reason: 'Geste commercial après incident' });
+    expect(actionContentHash(intent)).toBe(
+      actionContentHash(
+        normalizeIntent({
+          ...extend,
+          reason: 'Geste commercial après incident',
+        }),
+      ),
+    );
+  });
+
+  it('toute modification change l’empreinte (nouvelle vérification)', () => {
+    const hash = actionContentHash(normalizeIntent(extend));
+    for (const change of [
+      { days: 15 },
+      { reason: 'Autre motif suffisamment long' },
+      { organizationId: 'fedcba9876543210fedcba98' },
+      { operationId: '3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0c' },
+      { expectedCoverageEndsAt: null },
+    ]) {
+      expect(
+        actionContentHash(normalizeIntent({ ...extend, ...change })),
+      ).not.toBe(hash);
+    }
+  });
+
+  it.each([
+    [{ days: 0 }],
+    [{ days: 91 }],
+    [{ days: 1.5 }],
+    [{ days: '10' }],
+    [{ reason: 'court' }],
+    [{ operationId: 'pas-un-uuid' }],
+    [{ organizationId: '../users' }],
+    [{ expectedCoverageEndsAt: 'demain' }],
+    [{ action: 'organization_delete' }],
+  ])('refuse %j', (change) => {
+    expect(() => normalizeIntent({ ...extend, ...change })).toThrow();
+  });
+
+  it('suspension : motif interne et message client tous deux requis', () => {
+    const suspend = {
+      action: 'organization_suspend',
+      organizationId,
+      operationId,
+      internalReason: 'Impayé signalé par la comptabilité',
+      clientMessage: 'Votre commerce est suspendu, contactez le support.',
+    };
+    expect(normalizeIntent(suspend).action).toBe('organization_suspend');
+    expect(() => normalizeIntent({ ...suspend, clientMessage: '' })).toThrow();
+    expect(() =>
+      normalizeIntent({ ...suspend, internalReason: undefined }),
+    ).toThrow();
+  });
+});
+
+describe('Prolongation offerte — calcul', () => {
+  const now = new Date('2026-10-23T12:00:00.000Z');
+  const at = (days: number) => new Date(now.getTime() + days * DAY_MS);
+  const period = (from: number, to: number) => ({
+    startsAt: at(from),
+    endsAt: at(to),
+  });
+
+  it('essai en cours : à la suite de l’essai', () => {
+    const plan = planOfferedExtension([period(-3, 4)], now, 10);
+    expect(plan).toEqual({
+      ok: true,
+      basis: 'extend-coverage',
+      previousCoverageEndsAt: at(4),
+      startsAt: at(4),
+      endsAt: at(14),
+      scheduledPeriods: 0,
+    });
+  });
+
+  it('abonnement valide suivi d’une période jointive programmée : après celle-ci, inchangée', () => {
+    const plan = planOfferedExtension([period(-10, 5), period(5, 35)], now, 7);
+    expect(plan).toMatchObject({
+      ok: true,
+      basis: 'extend-coverage',
+      startsAt: at(35),
+      endsAt: at(42),
+      scheduledPeriods: 1,
+    });
+  });
+
+  it('abonnement expiré : commence à l’heure serveur', () => {
+    const plan = planOfferedExtension([period(-40, -10)], now, 30);
+    expect(plan).toMatchObject({
+      ok: true,
+      basis: 'start-now',
+      previousCoverageEndsAt: null,
+      startsAt: now,
+      endsAt: at(30),
+    });
+  });
+
+  it('aucune période : commence à l’heure serveur', () => {
+    expect(planOfferedExtension([], now, 1)).toMatchObject({
+      ok: true,
+      basis: 'start-now',
+    });
+  });
+
+  it('interruption avant une période future : refus', () => {
+    expect(
+      planOfferedExtension([period(-5, 2), period(4, 30)], now, 7),
+    ).toEqual({
+      ok: false,
+      refusal: 'DISCONTINUOUS_COVERAGE',
+    });
+  });
+
+  it('période programmée sans couverture en cours : refus (début ambigu)', () => {
+    expect(
+      planOfferedExtension([period(-40, -10), period(3, 33)], now, 7),
+    ).toEqual({
+      ok: false,
+      refusal: 'SCHEDULED_WITHOUT_CURRENT',
+    });
+  });
+
+  it('borne exclue : une période se terminant maintenant ne couvre plus', () => {
+    expect(planOfferedExtension([period(-30, 0)], now, 5)).toMatchObject({
+      basis: 'start-now',
+    });
   });
 });

@@ -514,8 +514,12 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     en: 'endsAt must be after startsAt.',
   },
   'source incohérente avec kind.': { en: 'source inconsistent with kind.' },
-  "term requis pour un abonnement, interdit pour l'essai.": {
-    en: 'term required for a subscription, forbidden for the trial.',
+  "term requis pour un abonnement, interdit pour l'essai et la prolongation offerte.":
+    {
+      en: 'term required for a subscription, forbidden for the trial and an offered extension.',
+    },
+  'offeredDays : 1 à 90 jours, prolongation offerte seulement.': {
+    en: 'offeredDays: 1 to 90 days, offered extension only.',
   },
 
   // ─── Assistance ───────────────────────────────────────────────────────
@@ -573,6 +577,25 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
   },
   'Trop de tentatives. Réessayez plus tard.': {
     en: 'Too many attempts. Try again later.',
+  },
+  'Ce commerce est suspendu.': {
+    en: 'This shop is suspended.',
+  },
+  'Paramètre invalide.': {
+    en: 'Invalid parameter.',
+  },
+  'Votre accès ne permet pas cette action.': {
+    en: 'Your access does not allow this action.',
+  },
+  'Identifiant d’opération déjà utilisé pour une autre demande.': {
+    en: 'Operation identifier already used for another request.',
+  },
+  'La situation a changé depuis votre confirmation. Vérifiez puis recommencez.':
+    {
+      en: 'The situation changed since your confirmation. Check and start again.',
+    },
+  'Prolongation impossible sans réécrire les périodes existantes.': {
+    en: 'Extension impossible without rewriting existing periods.',
   },
   'Introuvable.': {
     en: 'Not found.',

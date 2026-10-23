@@ -56,6 +56,10 @@ export default function AdminOverviewPage() {
                 value={format.number(data.subscriptions.paid)}
               />
               <Stat
+                label={t("overview.offered")}
+                value={format.number(data.subscriptions.offered)}
+              />
+              <Stat
                 label={t("overview.manual")}
                 value={format.number(data.subscriptions.manual)}
               />

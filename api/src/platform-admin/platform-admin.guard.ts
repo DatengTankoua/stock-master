@@ -12,8 +12,10 @@ import type { Request, Response } from 'express';
 import { isIP } from 'net';
 import type { Observable } from 'rxjs';
 import { clientKeyFor } from '../common/auth-rate-limiting';
+import type { PlatformCapability } from './platform-admin-capabilities';
 import {
   PlatformAdminService,
+  UNATTRIBUTED_CLIENT,
   type AccessLevel,
   type PlatformAdminRequestContext,
 } from './platform-admin.service';
@@ -37,6 +39,12 @@ const ACCESS_LEVEL_KEY = 'platformAdminAccessLevel';
  */
 export const PlatformAdminAccess = (level: AccessLevel) =>
   SetMetadata(ACCESS_LEVEL_KEY, level);
+
+const CAPABILITY_KEY = 'platformAdminCapability';
+
+/** Capacité plateforme exigée en plus du niveau (relue à chaque requête). */
+export const PlatformAdminCapability = (capability: PlatformCapability) =>
+  SetMetadata(CAPABILITY_KEY, capability);
 
 type AdminRequest = Request & { platformAdmin?: PlatformAdminRequestContext };
 
@@ -71,12 +79,22 @@ export class PlatformAdminGuard implements CanActivate {
     request.platformAdmin = await this.service.authenticate(level, {
       proxySecret,
       sessionToken: header(request, ADMIN_SESSION_HEADER),
-      // L'adresse transmise n'est retenue que si elle est une IP valide ; le
-      // secret du BFF est vérifié par `authenticate` avant tout usage.
-      clientKey: clientKeyFor(
-        forwarded && isIP(forwarded) ? forwarded : request.ip,
-      ),
+      // Adresse retenue SEULEMENT si le BFF en relaie une (en-tête déclaré
+      // de confiance côté web) et qu'elle est valide ; le secret du BFF est
+      // vérifié par `authenticate` avant tout usage. Jamais l'adresse de la
+      // socket (celle du BFF, commune à tous les administrateurs).
+      clientKey:
+        forwarded && isIP(forwarded)
+          ? clientKeyFor(forwarded)
+          : UNATTRIBUTED_CLIENT,
     });
+    const capability = this.reflector.getAllAndOverride<PlatformCapability>(
+      CAPABILITY_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (capability) {
+      this.service.requireCapability(request.platformAdmin, capability);
+    }
     return true;
   }
 }

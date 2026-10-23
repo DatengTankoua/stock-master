@@ -5,6 +5,7 @@ import {
   adminCookieName,
   adminCookieOptions,
   checkAdminRequest,
+  clearsCookieAlways,
   clientAddress,
   extractSession,
   filterAdminQuery,
@@ -76,7 +77,7 @@ async function relay(request: NextRequest, context: Context) {
   };
   if (body !== undefined) headers["content-type"] = "application/json";
   if (sessionToken) headers["x-platform-admin-session"] = sessionToken;
-  const address = clientAddress(request.headers);
+  const address = clientAddress(request.headers, config.clientIpHeader);
   if (address) headers["x-platform-admin-client-ip"] = address;
   const language = request.headers.get("accept-language");
   if (language) headers["accept-language"] = language.slice(0, 100);
@@ -95,7 +96,17 @@ async function relay(request: NextRequest, context: Context) {
       },
     );
   } catch {
-    return reply(502, { statusCode: 502, code: "PLATFORM_ADMIN_UPSTREAM" });
+    const failed = reply(502, {
+      statusCode: 502,
+      code: "PLATFORM_ADMIN_UPSTREAM",
+    });
+    if (clearsCookieAlways(path)) {
+      failed.cookies.set(cookieName, "", {
+        ...adminCookieOptions(config.secureCookie),
+        maxAge: 0,
+      });
+    }
+    return failed;
   }
 
   const parsed: unknown = await upstream.json().catch(() => null);
@@ -111,7 +122,7 @@ async function relay(request: NextRequest, context: Context) {
       token,
       adminCookieOptions(config.secureCookie),
     );
-  } else if (clear) {
+  } else if (clear || clearsCookieAlways(path)) {
     response.cookies.set(cookieName, "", {
       ...adminCookieOptions(config.secureCookie),
       maxAge: 0,

@@ -97,6 +97,15 @@ function subscriptionStages(now: Date): Record<string, unknown>[] {
               },
               {
                 case: has('$currentPeriods', {
+                  $and: [
+                    { $eq: ['$$this.kind', 'subscription'] },
+                    { $eq: ['$$this.source', 'offered'] },
+                  ],
+                }),
+                then: 'offered',
+              },
+              {
+                case: has('$currentPeriods', {
                   $eq: ['$$this.kind', 'subscription'],
                 }),
                 then: 'manual',
@@ -217,6 +226,7 @@ export class PlatformAdminDataService {
       subscriptions: {
         trial: byClass.trial ?? 0,
         paid: byClass.paid ?? 0,
+        offered: byClass.offered ?? 0,
         manual: byClass.manual ?? 0,
         scheduled: byClass.scheduled ?? 0,
         expired: byClass.expired ?? 0,
@@ -324,6 +334,12 @@ export class PlatformAdminDataService {
         status: string;
         currency: string;
         createdAt: Date;
+        suspension?: {
+          suspendedAt: Date;
+          suspendedBy: Types.ObjectId;
+          internalReason: string;
+          clientMessage: string;
+        } | null;
         subscriptionClass: SubscriptionClass;
         coverageEndsAt: Date | null;
         periods: Array<{
@@ -343,6 +359,7 @@ export class PlatformAdminDataService {
               status: 1,
               currency: 1,
               createdAt: 1,
+              suspension: 1,
             },
           },
           ...subscriptionStages(now),
@@ -386,11 +403,27 @@ export class PlatformAdminDataService {
         )
       : null;
     const roleCount = Object.fromEntries(roles.map((r) => [r._id, r.count]));
+    const suspendedBy = org.suspension?.suspendedBy
+      ? await this.collection('users').findOne(
+          { _id: org.suspension.suspendedBy },
+          { projection: { email: 1 } },
+        )
+      : null;
     return {
       id: org._id.toHexString(),
       name: org.name,
       slug: org.slug,
       status: org.status,
+      // Suspension : motif INTERNE et message au commerce, champs séparés.
+      suspension:
+        org.status === 'suspended'
+          ? {
+              suspendedAt: org.suspension?.suspendedAt ?? null,
+              suspendedBy: suspendedBy ? String(suspendedBy.email) : null,
+              internalReason: org.suspension?.internalReason ?? null,
+              clientMessage: org.suspension?.clientMessage ?? null,
+            }
+          : null,
       currency: org.currency,
       createdAt: org.createdAt,
       owner: owner

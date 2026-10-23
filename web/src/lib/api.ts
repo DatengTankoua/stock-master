@@ -400,6 +400,50 @@ export const SUBSCRIPTION_ACCESS_LIMITED = "SUBSCRIPTION_ACCESS_LIMITED";
 export const SUBSCRIPTION_STATUS_UNAVAILABLE =
   "SUBSCRIPTION_STATUS_UNAVAILABLE";
 
+/**
+ * Suspension administrative du commerce (administration de la plateforme) :
+ * refus DISTINCT, réservé aux membres actifs. Le message destiné au commerce
+ * n'est fourni qu'au propriétaire. Jamais une erreur de saisie : les ventes
+ * en attente restent sur l'appareil et repartent après réactivation.
+ */
+export const ORGANIZATION_SUSPENDED = "ORGANIZATION_SUSPENDED";
+
+export interface OrganizationSuspendedView {
+  organizationId: string;
+  organizationName: string;
+  suspendedAt: string | null;
+  isOwner: boolean;
+  message: string | null;
+}
+
+export function readOrganizationSuspended(
+  err: unknown,
+): OrganizationSuspendedView | null {
+  if (!axios.isAxiosError(err) || err.response?.status !== 403) return null;
+  const data = err.response.data as
+    | { code?: unknown; suspension?: Partial<OrganizationSuspendedView> }
+    | undefined;
+  if (data?.code !== ORGANIZATION_SUSPENDED) return null;
+  const s = data.suspension ?? {};
+  return {
+    organizationId:
+      typeof s.organizationId === "string" ? s.organizationId : "",
+    organizationName:
+      typeof s.organizationName === "string" ? s.organizationName : "",
+    suspendedAt: typeof s.suspendedAt === "string" ? s.suspendedAt : null,
+    isOwner: s.isOwner === true,
+    message: typeof s.message === "string" ? s.message : null,
+  };
+}
+
+let organizationSuspendedListener: (() => void) | null = null;
+
+export function setOrganizationSuspendedListener(
+  listener: (() => void) | null,
+): void {
+  organizationSuspendedListener = listener;
+}
+
 /** Refus COMMERCIAL (abonnement inactif ou session limitée). */
 export function isCommercialRefusalCode(code: unknown): boolean {
   return code === SUBSCRIPTION_INACTIVE || code === SUBSCRIPTION_ACCESS_LIMITED;
@@ -441,6 +485,18 @@ apiClient.interceptors.response.use(
     ) {
       subscriptionBlockedListener?.();
     }
+    // Suspension du commerce courant : le shell relit le contexte et
+    // affiche l'écran de suspension (aucune déconnexion, rien d'effacé).
+    if (
+      axios.isAxiosError(error) &&
+      error.response?.status === 403 &&
+      (error.response.data as { code?: unknown } | undefined)?.code ===
+        ORGANIZATION_SUSPENDED &&
+      !error.config?.url?.startsWith("/auth/") &&
+      bearerOf(error.config?.headers?.Authorization) === getToken()
+    ) {
+      organizationSuspendedListener?.();
+    }
     return Promise.reject(error);
   },
 );
@@ -457,6 +513,8 @@ export type LoginResponse =
   | {
       organizationSelectionRequired: true;
       organizations: SelectableOrganization[];
+      /** Commerces suspendus (membership active) : espace limité seulement. */
+      suspendedOrganizations?: SelectableOrganization[];
     };
 
 export async function authLogin(payload: {
@@ -802,6 +860,8 @@ export function canRecordSalesFromContext(
 export interface ApiSubscriptionPeriod {
   kind: "trial" | "subscription";
   term: "monthly" | "quarterly" | "semiannual" | "annual" | null;
+  /** Prolongation offerte par Stock Master (aucun paiement). */
+  offered?: boolean;
   startsAt: string;
   endsAt: string;
 }

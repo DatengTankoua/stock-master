@@ -15,6 +15,10 @@ import {
 } from "@/components/admin/admin-ui";
 import { PaymentList } from "@/components/admin/payment-list";
 import {
+  OrganizationActions,
+  OrganizationSuspensionPanel,
+} from "@/components/admin/organization-actions";
+import {
   AdminApiError,
   type AdminOrganizationDetail,
 } from "@/lib/admin/admin-api";
@@ -22,8 +26,8 @@ import {
 const NOT_FOUND = new AdminApiError(404, "PLATFORM_ADMIN_NOT_FOUND", null);
 const isKind = (v: string): v is "trial" | "subscription" =>
   v === "trial" || v === "subscription";
-const isSource = (v: string): v is "trial" | "manual" | "payment" =>
-  v === "trial" || v === "manual" || v === "payment";
+const isSource = (v: string): v is "trial" | "manual" | "payment" | "offered" =>
+  v === "trial" || v === "manual" || v === "payment" || v === "offered";
 const isTerm = (
   v: string,
 ): v is "monthly" | "quarterly" | "semiannual" | "annual" =>
@@ -80,6 +84,8 @@ export default function AdminOrganizationPage() {
               <Badge variant="outline">{t("status.suspended")}</Badge>
             )}
           </header>
+          <OrganizationSuspensionPanel organization={data} />
+          <OrganizationActions organization={data} onChanged={retry} />
           <div className="grid gap-4 lg:grid-cols-2">
             <AdminSection title={t("organization.identity")}>
               <dl className="divide-y divide-border">

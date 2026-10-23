@@ -18,6 +18,7 @@
     "test:push-reconnect": "node scripts/test-push-reconnect.mjs",
     "test:whatsapp-contact": "node scripts/test-whatsapp-contact.mjs",
     "test:admin-bff": "node scripts/test-admin-bff.mjs",
+    "test:organization-suspension": "node scripts/test-organization-suspension.mjs",
     "i18n:coverage": "node scripts/i18n-coverage.mjs --fail"
   },
   "dependencies": {

@@ -96,12 +96,16 @@ import {
   hasApplicationAccess,
   isNetworkError,
   setSubscriptionBlockedListener,
+  setOrganizationSuspendedListener,
+  readOrganizationSuspended,
+  type OrganizationSuspendedView,
   SUBSCRIPTION_STATUS_UNAVAILABLE,
   type ApiAccessView,
   type ApiAuthContext,
   type ApiOrganizationCurrent,
   type SelectableOrganization,
 } from "@/lib/api";
+import { OrganizationSuspendedNotice } from "@/components/organization/organization-suspended-notice";
 
 // 1-16G : libellés dans `common` (`shell.nav.*`).
 type ShellNavKey =
@@ -277,6 +281,7 @@ export default function AppShellLayout({
     useAuth();
   const { t } = useT("common");
   const { t: ts } = useT("subscription");
+  const { t: tOrganization } = useT("organization");
   const { locale } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -339,6 +344,10 @@ export default function AppShellLayout({
   // (leurs données ne sont plus autorisées), seules les ventes locales et la
   // déconnexion restent proposées. Levé uniquement par un contexte valide.
   const [accessRefused, setAccessRefused] = useState(false);
+  // Commerce courant suspendu par Stock Master (refus distinct) : écran de
+  // suspension à la place des pages ; ventes en attente conservées.
+  const [suspension, setSuspension] =
+    useState<OrganizationSuspendedView | null>(null);
   // 1-15A : session (utilisateur + version du jeton) à laquelle appartient
   // l'état du contexte ; les pages ne sont jamais montées avec le contexte
   // d'une session précédente (autre onglet, reprise d'une session limitée).
@@ -381,6 +390,16 @@ export default function AppShellLayout({
   // (session ouverte puis expiration) bascule sur l'écran de blocage : le
   // refus est mémorisé pour cette identité, la capacité hors ligne retirée ;
   // le contexte est relu pour afficher l'état exact. Aucune déconnexion.
+  // Commerce suspendu pendant la session : relecture du contexte, qui
+  // affiche l'écran de suspension (aucune déconnexion, rien d'effacé).
+  useEffect(() => {
+    setOrganizationSuspendedListener(() => {
+      void clearSalesCapability();
+      setRefreshTick((v) => v + 1);
+    });
+    return () => setOrganizationSuspendedListener(null);
+  }, []);
+
   useEffect(() => {
     setSubscriptionBlockedListener(() => {
       const ctx = authContextRef.current;
@@ -447,6 +466,7 @@ export default function AppShellLayout({
       setOfflineIdentity(null);
       setCommercialBlock(null);
       setAccessRefused(false);
+      setSuspension(null);
       setContextReady(false);
       setListLoaded(false);
       setOrganizations([]);
@@ -517,6 +537,10 @@ export default function AppShellLayout({
           setContextSessionKey(currentSession);
           setContextReady(true);
         } else {
+          // Suspension : même fermeture que tout refus serveur (capacité
+          // hors ligne retirée, pages retirées), message dédié ; l'outbox
+          // n'est jamais vidée.
+          setSuspension(readOrganizationSuspended(reason));
           setOfflineIdentity(null);
           setOfflineBrand(null);
           // Refus serveur : plus aucune saisie hors ligne sur cet appareil,
@@ -542,6 +566,7 @@ export default function AppShellLayout({
       setReconnectPending(false);
       setOfflineIdentity(null);
       setAccessRefused(false);
+      setSuspension(null);
       setContextSessionKey(currentSession);
       // 1-15A : droits, rôle, organisation ou utilisateur changés → pages
       // remontées (données et requêtes de l'ancien contexte abandonnées).
@@ -1119,9 +1144,21 @@ export default function AppShellLayout({
                   data-testid="access-refused"
                   className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-4 text-center"
                 >
-                  <p role="alert" className="text-sm text-muted-foreground">
-                    {t("shell.accessRefused")}
-                  </p>
+                  {suspension ? (
+                    <OrganizationSuspendedNotice suspension={suspension}>
+                      <button
+                        type="button"
+                        onClick={() => setRefreshTick((v) => v + 1)}
+                        className="inline-flex w-fit items-center justify-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+                      >
+                        {tOrganization("suspended.retry")}
+                      </button>
+                    </OrganizationSuspendedNotice>
+                  ) : (
+                    <p role="alert" className="text-sm text-muted-foreground">
+                      {t("shell.accessRefused")}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={handleLogout}

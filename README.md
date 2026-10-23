@@ -320,7 +320,9 @@ vérifications sur vrais téléphones.
 L'**administration de la plateforme** (`/admin`) est distincte de ces rôles :
 autorisation accordée hors interface par la commande `platform-admin`, double
 authentification obligatoire
-([platform-admin-mfa.md](docs/architecture/platform-admin-mfa.md)).
+([platform-admin-mfa.md](docs/architecture/platform-admin-mfa.md)) ; suspension,
+réactivation et prolongation offerte par capacités dédiées
+([platform-admin-actions.md](docs/architecture/platform-admin-actions.md)).
 
 Les droits effectifs sont recalculés par l'API à chaque requête
 (`effectivePermissions`) ; détails :

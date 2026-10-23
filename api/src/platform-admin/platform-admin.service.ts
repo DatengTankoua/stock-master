@@ -16,6 +16,7 @@ import {
   type PlatformAdminSessionDoc,
 } from './platform-admin-store';
 import {
+  adminCapabilityRequired,
   adminAccessDenied,
   adminAlreadyEnrolled,
   adminChallengeInvalid,
@@ -42,6 +43,15 @@ import {
   encryptTotpSecret,
   type EncryptedTotpSecret,
 } from './totp-secret-cipher';
+import {
+  effectiveCapabilities,
+  type PlatformCapability,
+} from './platform-admin-capabilities';
+import {
+  ACTION_CAPABILITY,
+  actionContentHash,
+  type ActionIntent,
+} from './platform-admin-action-intent';
 import { generateTotpSecret, totpProvisioning, verifyTotpCode } from './totp';
 
 /**
@@ -81,6 +91,9 @@ export const ADMIN_MFA_IP_POLICY: FixedWindowPolicy = {
   windowMs: FIFTEEN_MINUTES,
 };
 
+/** Requête relayée sans adresse de confiance (voir le BFF). */
+export const UNATTRIBUTED_CLIENT = 'unattributed';
+
 export type AccessLevel = 'login' | 'session' | 'pre-mfa' | 'mfa';
 
 export interface PlatformAdminRequestContext {
@@ -89,6 +102,8 @@ export interface PlatformAdminRequestContext {
   session?: PlatformAdminSessionDoc;
   user?: { _id: Types.ObjectId; name: string; email: string };
   factor?: PlatformAdminFactorDoc | null;
+  /** Capacités de l'autorisation ACTIVE, relues à chaque requête. */
+  capabilities?: ReadonlySet<PlatformCapability>;
 }
 
 export interface AuthenticationInput {
@@ -205,6 +220,7 @@ export class PlatformAdminService {
       throw adminSessionExpired();
     }
     const factor = await this.db.factors.findOne({ userId: session.userId });
+    context.capabilities = effectiveCapabilities(grant);
 
     if (level === 'pre-mfa' && session.stage !== 'password') {
       throw adminAlreadyEnrolled();
@@ -252,10 +268,7 @@ export class PlatformAdminService {
     stage: 'enroll' | 'verify';
     challenge?: { token: string; expiresAt: Date };
   }> {
-    const ipAttempt = await this.rateLimiter.consume(
-      ADMIN_LOGIN_IP_POLICY,
-      context.clientKey,
-    );
+    const ipAttempt = await this.consumeNetwork(ADMIN_LOGIN_IP_POLICY, context);
     if (!ipAttempt.allowed) {
       await this.audit({
         actorType: 'anonymous',
@@ -393,7 +406,10 @@ export class PlatformAdminService {
         absoluteExpiresAt: session.absoluteExpiresAt,
       },
       ...(stage === 'ready'
-        ? { recoveryCodesRemaining: await this.remainingRecoveryCodes(context) }
+        ? {
+            recoveryCodesRemaining: await this.remainingRecoveryCodes(context),
+            capabilities: [...(context.capabilities ?? [])].sort(),
+          }
         : {}),
     };
   }
@@ -530,14 +546,23 @@ export class PlatformAdminService {
 
   // ─── Vérification renforcée, codes, changement de facteur ─────────────
 
-  /** Mot de passe récent + second facteur actuel → jeton à usage unique. */
+  /**
+   * Mot de passe récent + second facteur actuel → jeton à usage unique,
+   * 5 min. Avec `intent` : preuve LIÉE à cette action, cette organisation et
+   * ce contenu exact (empreinte), exigeant la capacité correspondante ; sans
+   * `intent` : preuve des seules opérations de sécurité du compte.
+   */
   async stepUp(
     context: PlatformAdminRequestContext,
     input: { password: string } & SecondFactorInput,
+    intent: ActionIntent | null = null,
   ): Promise<{ stepUpToken: string; expiresAt: Date }> {
     const { session, user } = this.requireSession(context);
     const factor = context.factor;
     if (!factor?.active) throw adminEnrollmentRequired();
+    if (intent) {
+      this.requireCapability(context, ACTION_CAPABILITY[intent.action]);
+    }
     const limits = await this.consumeMfaAttempt(
       context,
       user._id,
@@ -577,6 +602,9 @@ export class PlatformAdminService {
             expiresAt,
             consumedAt: null,
             attempts: 0,
+            boundAction: intent?.action ?? null,
+            boundTargetId: intent?.organizationId ?? null,
+            boundContentHash: intent ? actionContentHash(intent) : null,
           },
           { session: txn },
         );
@@ -585,7 +613,15 @@ export class PlatformAdminService {
           actorUserId: user._id,
           action: 'mfa_step_up',
           outcome: 'success',
-          detail: proof.kind,
+          detail: intent ? `${proof.kind} | ${intent.action}` : proof.kind,
+          ...(intent
+            ? {
+                targetType: 'organization' as const,
+                targetId: intent.organizationId,
+                operationId: intent.operationId,
+                capability: ACTION_CAPABILITY[intent.action],
+              }
+            : {}),
           sessionId: session._id,
           clientKeyHash: context.clientKeyHash,
         });
@@ -935,6 +971,27 @@ export class PlatformAdminService {
     if (consumed.matchedCount === 0) throw new CommitRejected('code');
   }
 
+  /**
+   * Plafond par origine réseau, seulement si le BFF a relayé une adresse
+   * de confiance. Sinon (`UNATTRIBUTED_CLIENT`), aucun plafond par adresse :
+   * l'adresse du BFF les partagerait entre tous les administrateurs (un
+   * tiers pourrait bloquer la connexion de tous) ; les plafonds par compte
+   * restent appliqués.
+   */
+  private async consumeNetwork(
+    policy: FixedWindowPolicy,
+    context: PlatformAdminRequestContext,
+  ): Promise<{
+    allowed: boolean;
+    retryAfterSeconds: number;
+    release(): Promise<void>;
+  }> {
+    if (context.clientKey === UNATTRIBUTED_CLIENT) {
+      return { allowed: true, retryAfterSeconds: 1, release: async () => {} };
+    }
+    return this.rateLimiter.consume(policy, context.clientKey);
+  }
+
   private async consumeMfaAttempt(
     context: PlatformAdminRequestContext,
     userId: Types.ObjectId,
@@ -944,10 +1001,7 @@ export class PlatformAdminService {
       ADMIN_MFA_ACCOUNT_POLICY,
       userId.toHexString(),
     );
-    const network = await this.rateLimiter.consume(
-      ADMIN_MFA_IP_POLICY,
-      context.clientKey,
-    );
+    const network = await this.consumeNetwork(ADMIN_MFA_IP_POLICY, context);
     if (!account.allowed || !network.allowed) {
       await this.audit({
         actorType: 'admin',
@@ -1043,12 +1097,80 @@ export class PlatformAdminService {
           sessionId: session._id,
           userId: user._id,
           purpose: 'step_up',
+          // Preuve non liée à une action (champ absent ou nul) uniquement.
+          boundAction: null,
           consumedAt: null,
           expiresAt: { $gt: this.now() },
         })
       : null;
     if (!stepUp) throw adminStepUpRequired();
     return stepUp;
+  }
+
+  /** 403 si la capacité plateforme manque (relue à chaque requête). */
+  requireCapability(
+    context: PlatformAdminRequestContext,
+    capability: PlatformCapability,
+  ): void {
+    if (!context.capabilities?.has(capability)) {
+      throw adminCapabilityRequired();
+    }
+  }
+
+  /**
+   * Preuve renforcée LIÉE à `intent` (même session, même utilisateur, même
+   * action, même organisation, même empreinte de contenu), non consommée et
+   * non expirée. Lecture seule : la consommation a lieu dans la transaction
+   * de l'action (`consumeStepUpIn`).
+   */
+  async findBoundStepUp(
+    context: PlatformAdminRequestContext,
+    token: string,
+    intent: ActionIntent,
+  ): Promise<PlatformAdminChallengeDoc> {
+    const { session, user } = this.requireSession(context);
+    const stepUp = OPAQUE_TOKEN_PATTERN.test(token)
+      ? await this.db.challenges.findOne({
+          tokenHash: hashOpaqueToken(token),
+          sessionId: session._id,
+          userId: user._id,
+          purpose: 'step_up',
+          boundAction: intent.action,
+          boundTargetId: intent.organizationId,
+          boundContentHash: actionContentHash(intent),
+          consumedAt: null,
+          expiresAt: { $gt: this.now() },
+        })
+      : null;
+    if (!stepUp) throw adminStepUpRequired();
+    return stepUp;
+  }
+
+  /** Consommation atomique dans la transaction de l'action. */
+  async consumeStepUpIn(
+    challenge: PlatformAdminChallengeDoc,
+    now: Date,
+    txn: MongoSession,
+  ): Promise<boolean> {
+    const consumed = await this.db.challenges.updateOne(
+      { _id: challenge._id, consumedAt: null, expiresAt: { $gt: now } },
+      { $set: { consumedAt: now } },
+      { session: txn },
+    );
+    return consumed.matchedCount === 1;
+  }
+
+  /** Audit dans la transaction de l'appelant (actions). */
+  async auditInTransaction(
+    txn: MongoSession,
+    entry: AuditEntryInput,
+  ): Promise<void> {
+    await this.auditIn(txn, entry);
+  }
+
+  /** Audit hors transaction (refus, échecs). */
+  async auditOutside(entry: AuditEntryInput): Promise<void> {
+    await this.audit(entry);
   }
 
   private async consumeChallenge(

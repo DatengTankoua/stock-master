@@ -24,6 +24,13 @@ const adminEn: Translation<typeof adminFr> = {
     loggingOut: "Signing out…",
   },
   errors: {
+    capabilityRequired: "Your access does not allow this action.",
+    operationConflict:
+      "This operation identifier was already used for another request. Start again from the record.",
+    stateChanged:
+      "The situation changed since your confirmation (another administrator or a payment). Reload the record, check and start again.",
+    extensionRefused:
+      "Extension impossible without rewriting existing periods (gap, or scheduled period without current coverage).",
     unavailable:
       "Platform administration is unavailable (disabled or incomplete configuration).",
     csrf: "Request refused. Reload the page.",
@@ -112,6 +119,7 @@ const adminEn: Translation<typeof adminFr> = {
     last30: "Last 30 days",
     collected: "Collected over 30 days",
     collectedCount: "Confirmed payments: {{count}}",
+    offered: "Offered extensions in progress",
     toReview: "Payments to review",
     definitions:
       "A valid subscription covers the present moment; it says nothing about the shop's activity. Revenue shown is subscriptions paid to Stock Master, never the shops' sales.",
@@ -137,6 +145,7 @@ const adminEn: Translation<typeof adminFr> = {
     suspended: "Suspended",
   },
   classes: {
+    offered: "Offered",
     trial: "Trial",
     paid: "Paid",
     manual: "Manual",
@@ -145,6 +154,16 @@ const adminEn: Translation<typeof adminFr> = {
     none: "None",
   },
   organization: {
+    suspendedTitle: "Shop suspended",
+    suspendedAt: "Suspended on",
+    suspendedBy: "By",
+    internalReason: "Internal reason (platform)",
+    clientMessage: "Message to the shop",
+    actions: "Actions",
+    noActionCapability:
+      "Your access is read-only. Actions are granted with the operator command.",
+    history: "Action history",
+    noHistory: "No action on this shop.",
     back: "Back to organizations",
     identity: "Identity",
     slug: "Slug",
@@ -184,6 +203,7 @@ const adminEn: Translation<typeof adminFr> = {
     subscription: "Subscription",
   },
   sources: {
+    offered: "Offered",
     trial: "Trial",
     manual: "Manual",
     payment: "Payment",
@@ -247,6 +267,11 @@ const adminEn: Translation<typeof adminFr> = {
       denied: "Denied",
     },
     actions: {
+      capability_grant: "Capability granted",
+      capability_revoke: "Capability removed",
+      organization_suspend: "Shop suspended",
+      organization_reactivate: "Shop reactivated",
+      subscription_extend: "Offered extension",
       login_password: "Sign-in (password)",
       mfa_verify: "Second factor",
       mfa_recovery_code: "Recovery code",
@@ -266,6 +291,85 @@ const adminEn: Translation<typeof adminFr> = {
       payments_view: "Payments viewed",
       audit_view: "Audit viewed",
     },
+  },
+  actions: {
+    suspend: "Suspend the shop",
+    reactivate: "Reactivate the shop",
+    extend: "Offer an extension",
+    names: {
+      organization_suspend: "Suspension",
+      organization_reactivate: "Reactivation",
+      subscription_extend: "Offered extension",
+    },
+    current: "Current status",
+    statusActive: "Active",
+    statusSuspended: "Suspended",
+    consequences: "Consequences",
+    suspendEffects: {
+      access:
+        "Online access refused to all members: browsing, sales, exports, images, payments.",
+      realtime: "Realtime connections closed (within 60 s on other servers).",
+      owner:
+        "The owner sees a limited space with your message and the support channels.",
+      kept: "Data, sales, members, rights and subscription are kept. These users' other shops stay accessible.",
+      offline:
+        "A device already offline can still show the data it holds; its pending sales are kept and sent after reactivation.",
+    },
+    reactivateEffects: {
+      only: "Only removes the suspension.",
+      unchanged:
+        "Does not extend the subscription and does not reactivate deactivated members.",
+    },
+    extendEffects: {
+      noPayment:
+        "No payment, receipt or revenue is created; existing payments do not change.",
+      noSuspension: "Does not remove a suspension; quotas and plan unchanged.",
+    },
+    internalReason: "Internal reason",
+    internalReasonHint:
+      "Visible to platform administrators only. Never shown to the shop.",
+    clientMessage: "Message to the shop owner",
+    clientMessageHint:
+      "Shown to the owner on the suspension screen. Do not put internal information in it.",
+    reason: "Reason",
+    reasonHint:
+      "Between {{min}} and {{max}} characters. Kept in the audit log.",
+    days: "Offered duration (days)",
+    daysHint: "Between {{min}} and {{max}} days.",
+    previewLoading: "Computing dates…",
+    previewState: "Current coverage",
+    previewNone: "No current coverage",
+    previewUntil: "Covered until {{date}}",
+    previewStartNow: "Start: now (server time), no current coverage.",
+    previewExtendCoverage: "Start: at the end of the current coverage.",
+    previewResult: "New period: from {{start}} to {{end}}",
+    previewScheduled: "Already scheduled periods kept as they are: {{count}}",
+    refusals: {
+      SCHEDULED_WITHOUT_CURRENT:
+        "A period is scheduled but none covers today: the start would be ambiguous. No extension possible.",
+      DISCONTINUOUS_COVERAGE:
+        "The coverage has a gap before a future period. No extension possible without rewriting history.",
+    },
+    review: "Summary",
+    edit: "Edit",
+    next: "Review",
+    stepUp:
+      "Confirm with your password and second factor. The confirmation is valid for this exact content, 5 minutes, once.",
+    password: "Password",
+    code: "6-digit code or recovery code",
+    confirm: "Confirm the action",
+    confirming: "Applying…",
+    retry: "Retry (same operation)",
+    networkLost:
+      "The response did not arrive. Retry: the same operation is never applied twice.",
+    done: "Action applied",
+    replayed:
+      "This operation had already been applied: existing result, no second effect.",
+    resultSuspended: "Shop suspended on {{date}}.",
+    resultActive: "Shop reactivated on {{date}}.",
+    resultExtended: "Offered period from {{start}} to {{end}}.",
+    close: "Close",
+    operation: "Operation",
   },
   security: {
     title: "Account security",

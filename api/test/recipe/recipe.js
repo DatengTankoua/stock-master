@@ -43,6 +43,7 @@ Pilotage (terminal 2, recette démarrée) :
   real-cli <arguments du CLI D.2G>        VRAI CLI (fournisseur indisponible : simulation bloquée)
   platform-admin <commande> [--email=<e>|--user-id=<id>] ...   commande opérateur RÉELLE (lecture seule sans --apply)
   platform-admin-flow             parcours complet de l'administration via le BFF (start --platform-admin)
+  platform-admin-actions-flow     actions (capacités, prolongation, suspension, réactivation) via le BFF
 
 Campagne navigateur (stack démarrée en mode simulated) :
   scenarios [ids...] --playwright=<dossier contenant node_modules/playwright> [--chromium=<chrome.exe>] [--out=<dossier>]
@@ -422,6 +423,13 @@ async function main(argv) {
         C.WORK_DIR,
       );
     }
+    case 'platform-admin-actions-flow':
+      return runInherited(
+        path.join(__dirname, 'platform-admin-actions-flow.js'),
+        [],
+        process.env,
+        C.WORK_DIR,
+      );
     case 'platform-admin-flow':
       return runInherited(
         path.join(__dirname, 'platform-admin-flow.js'),

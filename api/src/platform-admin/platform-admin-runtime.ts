@@ -7,6 +7,7 @@ import {
   type PlatformAdminConfig,
 } from './platform-admin-config';
 import { checkPlatformAdminIndexes } from './platform-admin-indexes';
+import { verifySubscriptionPeriodIndexes } from '../subscriptions/subscription-period-indexes';
 import {
   platformAdminCollections,
   type PlatformAdminCollections,
@@ -72,6 +73,12 @@ export class PlatformAdminRuntime {
     this.lastIndexCheck = now;
     try {
       const problems = await checkPlatformAdminIndexes(this.connection);
+      // Prolongation offerte : l'unicité `{ organizationId, sequence }` des
+      // périodes sérialise les attributions concurrentes (paiements, autres
+      // prolongations). Sans ces index, l'espace reste fermé.
+      await verifySubscriptionPeriodIndexes(this.connection).catch(() => {
+        problems.push('subscription_periods (migrate:predeploy)');
+      });
       if (problems.length > 0) {
         this.logger.warn(
           `Index de l'administration absents ou différents (migrate:predeploy) : ${problems.join(', ')}`,

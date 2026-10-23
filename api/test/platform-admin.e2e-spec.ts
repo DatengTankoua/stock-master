@@ -31,6 +31,7 @@ import {
 } from './e2e/legal-acceptance-fixtures';
 import { postRegister } from './e2e/registration-fixtures';
 import { ensurePlatformAdminIndexes } from '../src/platform-admin/platform-admin-indexes';
+import { ensureSubscriptionPeriodIndexes } from '../src/subscriptions/subscription-period-indexes';
 import {
   PLATFORM_ADMIN_CLOCK,
   PLATFORM_ADMIN_CONFIG,
@@ -230,6 +231,7 @@ describe('Administration de la plateforme (e2e)', () => {
       );
       // Même étape que `migrate:predeploy` (index seuls, aucun accès).
       await ensurePlatformAdminIndexes(connection);
+      await ensureSubscriptionPeriodIndexes(connection);
 
       const ownerEmail = unique('owner');
       const reg = await postRegister(app, {

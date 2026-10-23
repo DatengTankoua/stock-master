@@ -14,6 +14,15 @@
  *   reset-mfa  --user-id=<id> --reason=<motif> --operator=<opérateur>
  *              --identity-check=<référence de la vérification d'identité> [--apply]
  *   rotate-key --operator=<opérateur> [--apply]
+ *   capability-add    --user-id=<id> --capability=<capacité> --reason=<motif>
+ *                     --operator=<opérateur> [--apply]
+ *   capability-remove --user-id=<id> --capability=<capacité> --reason=<motif>
+ *                     --operator=<opérateur> [--apply]
+ *
+ * Capacités (`platform-admin-capabilities.ts`) : `platform.read`,
+ * `platform.organizations.suspend`, `platform.subscriptions.extend`. Une
+ * autorisation accordée (ou réaccordée) commence en lecture seule ; les
+ * autres capacités s'ajoutent une par une, sur une autorisation ACTIVE.
  *
  * - LECTURE SEULE par défaut : sans `--apply`, la commande décrit ce qu'elle
  *   ferait et n'écrit rien.
@@ -38,6 +47,13 @@ import {
 } from '../platform-admin/platform-admin-store';
 import { parsePlatformAdminKeyring } from '../platform-admin/platform-admin-config';
 import {
+  DEFAULT_PLATFORM_CAPABILITIES,
+  PLATFORM_CAPABILITIES,
+  effectiveCapabilities,
+  isPlatformCapability,
+  type PlatformCapability,
+} from '../platform-admin/platform-admin-capabilities';
+import {
   decryptTotpSecret,
   encryptTotpSecret,
   type EncryptedTotpSecret,
@@ -49,6 +65,8 @@ export const CLI_COMMANDS = [
   'revoke',
   'reset-mfa',
   'rotate-key',
+  'capability-add',
+  'capability-remove',
 ] as const;
 export type CliCommand = (typeof CLI_COMMANDS)[number];
 
@@ -59,6 +77,7 @@ export interface CliArguments {
   reason?: string;
   operator?: string;
   identityCheck?: string;
+  capability?: string;
 }
 
 const OPTIONS = {
@@ -66,6 +85,7 @@ const OPTIONS = {
   '--reason': 'reason',
   '--operator': 'operator',
   '--identity-check': 'identityCheck',
+  '--capability': 'capability',
 } as const;
 
 const REQUIRED: Record<CliCommand, readonly (keyof typeof OPTIONS)[]> = {
@@ -74,6 +94,8 @@ const REQUIRED: Record<CliCommand, readonly (keyof typeof OPTIONS)[]> = {
   revoke: ['--user-id', '--reason', '--operator'],
   'reset-mfa': ['--user-id', '--reason', '--operator', '--identity-check'],
   'rotate-key': ['--operator'],
+  'capability-add': ['--user-id', '--capability', '--reason', '--operator'],
+  'capability-remove': ['--user-id', '--capability', '--reason', '--operator'],
 };
 
 export const USAGE = [
@@ -83,6 +105,9 @@ export const USAGE = [
   '  revoke     --user-id=<id> --reason=<motif> --operator=<opérateur> [--apply]',
   '  reset-mfa  --user-id=<id> --reason=<motif> --operator=<opérateur> --identity-check=<référence> [--apply]',
   '  rotate-key --operator=<opérateur> [--apply]',
+  '  capability-add    --user-id=<id> --capability=<capacité> --reason=<motif> --operator=<opérateur> [--apply]',
+  '  capability-remove --user-id=<id> --capability=<capacité> --reason=<motif> --operator=<opérateur> [--apply]',
+  `  capacités : ${PLATFORM_CAPABILITIES.join(', ')}`,
 ].join('\n');
 
 /** Analyse stricte ; `string` = message d'erreur (jamais une valeur reçue). */
@@ -123,6 +148,12 @@ export function parseCliArguments(
     if (!required.includes(flag as keyof typeof OPTIONS)) {
       return `option ${flag} inattendue pour ${parsed.command}`;
     }
+  }
+  if (
+    parsed.capability !== undefined &&
+    !isPlatformCapability(parsed.capability)
+  ) {
+    return `--capability : ${PLATFORM_CAPABILITIES.join(' | ')}`;
   }
   if (parsed.userId !== undefined && !/^[0-9a-f]{24}$/.test(parsed.userId)) {
     return '--user-id : identifiant de 24 caractères hexadécimaux (minuscules)';
@@ -224,6 +255,10 @@ export async function runPlatformAdminCli(
     access: grant?.status ?? 'none',
     mfa: factor?.active ? 'active' : 'not_enrolled',
     activeSessions,
+    capabilities:
+      grant?.status === 'active'
+        ? [...effectiveCapabilities(grant)].sort()
+        : [],
   };
 
   switch (args.command) {
@@ -248,6 +283,8 @@ export async function runPlatformAdminCli(
               revokedAt: null,
               revokedBy: null,
               revokeReason: null,
+              // Toujours lecture seule au départ (moindre privilège).
+              capabilities: [...DEFAULT_PLATFORM_CAPABILITIES],
               updatedAt: now,
             },
           },
@@ -264,7 +301,76 @@ export async function runPlatformAdminCli(
           { session: txn },
         );
       });
-      return { result: 'granted', ...state, access: 'active' };
+      return {
+        result: 'granted',
+        ...state,
+        access: 'active',
+        capabilities: [...DEFAULT_PLATFORM_CAPABILITIES],
+      };
+    }
+
+    case 'capability-add':
+    case 'capability-remove': {
+      if (grant?.status !== 'active') {
+        throw new Error('autorisation plateforme non active');
+      }
+      const capability = args.capability as PlatformCapability;
+      const adding = args.command === 'capability-add';
+      const current = new Set(effectiveCapabilities(grant));
+      if (current.has(capability) === adding) {
+        return { result: adding ? 'already-present' : 'not-present', ...state };
+      }
+      const next = new Set(current);
+      if (adding) next.add(capability);
+      else next.delete(capability);
+      const capabilities = PLATFORM_CAPABILITIES.filter((c) => next.has(c));
+      if (!args.apply) {
+        return {
+          result: `dry-run:${args.command}`,
+          ...state,
+          capabilitiesAfter: capabilities,
+        };
+      }
+      await inTransaction(connection, async (txn) => {
+        // Écriture conditionnée à l'état lu (aucun écrasement silencieux
+        // d'une modification concurrente).
+        const updated = await db.grants.updateOne(
+          {
+            userId,
+            status: 'active',
+            updatedAt: grant.updatedAt,
+          },
+          { $set: { capabilities, updatedAt: now } },
+          { session: txn },
+        );
+        if (updated.matchedCount === 0) {
+          throw new Error('autorisation modifiée entre-temps : relancer');
+        }
+        await db.audit.insertOne(
+          {
+            _id: new Types.ObjectId(),
+            ...auditDocument(
+              {
+                ...operatorAudit(
+                  args,
+                  adding ? 'capability_grant' : 'capability_revoke',
+                  args.reason!,
+                ),
+                capability,
+                before: { capabilities: [...current].sort().join(',') },
+                after: { capabilities: capabilities.join(',') },
+              },
+              now,
+            ),
+          },
+          { session: txn },
+        );
+      });
+      return {
+        result: adding ? 'capability-added' : 'capability-removed',
+        ...state,
+        capabilities,
+      };
     }
 
     case 'revoke': {

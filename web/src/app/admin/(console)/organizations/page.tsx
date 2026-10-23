@@ -25,6 +25,7 @@ import type {
 const CLASSES: SubscriptionClass[] = [
   "trial",
   "paid",
+  "offered",
   "manual",
   "scheduled",
   "expired",

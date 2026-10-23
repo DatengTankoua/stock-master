@@ -169,6 +169,8 @@ const salesEn: Translation<typeof salesFr> = {
       abandoned: "Abandoned",
     },
     blocked: {
+      suspended:
+        "Sending paused: this shop is suspended by Stock Master. Sales stay on this device and will be sent after reactivation.",
       subscription:
         "Sending paused: this shop's subscription is not active. The sales stay on this device and will be sent after the renewal.",
       accessDenied:
@@ -220,6 +222,8 @@ const salesEn: Translation<typeof salesFr> = {
       accessDenied: "Access refused by the server.",
       subscriptionInactive:
         "Shop subscription inactive: sale kept, will be sent after renewal.",
+      organizationSuspended:
+        "Shop suspended: sale kept, will be sent after reactivation.",
       network: "Network unavailable, automatic retry.",
       server: "Sending temporarily impossible, automatic retry.",
       auth: "Session expired or access refused.",

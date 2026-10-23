@@ -1,5 +1,6 @@
 import type { Connection, Types } from 'mongoose';
 import type { EncryptedTotpSecret } from './totp-secret-cipher';
+import type { PlatformCapability } from './platform-admin-capabilities';
 
 /**
  * Collections de l'administration de la plateforme. Accès par le pilote
@@ -18,6 +19,7 @@ export const PLATFORM_ADMIN_COLLECTIONS = Object.freeze({
   sessions: 'platform_admin_sessions',
   challenges: 'platform_admin_challenges',
   audit: 'platform_admin_audit',
+  operations: 'platform_admin_operations',
 });
 
 export type GrantStatus = 'active' | 'revoked';
@@ -32,6 +34,11 @@ export interface PlatformAdminGrantDoc {
   revokedAt: Date | null;
   revokedBy: string | null;
   revokeReason: string | null;
+  /**
+   * Capacités plateforme (`platform-admin-capabilities.ts`). Absent
+   * (autorisations antérieures) : lecture seule.
+   */
+  capabilities?: PlatformCapability[];
   updatedAt: Date;
 }
 
@@ -98,6 +105,36 @@ export interface PlatformAdminChallengeDoc {
   expiresAt: Date;
   consumedAt: Date | null;
   attempts: number;
+  /**
+   * Vérification renforcée LIÉE à une action (`step_up` seulement) :
+   * action, organisation et empreinte du contenu confirmé. Absent : preuve
+   * des opérations de sécurité du compte (codes, facteur) uniquement.
+   */
+  boundAction?: PlatformAdminActionKind | null;
+  boundTargetId?: string | null;
+  boundContentHash?: string | null;
+}
+
+export type PlatformAdminActionKind =
+  'organization_suspend' | 'organization_reactivate' | 'subscription_extend';
+
+/**
+ * Opération administrative idempotente : `_id` = identifiant d'opération
+ * fourni par l'interface. Écrite dans la MÊME transaction que l'action, la
+ * consommation de la preuve renforcée et l'audit. Même identifiant et même
+ * contenu → résultat existant ; contenu différent → refus.
+ */
+export interface PlatformAdminOperationDoc {
+  _id: string;
+  action: PlatformAdminActionKind;
+  organizationId: Types.ObjectId;
+  actorUserId: Types.ObjectId;
+  contentHash: string;
+  createdAt: Date;
+  /** Motif saisi (interne à la plateforme). */
+  reason: string;
+  /** Résultat rejouable (aucune donnée secrète). */
+  result: Record<string, unknown>;
 }
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
@@ -122,6 +159,11 @@ export const PLATFORM_ADMIN_AUDIT_ACTIONS = [
   'organization_view',
   'payments_view',
   'audit_view',
+  'capability_grant',
+  'capability_revoke',
+  'organization_suspend',
+  'organization_reactivate',
+  'subscription_extend',
 ] as const;
 export type PlatformAdminAuditAction =
   (typeof PLATFORM_ADMIN_AUDIT_ACTIONS)[number];
@@ -142,7 +184,16 @@ export interface PlatformAdminAuditDoc {
   sessionId: Types.ObjectId | null;
   /** Empreinte HMAC de l'origine réseau (jamais l'adresse en clair). */
   clientKeyHash: string | null;
+  /** Capacité plateforme exercée ou modifiée. */
+  capability: PlatformCapability | null;
+  /** Identifiant d'opération idempotente (actions). */
+  operationId: string | null;
+  /** État avant / après (valeurs simples, jamais un secret). */
+  before: AuditState | null;
+  after: AuditState | null;
 }
+
+export type AuditState = Record<string, string | number | boolean | null>;
 
 export function platformAdminCollections(connection: Connection) {
   const db = connection.db;
@@ -166,6 +217,9 @@ export function platformAdminCollections(connection: Connection) {
     audit: db.collection<PlatformAdminAuditDoc>(
       PLATFORM_ADMIN_COLLECTIONS.audit,
     ),
+    operations: db.collection<PlatformAdminOperationDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.operations,
+    ),
   };
 }
 
@@ -186,6 +240,10 @@ export interface AuditEntryInput {
   detail?: string | null;
   sessionId?: Types.ObjectId | null;
   clientKeyHash?: string | null;
+  capability?: PlatformCapability | null;
+  operationId?: string | null;
+  before?: AuditState | null;
+  after?: AuditState | null;
 }
 
 /** Ajout seul : aucune fonction de modification ou de suppression. */
@@ -205,5 +263,9 @@ export function auditDocument(
     detail: input.detail?.slice(0, MAX_AUDIT_DETAIL_LENGTH) ?? null,
     sessionId: input.sessionId ?? null,
     clientKeyHash: input.clientKeyHash ?? null,
+    capability: input.capability ?? null,
+    operationId: input.operationId ?? null,
+    before: input.before ?? null,
+    after: input.after ?? null,
   };
 }

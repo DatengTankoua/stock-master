@@ -23,6 +23,13 @@ const adminFr = {
     loggingOut: "Déconnexion…",
   },
   errors: {
+    capabilityRequired: "Votre accès ne permet pas cette action.",
+    operationConflict:
+      "Cet identifiant d'opération a déjà servi pour une autre demande. Recommencez depuis la fiche.",
+    stateChanged:
+      "La situation a changé depuis votre confirmation (autre administrateur ou paiement). Rechargez la fiche, vérifiez puis recommencez.",
+    extensionRefused:
+      "Prolongation impossible sans réécrire les périodes existantes (interruption ou période programmée sans couverture en cours).",
     unavailable:
       "L'administration de la plateforme n'est pas disponible (désactivée ou configuration incomplète).",
     csrf: "Requête refusée. Rechargez la page.",
@@ -113,6 +120,7 @@ const adminFr = {
     last30: "30 derniers jours",
     collected: "Encaissé sur 30 jours",
     collectedCount: "Paiements confirmés : {{count}}",
+    offered: "Prolongations offertes en cours",
     toReview: "Paiements à examiner",
     definitions:
       "Un abonnement valide couvre l'instant présent ; il ne dit rien de l'activité du commerce. Les revenus affichés sont les abonnements payés à Stock Master, jamais les ventes des commerces.",
@@ -138,6 +146,7 @@ const adminFr = {
     suspended: "Suspendue",
   },
   classes: {
+    offered: "Offert",
     trial: "Essai",
     paid: "Payé",
     manual: "Manuel",
@@ -146,6 +155,16 @@ const adminFr = {
     none: "Aucun",
   },
   organization: {
+    suspendedTitle: "Commerce suspendu",
+    suspendedAt: "Suspendu le",
+    suspendedBy: "Par",
+    internalReason: "Motif interne (plateforme)",
+    clientMessage: "Message au commerce",
+    actions: "Actions",
+    noActionCapability:
+      "Votre accès est en lecture seule. Les actions sont accordées par la commande opérateur.",
+    history: "Historique des actions",
+    noHistory: "Aucune action sur ce commerce.",
     back: "Retour aux organisations",
     identity: "Identité",
     slug: "Identifiant",
@@ -185,6 +204,7 @@ const adminFr = {
     subscription: "Abonnement",
   },
   sources: {
+    offered: "Offerte",
     trial: "Essai",
     manual: "Manuel",
     payment: "Paiement",
@@ -248,6 +268,11 @@ const adminFr = {
       denied: "Refus",
     },
     actions: {
+      capability_grant: "Capacité accordée",
+      capability_revoke: "Capacité retirée",
+      organization_suspend: "Commerce suspendu",
+      organization_reactivate: "Commerce réactivé",
+      subscription_extend: "Prolongation offerte",
       login_password: "Connexion (mot de passe)",
       mfa_verify: "Second facteur",
       mfa_recovery_code: "Code de récupération",
@@ -267,6 +292,88 @@ const adminFr = {
       payments_view: "Paiements consultés",
       audit_view: "Audit consulté",
     },
+  },
+  actions: {
+    suspend: "Suspendre le commerce",
+    reactivate: "Réactiver le commerce",
+    extend: "Offrir une prolongation",
+    names: {
+      organization_suspend: "Suspension",
+      organization_reactivate: "Réactivation",
+      subscription_extend: "Prolongation offerte",
+    },
+    current: "État actuel",
+    statusActive: "Actif",
+    statusSuspended: "Suspendu",
+    consequences: "Conséquences",
+    suspendEffects: {
+      access:
+        "Accès en ligne refusé à tous les membres : consultation, ventes, exports, images, paiements.",
+      realtime:
+        "Connexions temps réel fermées (au plus 60 s sur les autres serveurs).",
+      owner:
+        "Le propriétaire voit un espace limité avec votre message et les moyens d'assistance.",
+      kept: "Données, ventes, membres, droits et abonnement conservés. Les autres commerces de ces utilisateurs restent accessibles.",
+      offline:
+        "Un appareil déjà déconnecté peut encore afficher les données qu'il a en mémoire ; ses ventes en attente sont conservées et envoyées après réactivation.",
+    },
+    reactivateEffects: {
+      only: "Retire uniquement la suspension.",
+      unchanged:
+        "Ne prolonge pas l'abonnement et ne réactive pas les membres désactivés.",
+    },
+    extendEffects: {
+      noPayment:
+        "Aucun paiement, reçu ni revenu n'est créé ; les paiements existants ne changent pas.",
+      noSuspension:
+        "Ne retire pas une suspension ; quotas et forfait inchangés.",
+    },
+    internalReason: "Motif interne",
+    internalReasonHint:
+      "Visible des seuls administrateurs de la plateforme. Jamais montré au commerce.",
+    clientMessage: "Message au propriétaire du commerce",
+    clientMessageHint:
+      "Affiché au propriétaire sur l'écran de suspension. Ne pas y mettre d'information interne.",
+    reason: "Motif",
+    reasonHint: "Entre {{min}} et {{max}} caractères. Conservé dans l'audit.",
+    days: "Durée offerte (jours)",
+    daysHint: "Entre {{min}} et {{max}} jours.",
+    previewLoading: "Calcul des dates…",
+    previewState: "Couverture actuelle",
+    previewNone: "Aucune couverture en cours",
+    previewUntil: "Couvert jusqu'au {{date}}",
+    previewStartNow:
+      "Début : maintenant (heure serveur), aucune couverture en cours.",
+    previewExtendCoverage: "Début : à la fin de la couverture actuelle.",
+    previewResult: "Nouvelle période : du {{start}} au {{end}}",
+    previewScheduled:
+      "Périodes déjà programmées conservées telles quelles : {{count}}",
+    refusals: {
+      SCHEDULED_WITHOUT_CURRENT:
+        "Une période est programmée mais aucune ne couvre aujourd'hui : le début serait ambigu. Aucune prolongation possible.",
+      DISCONTINUOUS_COVERAGE:
+        "La couverture comporte une interruption avant une période future. Aucune prolongation possible sans réécrire l'historique.",
+    },
+    review: "Récapitulatif",
+    edit: "Modifier",
+    next: "Vérifier",
+    stepUp:
+      "Confirmez avec votre mot de passe et votre second facteur. La confirmation vaut pour ce contenu exact, 5 minutes, une seule fois.",
+    password: "Mot de passe",
+    code: "Code à 6 chiffres ou code de récupération",
+    confirm: "Confirmer l'action",
+    confirming: "Application…",
+    retry: "Réessayer (même opération)",
+    networkLost:
+      "La réponse n'est pas parvenue. Réessayez : la même opération ne sera jamais appliquée deux fois.",
+    done: "Action appliquée",
+    replayed:
+      "Cette opération avait déjà été appliquée : résultat existant, aucun second effet.",
+    resultSuspended: "Commerce suspendu le {{date}}.",
+    resultActive: "Commerce réactivé le {{date}}.",
+    resultExtended: "Période offerte du {{start}} au {{end}}.",
+    close: "Fermer",
+    operation: "Opération",
   },
   security: {
     title: "Sécurité du compte",

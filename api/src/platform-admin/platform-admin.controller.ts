@@ -13,6 +13,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import {
   AdminContext,
   PlatformAdminAccess,
+  PlatformAdminCapability,
   PlatformAdminGuard,
   PlatformAdminNoStoreInterceptor,
 } from './platform-admin.guard';
@@ -21,9 +22,15 @@ import {
   type PlatformAdminRequestContext,
 } from './platform-admin.service';
 import { PlatformAdminDataService } from './platform-admin-data.service';
+import { PlatformAdminActionsService } from './platform-admin-actions.service';
+import { normalizeIntent } from './platform-admin-action-intent';
 import {
   AdminAuditQuery,
   AdminCodeDto,
+  AdminExtendDto,
+  AdminExtensionPreviewQuery,
+  AdminReactivateDto,
+  AdminSuspendDto,
   AdminLoginDto,
   AdminOrganizationsQuery,
   AdminPaymentsQuery,
@@ -48,6 +55,7 @@ export class PlatformAdminController {
   constructor(
     private readonly service: PlatformAdminService,
     private readonly data: PlatformAdminDataService,
+    private readonly actions: PlatformAdminActionsService,
   ) {}
 
   // ─── Connexion et second facteur ──────────────────────────────────────
@@ -119,7 +127,13 @@ export class PlatformAdminController {
     @AdminContext() context: PlatformAdminRequestContext,
     @Body() dto: AdminStepUpDto,
   ) {
-    return this.service.stepUp(context, dto);
+    // `intent` : preuve liée à une action (normalisée, 400 si invalide).
+    const { intent, ...factor } = dto;
+    return this.service.stepUp(
+      context,
+      factor,
+      intent ? normalizeIntent(intent) : null,
+    );
   }
 
   @HttpCode(200)
@@ -155,18 +169,21 @@ export class PlatformAdminController {
   // ─── Données en lecture seule ─────────────────────────────────────────
 
   @PlatformAdminAccess('mfa')
+  @PlatformAdminCapability('platform.read')
   @Get('overview')
   overview() {
     return this.data.overview();
   }
 
   @PlatformAdminAccess('mfa')
+  @PlatformAdminCapability('platform.read')
   @Get('organizations')
   organizations(@Query() query: AdminOrganizationsQuery) {
     return this.data.organizations(query);
   }
 
   @PlatformAdminAccess('mfa')
+  @PlatformAdminCapability('platform.read')
   @Get('organizations/:id')
   async organization(
     @AdminContext() context: PlatformAdminRequestContext,
@@ -174,10 +191,11 @@ export class PlatformAdminController {
   ) {
     const detail = await this.data.organization(id);
     await this.service.recordConsultation(context, 'organization_view', id);
-    return detail;
+    return { ...detail, actions: await this.actions.history(id) };
   }
 
   @PlatformAdminAccess('mfa')
+  @PlatformAdminCapability('platform.read')
   @Get('payments')
   async payments(
     @AdminContext() context: PlatformAdminRequestContext,
@@ -193,6 +211,7 @@ export class PlatformAdminController {
   }
 
   @PlatformAdminAccess('mfa')
+  @PlatformAdminCapability('platform.read')
   @Get('audit')
   async audit(
     @AdminContext() context: PlatformAdminRequestContext,
@@ -201,5 +220,80 @@ export class PlatformAdminController {
     const page = await this.data.audit(query);
     await this.service.recordConsultation(context, 'audit_view');
     return page;
+  }
+
+  // ─── Actions (capacité dédiée, preuve renforcée liée, idempotence) ─────
+
+  @PlatformAdminAccess('mfa')
+  @Get('organizations/:id/extension-preview')
+  extensionPreview(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Query() query: AdminExtensionPreviewQuery,
+  ) {
+    return this.actions.extensionPreview(context, id, query.days);
+  }
+
+  @HttpCode(200)
+  @PlatformAdminAccess('mfa')
+  @Post('organizations/:id/suspend')
+  suspend(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Body() dto: AdminSuspendDto,
+  ) {
+    return this.actions.execute(
+      context,
+      normalizeIntent({
+        action: 'organization_suspend',
+        organizationId: id,
+        operationId: dto.operationId,
+        internalReason: dto.internalReason,
+        clientMessage: dto.clientMessage,
+      }),
+      dto.stepUpToken,
+    );
+  }
+
+  @HttpCode(200)
+  @PlatformAdminAccess('mfa')
+  @Post('organizations/:id/reactivate')
+  reactivate(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Body() dto: AdminReactivateDto,
+  ) {
+    return this.actions.execute(
+      context,
+      normalizeIntent({
+        action: 'organization_reactivate',
+        organizationId: id,
+        operationId: dto.operationId,
+        reason: dto.reason,
+      }),
+      dto.stepUpToken,
+    );
+  }
+
+  @HttpCode(200)
+  @PlatformAdminAccess('mfa')
+  @Post('organizations/:id/extend')
+  extend(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Body() dto: AdminExtendDto,
+  ) {
+    return this.actions.execute(
+      context,
+      normalizeIntent({
+        action: 'subscription_extend',
+        organizationId: id,
+        operationId: dto.operationId,
+        days: dto.days,
+        reason: dto.reason,
+        expectedCoverageEndsAt: dto.expectedCoverageEndsAt,
+      }),
+      dto.stepUpToken,
+    );
   }
 }

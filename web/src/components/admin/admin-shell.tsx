@@ -17,7 +17,9 @@ import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import {
   adminRequest,
+  endAdminSessionQuietly,
   needsSignIn,
+  retryPendingAdminLogout,
   type AdminStatus,
 } from "@/lib/admin/admin-api";
 import { AdminError, AdminLoading } from "@/components/admin/admin-ui";
@@ -60,24 +62,28 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    adminRequest<AdminStatus>("GET", "auth/status").then(
-      (status) => {
-        if (cancelled) return;
-        if (status.stage !== "ready") {
-          router.replace("/admin/login");
-          return;
-        }
-        setState({ key, status });
-      },
-      (error: unknown) => {
-        if (cancelled) return;
-        if (needsSignIn(error)) {
-          router.replace("/admin/login?session=expired");
-          return;
-        }
-        setState({ key, error });
-      },
-    );
+    // Déconnexion en attente : rejouée AVANT de lire la session (jamais de
+    // console ouverte sur une session que l'utilisateur a voulu fermer).
+    retryPendingAdminLogout()
+      .then(() => adminRequest<AdminStatus>("GET", "auth/status"))
+      .then(
+        (status) => {
+          if (cancelled) return;
+          if (status.stage !== "ready") {
+            router.replace("/admin/login");
+            return;
+          }
+          setState({ key, status });
+        },
+        (error: unknown) => {
+          if (cancelled) return;
+          if (needsSignIn(error)) {
+            router.replace("/admin/login?session=expired");
+            return;
+          }
+          setState({ key, error });
+        },
+      );
     return () => {
       cancelled = true;
     };
@@ -85,7 +91,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setLeaving(true);
-    await adminRequest("POST", "auth/logout").catch(() => undefined);
+    await endAdminSessionQuietly();
     router.replace("/admin/login?session=out");
   };
 

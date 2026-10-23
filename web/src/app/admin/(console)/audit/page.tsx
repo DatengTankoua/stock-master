@@ -34,6 +34,11 @@ const ACTIONS = [
   "organization_view",
   "payments_view",
   "audit_view",
+  "capability_grant",
+  "capability_revoke",
+  "organization_suspend",
+  "organization_reactivate",
+  "subscription_extend",
 ] as const;
 type Action = (typeof ACTIONS)[number];
 const OUTCOMES = ["success", "failure", "denied"] as const;

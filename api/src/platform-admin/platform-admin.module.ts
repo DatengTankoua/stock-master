@@ -3,6 +3,9 @@ import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { RateLimitModule } from '../common/rate-limit/rate-limit.module';
 import { StorageQuotaModule } from '../storage-quota/storage-quota.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { OrganizationsModule } from '../organizations/organizations.module';
+import { PlatformAdminActionsService } from './platform-admin-actions.service';
 import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
@@ -19,7 +22,14 @@ import {
  * authentification obligatoire, données en lecture seule.
  */
 @Module({
-  imports: [AuthModule, UsersModule, RateLimitModule, StorageQuotaModule],
+  imports: [
+    AuthModule,
+    UsersModule,
+    RateLimitModule,
+    StorageQuotaModule,
+    SubscriptionsModule,
+    OrganizationsModule,
+  ],
   controllers: [PlatformAdminController],
   providers: [
     platformAdminConfigProvider,
@@ -27,6 +37,7 @@ import {
     PlatformAdminRuntime,
     PlatformAdminService,
     PlatformAdminDataService,
+    PlatformAdminActionsService,
     PlatformAdminGuard,
   ],
 })

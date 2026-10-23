@@ -273,16 +273,42 @@ La commande sort en code 0 si les quatre cas sont conformes.
 
 ## Administration de la plateforme
 
-Démarrer avec `start --platform-admin`. Aucun compte n'a l'accès au départ.
+Démarrer avec `start --platform-admin`. **Aucun compte n'a l'accès au
+départ**, et la base est recréée à **chaque** démarrage : sans les commandes
+ci-dessous, la connexion répond « Ce compte n'a pas accès à
+l'administration de la plateforme ».
 
-- Attribution (commande opérateur RÉELLE, base de la recette) :
-  `$R platform-admin grant --email=proprietaire.actif@recette.local --reason="Recette locale" --operator=moi`
-  (lecture seule), puis la même commande avec `--apply`. `--email` est une
-  commodité de la recette, traduite en `--user-id`.
-- Navigateur : `http://127.0.0.1:3200/admin/login`, mot de passe commun,
-  puis enrôlement avec une application d'authentification.
+À relancer après chaque `start`, depuis la racine du dépôt (commande
+opérateur RÉELLE sur la base de la recette ; `--email` est une commodité de
+la recette, traduite en `--user-id`) :
+
+```bash
+# 1. Accès plateforme (lecture seule au départ)
+node api/test/recipe/recipe.js platform-admin grant --email=proprietaire.actif@recette.local "--reason=Test manuel" --operator=moi --apply
+# 2. Suspension / réactivation
+node api/test/recipe/recipe.js platform-admin capability-add --email=proprietaire.actif@recette.local --capability=platform.organizations.suspend "--reason=Test manuel" --operator=moi --apply
+# 3. Prolongation offerte
+node api/test/recipe/recipe.js platform-admin capability-add --email=proprietaire.actif@recette.local --capability=platform.subscriptions.extend "--reason=Test manuel" --operator=moi --apply
+# Contrôle : access "active", trois capacités
+node api/test/recipe/recipe.js platform-admin status --email=proprietaire.actif@recette.local
+```
+
+- Sans `--apply`, chaque commande ne fait que décrire ce qu'elle ferait
+  (rien n'est écrit). Motif : 10 caractères au moins.
+- Navigateur : `http://127.0.0.1:3200/admin/login`, mot de passe commun
+  `Recette-locale-14d2h!`, puis enrôlement avec une application
+  d'authentification (nouveau QR code à chaque nouvelle base : supprimer
+  l'ancienne entrée « Stock Master Admin » de l'application).
 - Parcours automatisé par le serveur web (cookie, anti-CSRF, enrôlement,
   consultation, déconnexion, code de récupération, révocation) :
   `$R platform-admin-flow`. Il laisse l'accès révoqué.
 
 Rapport : [platform-admin-mfa.md](../../../docs/architecture/platform-admin-mfa.md).
+
+Actions (capacités, prolongation offerte, suspension, réactivation) :
+`$R platform-admin-actions-flow` (administrateur `admin.actif@recette.local`,
+commerce de `proprietaire.revue@recette.local` ; révoque l'accès à la fin).
+Capacités possibles : `platform.read` (accordée par `grant`),
+`platform.organizations.suspend`, `platform.subscriptions.extend` ; retrait
+par `capability-remove` (mêmes options).
+Rapport : [platform-admin-actions.md](../../../docs/architecture/platform-admin-actions.md).

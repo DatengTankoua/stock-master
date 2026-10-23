@@ -31,6 +31,7 @@ const {
   adminCookieName,
   adminCookieOptions,
   checkAdminRequest,
+  clearsCookieAlways,
   clientAddress,
   extractSession,
   filterAdminQuery,
@@ -49,7 +50,14 @@ test("seules les routes déclarées sont relayées, avec leur méthode", () => {
     resolveAdminRoute("GET", ["organizations", "0123456789abcdef01234567"]),
     "organizations/0123456789abcdef01234567",
   );
+  const org = "0123456789abcdef01234567";
+  assert.equal(resolveAdminRoute("POST", ["organizations", org, "suspend"]), `organizations/${org}/suspend`);
+  assert.equal(resolveAdminRoute("POST", ["organizations", org, "extend"]), `organizations/${org}/extend`);
+  assert.equal(resolveAdminRoute("GET", ["organizations", org, "extension-preview"]), `organizations/${org}/extension-preview`);
   for (const [method, segments] of [
+    ["GET", ["organizations", org, "suspend"]],
+    ["POST", ["organizations", org, "delete"]],
+    ["POST", ["organizations", org, "extension-preview"]],
     ["GET", ["auth", "login"]],
     ["POST", ["overview"]],
     ["DELETE", ["audit"]],
@@ -111,6 +119,34 @@ test("le jeton de session n'atteint jamais le navigateur", () => {
   assert.equal(extractSession(null).token, null);
 });
 
+test("statut : les échéances de session restent visibles, jamais un jeton", () => {
+  const status = {
+    stage: "ready",
+    session: { idleExpiresAt: "2026-10-24T10:30:00.000Z", absoluteExpiresAt: "2026-10-24T18:00:00.000Z" },
+  };
+  const out = extractSession(status);
+  assert.equal(out.token, null);
+  assert.deepEqual(out.body.session, status.session);
+  // Jeton et échéances ensemble : le jeton seul est retiré.
+  const mixed = extractSession({ session: { token: TOKEN, idleExpiresAt: "x" } });
+  assert.equal(mixed.token, TOKEN);
+  assert.deepEqual(mixed.body.session, { idleExpiresAt: "x" });
+  assert.equal(JSON.stringify(mixed.body).includes(TOKEN), false);
+});
+
+test("déconnexion : cookie toujours effacé, quelle que soit la réponse de l'API", () => {
+  assert.equal(clearsCookieAlways("auth/logout"), true);
+  assert.equal(clearsCookieAlways("auth/status"), false);
+  const route = readFileSync(
+    path.join(here, "..", "src", "app", "api", "admin", "[...path]", "route.ts"),
+    "utf8",
+  );
+  // API injoignable : la réponse 502 efface aussi le cookie.
+  const failure = route.slice(route.indexOf("} catch {"), route.indexOf("const parsed"));
+  assert.match(failure, /clearsCookieAlways\(path\)/);
+  assert.match(failure, /maxAge: 0/);
+});
+
 test("configuration : fermée par défaut, complète et cohérente sinon", () => {
   const env = {
     NODE_ENV: "production",
@@ -124,7 +160,14 @@ test("configuration : fermée par défaut, complète et cohérente sinon", () =>
     proxySecret: SECRET,
     allowedOrigin: ORIGIN,
     secureCookie: true,
+    clientIpHeader: null,
   });
+  assert.equal(
+    resolveAdminBffConfig({ ...env, PLATFORM_ADMIN_CLIENT_IP_HEADER: "X-Real-IP" }).clientIpHeader,
+    "x-real-ip",
+  );
+  // En-tête non sûr déclaré : configuration refusée (espace fermé).
+  assert.equal(resolveAdminBffConfig({ ...env, PLATFORM_ADMIN_CLIENT_IP_HEADER: "x-forwarded-for" }), null);
   assert.equal(resolveAdminBffConfig({ ...env, PLATFORM_ADMIN_ENABLED: undefined }), null);
   assert.equal(resolveAdminBffConfig({ ...env, PLATFORM_ADMIN_PROXY_SECRET: "court" }), null);
   assert.equal(resolveAdminBffConfig({ ...env, PLATFORM_ADMIN_ALLOWED_ORIGIN: `${ORIGIN}/admin` }), null);
@@ -151,11 +194,22 @@ test("configuration : fermée par défaut, complète et cohérente sinon", () =>
   );
 });
 
-test("adresse du client et paramètres relayés", () => {
+test("adresse du client : seulement l'en-tête déclaré de confiance", () => {
   const headers = (map) => ({ get: (name) => map[name] ?? null });
-  assert.equal(clientAddress(headers({ "x-real-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.1" })), "203.0.113.9");
-  assert.equal(clientAddress(headers({ "x-forwarded-for": "198.51.100.1, 10.0.0.1" })), "198.51.100.1");
-  assert.equal(clientAddress(headers({ "x-real-ip": "<script>" })), null);
+  const forged = headers({ "x-real-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.1" });
+  // Aucun en-tête déclaré : rien n'est relayé, quelle que soit la requête.
+  assert.equal(clientAddress(forged, null), null);
+  assert.equal(clientAddress(forged, "x-real-ip"), "203.0.113.9");
+  // x-forwarded-for n'est jamais lu (valeur du client possible).
+  assert.equal(clientAddress(headers({ "x-forwarded-for": "198.51.100.1" }), "x-real-ip"), null);
+  assert.equal(
+    clientAddress(headers({ "x-vercel-forwarded-for": "198.51.100.7" }), "x-vercel-forwarded-for"),
+    "198.51.100.7",
+  );
+  assert.equal(clientAddress(headers({ "x-real-ip": "<script>" }), "x-real-ip"), null);
+});
+
+test("paramètres relayés", () => {
   const query = filterAdminQuery(new URLSearchParams("page=2&q=boutique&token=secret&page=9&status=active"));
   assert.equal(query, "?page=2&q=boutique&status=active");
   assert.equal(filterAdminQuery(new URLSearchParams("")), "");

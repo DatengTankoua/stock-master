@@ -74,7 +74,11 @@ export interface OutboxOperation {
 // (JWT applicatif, accès commercial ET saisie autorisés, même identité) —
 // jamais par un simple changement de token.
 export type PartitionBlockReason =
-  "access_denied" | "corruption" | "subscription";
+  | "access_denied"
+  | "corruption"
+  | "subscription"
+  /** Commerce suspendu par la plateforme : levé comme `subscription`. */
+  | "suspended";
 
 export interface OutboxPartitionMeta {
   partitionKey: string;
@@ -631,7 +635,14 @@ export async function clearSubscriptionBlock(params: {
   try {
     const lifted = await withTx([META], "readwrite", async (tx) => {
       const meta = await getMetaIn(tx, partitionKey);
-      if (meta.blocked?.reason !== "subscription") return false;
+      // Abonnement inactif ou commerce suspendu : levés tous deux sur le
+      // même signal serveur (contexte lu, saisie autorisée).
+      if (
+        meta.blocked?.reason !== "subscription" &&
+        meta.blocked?.reason !== "suspended"
+      ) {
+        return false;
+      }
       const next: OutboxPartitionMeta = { ...meta };
       delete next.blocked;
       await req(tx.objectStore(META).put(next));

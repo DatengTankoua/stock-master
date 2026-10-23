@@ -1,5 +1,9 @@
 # Administration de la plateforme avec double authentification
 
+> Suite : [platform-admin-actions.md](platform-admin-actions.md) (capacités,
+> suspension, prolongation offerte ; corrections de l'adresse réseau relayée
+> et de la déconnexion générale).
+
 Branche : `feature/platform-admin-mfa` (depuis `origin/dev`).
 
 > Section 1 : plan écrit avant l'implémentation. Les sections suivantes
