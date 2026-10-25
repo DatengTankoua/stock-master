@@ -131,6 +131,8 @@ export type AdminErrorKey =
   | "errors.credentials"
   | "errors.emailNotVerified"
   | "errors.challengeRequired"
+  | "errors.antiBotFailed"
+  | "errors.antiBotUnavailable"
   | "errors.codeInvalid"
   | "errors.challengeInvalid"
   | "errors.rateLimited"
@@ -164,6 +166,9 @@ export function adminErrorKey(error: unknown): {
     PLATFORM_ADMIN_RATE_LIMITED: "errors.rateLimited",
     AUTH_RATE_LIMITED: "errors.rateLimited",
     AUTH_CHALLENGE_REQUIRED: "errors.challengeRequired",
+    TURNSTILE_FAILED: "errors.antiBotFailed",
+    TURNSTILE_REQUIRED: "errors.antiBotFailed",
+    TURNSTILE_UNAVAILABLE: "errors.antiBotUnavailable",
     PLATFORM_ADMIN_STEP_UP_REQUIRED: "errors.stepUpRequired",
     PLATFORM_ADMIN_ALREADY_ENROLLED: "errors.alreadyEnrolled",
     PLATFORM_ADMIN_NOT_FOUND: "errors.notFound",

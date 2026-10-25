@@ -24,6 +24,38 @@ plantait au rendu (« This page couldn't load »). Désormais seul le jeton est
 retiré. Reproduit en recette (Chrome) ; test de non-régression dans
 `test-admin-bff.mjs`.
 
+**Défi Cloudflare Turnstile sur `/admin/login` (oubli du premier lot,
+corrigé le 25 octobre 2026).** L'API appliquait déjà à la connexion
+d'administration la règle 1-18C de la connexion des commerces (même
+`verifyCredentials`, mêmes compteurs par compte) : après 10 échecs sur un
+compte (`AUTH_ACCOUNT_FAILURE_LIMIT`), chaque essai exige un défi Turnstile
+neuf (action `login`). La page ne savait pas l'afficher. Désormais :
+
+- sur `AUTH_CHALLENGE_REQUIRED`, la page affiche le widget Turnstile
+  (`TurnstileWidget`, action `login`) et n'autorise l'envoi qu'avec un jeton ;
+  jeton à usage unique, widget réinitialisé à chaque envoi ;
+- refus du défi (`TURNSTILE_FAILED`, `TURNSTILE_REQUIRED`) et indisponibilité
+  (`TURNSTILE_UNAVAILABLE`) ont leurs messages FR/EN ;
+- défi réussi + bon mot de passe : la fenêtre du compte est refermée (règle
+  1-18C inchangée) ; puis second facteur, comme toujours ;
+- CSP inchangée (`challenges.cloudflare.com` déjà autorisé pour toutes les
+  pages).
+
+Configuration : la même que la connexion des commerces
+(`TURNSTILE_SECRET_KEY`, `TURNSTILE_ALLOWED_HOSTNAMES` côté API,
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` côté web ; le nom d'hôte de `/admin` est
+celui du site). Sans Turnstile configuré, aucun défi n'est proposé : après
+10 échecs, attendre la fin de la fenêtre (15 min). En recette :
+`start --platform-admin --anti-bot=simulated`.
+
+Le défi n'est **pas** exigé à chaque connexion (même règle que les
+commerces) : la connexion d'administration garde en plus le plafond par
+adresse (§ 10) et le second facteur obligatoire.
+
+Contrôle : `platform-admin.e2e-spec.ts` (10 échecs → `AUTH_CHALLENGE_REQUIRED`
+avec le bon mot de passe ; jeton d'une autre action refusé ; jeton `login`
+neuf → connexion ; fenêtre refermée ensuite), 32/32.
+
 ### 1.1 Déconnexion d'administration en échec
 
 Chemins : déconnexion d'un commerce (`logout()`) et bouton de la console,
