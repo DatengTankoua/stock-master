@@ -8,6 +8,7 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   adminErrorKey,
+  adminErrorReference,
   adminRequest,
   needsSignIn,
 } from "@/lib/admin/admin-api";
@@ -62,12 +63,18 @@ export function AdminError({
 }) {
   const { t } = useT("admin");
   const { key, seconds } = adminErrorKey(error);
+  const reference = adminErrorReference(error);
   return (
     <div
       role="alert"
       className="flex flex-col items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
     >
       <p>{t(key, { seconds })}</p>
+      {reference && (
+        <p className="font-mono text-xs opacity-80">
+          {t("errors.reference", { reference })}
+        </p>
+      )}
       {onRetry && (
         <Button size="sm" variant="outline" onClick={onRetry}>
           {t("retry")}

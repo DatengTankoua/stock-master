@@ -14,7 +14,6 @@ import { RateLimitedException } from '../common/auth-rate-limiting';
  */
 export const PlatformAdminErrorCode = Object.freeze({
   UNAVAILABLE: 'PLATFORM_ADMIN_UNAVAILABLE',
-  PROXY_REQUIRED: 'PLATFORM_ADMIN_PROXY_REQUIRED',
   ACCESS_DENIED: 'PLATFORM_ADMIN_ACCESS_DENIED',
   SESSION_EXPIRED: 'PLATFORM_ADMIN_SESSION_EXPIRED',
   MFA_REQUIRED: 'PLATFORM_ADMIN_MFA_REQUIRED',
@@ -39,11 +38,6 @@ export const adminUnavailable = () =>
       PlatformAdminErrorCode.UNAVAILABLE,
       "L'administration de la plateforme n'est pas disponible.",
     ),
-  );
-
-export const adminProxyRequired = () =>
-  new ForbiddenException(
-    body(PlatformAdminErrorCode.PROXY_REQUIRED, 'Accès refusé.'),
   );
 
 export const adminAccessDenied = () =>

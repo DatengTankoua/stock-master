@@ -578,6 +578,11 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
   'Trop de tentatives. Réessayez plus tard.': {
     en: 'Too many attempts. Try again later.',
   },
+  // Route masquée de l'administration : même texte que le 404 du routeur
+  // de Nest, non traduit (identique à une URL inconnue).
+  'Cannot ${…} ${…}': {
+    en: 'Cannot ${…} ${…}',
+  },
   'Ce commerce est suspendu.': {
     en: 'This shop is suspended.',
   },

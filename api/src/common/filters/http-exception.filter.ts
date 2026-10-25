@@ -62,7 +62,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       response.setHeader('Cache-Control', 'no-store');
     }
     // Administration de la plateforme : erreurs privées, jamais en cache.
+    // Sauf 404 : une route masquée (appel sans le secret du BFF) répond
+    // exactement comme une URL inconnue, en-têtes compris.
     if (
+      status !== 404 &&
       typeof request.path === 'string' &&
       request.path.toLowerCase().startsWith('/platform-admin')
     ) {

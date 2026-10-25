@@ -56,6 +56,35 @@ Contrôle : `platform-admin.e2e-spec.ts` (10 échecs → `AUTH_CHALLENGE_REQUIRE
 avec le bon mot de passe ; jeton d'une autre action refusé ; jeton `login`
 neuf → connexion ; fenêtre refermée ensuite), 32/32.
 
+**Messages d'erreur sans information exploitable (26 octobre 2026).**
+
+- **API** : sans le secret du BFF, ou espace fermé, toute route
+  `/platform-admin/*` répond exactement comme une URL inconnue (404
+  `Cannot <MÉTHODE> <url>`, mêmes en-têtes) ; seul le BFF apprend ensuite si
+  l'espace est ouvert.
+- **BFF** : le corps d'erreur de l'API n'est jamais relayé (ni message, ni
+  détail de validation, ni chemin). Le navigateur reçoit le statut, un
+  **code public** et une **référence opaque aléatoire** (`publicError`,
+  `bff-policy.ts`) :
+  - connexion : mot de passe faux, compte inconnu, compte sans accès
+    plateforme et adresse non confirmée → un seul refus
+    `PLATFORM_ADMIN_LOGIN_FAILED` (« Identifiants incorrects ou accès non
+    autorisé ») ;
+  - API injoignable, erreur 5xx, secret ou route refusés, espace fermé,
+    code inconnu → `PLATFORM_ADMIN_UNAVAILABLE` ;
+  - validation → `PLATFORM_ADMIN_INVALID_REQUEST`, sans détail ;
+  - conservés : expiration de session, second facteur, défi anti-robot,
+    plafonds (identiques pour un compte connu ou inconnu), et, en session
+    vérifiée, les codes utiles aux actions.
+- **Diagnostic** : le BFF écrit dans le journal serveur
+  `[admin-bff] ref=<référence> <méthode> <route> → <statut public> <code public> (API <statut> <code>)`,
+  sans secret, jeton ni saisie. L'écran n'affiche que la référence, à
+  rechercher dans les journaux Vercel.
+- Les textes FR/EN ne citent plus ni variable de configuration, ni
+  composant, ni l'existence d'un compte.
+- Contrôles : `test-admin-bff.mjs` (14/14) ; e2e : route masquée identique à
+  une URL inconnue, espace fermé → 404 (49/49).
+
 ### 1.1 Déconnexion d'administration en échec
 
 Chemins : déconnexion d'un commerce (`logout()`) et bouton de la console,

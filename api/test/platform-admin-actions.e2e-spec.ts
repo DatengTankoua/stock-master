@@ -413,7 +413,8 @@ describe('Administration de la plateforme — actions (e2e)', () => {
         .post(`/platform-admin/organizations/${s.organizationId}/suspend`)
         .set('Authorization', `Bearer ${s.ownerToken}`)
         .send({});
-      expect([401, 403]).toContain(res.status);
+      // Sans le secret du BFF : route masquée (404), jamais d'action.
+      expect(res.status).toBe(404);
       const invite = await http()
         .post('/organizations/invitations')
         .set('Authorization', `Bearer ${s.ownerToken}`)

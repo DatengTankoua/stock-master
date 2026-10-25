@@ -31,14 +31,9 @@ const adminEn: Translation<typeof adminFr> = {
       "The situation changed since your confirmation (another administrator or a payment). Reload the record, check and start again.",
     extensionRefused:
       "Extension impossible without rewriting existing periods (gap, or scheduled period without current coverage).",
-    unavailable:
-      "Platform administration is unavailable (disabled or incomplete configuration).",
     csrf: "Request refused. Reload the page.",
     network: "Server unreachable. Check your connection.",
     sessionExpired: "Your administration session has expired. Sign in again.",
-    accessDenied: "This account has no access to platform administration.",
-    credentials: "Incorrect email or password.",
-    emailNotVerified: "Email address not confirmed.",
     challengeRequired:
       "Too many attempts on this account. Complete the anti-bot check below, then sign in again.",
     antiBotFailed: "The anti-bot check failed or expired. Do it again.",
@@ -51,7 +46,11 @@ const adminEn: Translation<typeof adminFr> = {
     stepUpRequired: "First confirm your password and your second factor.",
     alreadyEnrolled: "Two-factor authentication is already set up.",
     notFound: "Not found.",
+    unavailable: "Administration temporarily unavailable. Try again later.",
+    loginFailed: "Incorrect credentials or access not allowed.",
+    invalidRequest: "Request refused. Check your input.",
     generic: "Something went wrong. Try again.",
+    reference: "Reference: {{reference}}",
   },
   login: {
     title: "Platform administration",

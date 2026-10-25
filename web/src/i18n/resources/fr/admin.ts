@@ -30,15 +30,9 @@ const adminFr = {
       "La situation a changé depuis votre confirmation (autre administrateur ou paiement). Rechargez la fiche, vérifiez puis recommencez.",
     extensionRefused:
       "Prolongation impossible sans réécrire les périodes existantes (interruption ou période programmée sans couverture en cours).",
-    unavailable:
-      "L'administration de la plateforme n'est pas disponible (désactivée ou configuration incomplète).",
     csrf: "Requête refusée. Rechargez la page.",
     network: "Serveur injoignable. Vérifiez votre connexion.",
     sessionExpired: "Votre session administrative a expiré. Reconnectez-vous.",
-    accessDenied:
-      "Ce compte n'a pas accès à l'administration de la plateforme.",
-    credentials: "Email ou mot de passe incorrect.",
-    emailNotVerified: "Adresse email non confirmée.",
     challengeRequired:
       "Trop de tentatives sur ce compte. Validez la vérification anti-robot ci-dessous, puis reconnectez-vous.",
     antiBotFailed:
@@ -53,7 +47,11 @@ const adminFr = {
       "Confirmez d'abord votre mot de passe et votre second facteur.",
     alreadyEnrolled: "La double authentification est déjà configurée.",
     notFound: "Élément introuvable.",
+    unavailable: "Administration momentanément indisponible. Réessayez plus tard.",
+    loginFailed: "Identifiants incorrects ou accès non autorisé.",
+    invalidRequest: "Requête refusée. Vérifiez votre saisie.",
     generic: "Une erreur est survenue. Réessayez.",
+    reference: "Référence : {{reference}}",
   },
   login: {
     title: "Administration de la plateforme",
