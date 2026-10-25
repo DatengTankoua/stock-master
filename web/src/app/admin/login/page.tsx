@@ -21,6 +21,7 @@ import {
   type AdminProvisioning,
   type AdminStatus,
 } from "@/lib/admin/admin-api";
+import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 
 // Administration de la plateforme — connexion en étapes : mot de passe,
 // puis enrôlement (premier accès) ou second facteur. Aucun secret, code ni
@@ -47,6 +48,12 @@ export default function AdminLoginPage() {
   const [code, setCode] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
   const [useRecovery, setUseRecovery] = useState(false);
+  // Défi anti-robot Cloudflare Turnstile (même règle que la connexion des
+  // commerces) : exigé par l'API après trop d'échecs sur le compte
+  // (`AUTH_CHALLENGE_REQUIRED`) ; jeton à usage unique, neuf à chaque essai.
+  const [antiBotRequired, setAntiBotRequired] = useState(false);
+  const [antiBotToken, setAntiBotToken] = useState<string | null>(null);
+  const [antiBotReset, setAntiBotReset] = useState(0);
 
   useEffect(() => {
     const marker = new URLSearchParams(window.location.search).get("session");
@@ -83,6 +90,12 @@ export default function AdminLoginPage() {
       setError(err);
       if (
         err instanceof AdminApiError &&
+        err.code === "AUTH_CHALLENGE_REQUIRED"
+      ) {
+        setAntiBotRequired(true);
+      }
+      if (
+        err instanceof AdminApiError &&
         err.code === "PLATFORM_ADMIN_SESSION_EXPIRED"
       ) {
         setNotice("expired");
@@ -93,12 +106,22 @@ export default function AdminLoginPage() {
     }
   };
 
-  const submitPassword = () =>
-    run(async () => {
+  const submitPassword = () => {
+    // Jeton consommé dès l'envoi : un nouvel essai exige un nouveau défi.
+    if (antiBotToken) {
+      setAntiBotToken(null);
+      setAntiBotReset((n) => n + 1);
+    }
+    return run(async () => {
       const result = await adminRequest<{
         stage: "enroll" | "verify";
         challenge?: AdminChallenge;
-      }>("POST", "auth/login", { email, password });
+      }>("POST", "auth/login", {
+        email,
+        password,
+        ...(antiBotToken ? { challengeToken: antiBotToken } : {}),
+      });
+      setAntiBotRequired(false);
       setPassword("");
       setNotice(null);
       setStep(
@@ -107,6 +130,7 @@ export default function AdminLoginPage() {
           : { name: "verify", challenge: result.challenge ?? null },
       );
     });
+  };
 
   const newChallenge = () =>
     run(async () => {
@@ -205,7 +229,23 @@ export default function AdminLoginPage() {
                 onChange={(event) => setPassword(event.target.value)}
               />
             </div>
-            <Button type="submit" disabled={busy}>
+            {antiBotRequired && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm text-muted-foreground">
+                  {t("login.antiBot")}
+                </p>
+                <TurnstileWidget
+                  action="login"
+                  onToken={setAntiBotToken}
+                  resetSignal={antiBotReset}
+                  disabled={busy}
+                />
+              </div>
+            )}
+            <Button
+              type="submit"
+              disabled={busy || (antiBotRequired && !antiBotToken)}
+            >
               {busy ? t("login.submitting") : t("login.submit")}
             </Button>
           </form>
