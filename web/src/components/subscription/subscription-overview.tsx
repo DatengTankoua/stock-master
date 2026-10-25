@@ -58,6 +58,7 @@ export function subscriptionStatusLabel(
 
 function periodLabel(period: ApiSubscriptionPeriod, t: SubscriptionT): string {
   if (period.kind === "trial") return t("overview.trial");
+  if (period.offered) return t("overview.offered");
   const term = knownTerm(period.term);
   return t("overview.subscriptionTerm", {
     term: term ? t(`offers.term.${term}`) : "—",

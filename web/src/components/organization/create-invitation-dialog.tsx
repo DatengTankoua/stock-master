@@ -8,7 +8,9 @@ import { useMessage } from "@/i18n/use-message";
 import { CheckIcon, CopyIcon, PlusIcon } from "lucide-react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -125,7 +127,7 @@ export function CreateInvitationDialog({
           if (!next) reset();
         }}
       >
-        <DialogContent>
+        <DialogContent layout="form" className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {created ? t("invitations.created") : t("invitations.newTitle")}
@@ -133,112 +135,127 @@ export function CreateInvitationDialog({
           </DialogHeader>
 
           {created ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {t("invitations.copyHint", { email: created.invitation.email })}
-              </p>
-              <div className="space-y-2">
-                <Label htmlFor="invite-link">{t("invitations.link")}</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="invite-link"
-                    ref={linkInput}
-                    readOnly
-                    value={created.invitationUrl}
-                    onFocus={(e) => e.currentTarget.select()}
-                    aria-describedby="invite-link-status"
-                    className="text-xs"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleCopy()}
+            <>
+              <DialogBody className="gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {t("invitations.copyHint", {
+                    email: created.invitation.email,
+                  })}
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-link">{t("invitations.link")}</Label>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Input
+                      id="invite-link"
+                      ref={linkInput}
+                      readOnly
+                      value={created.invitationUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                      aria-describedby="invite-link-status"
+                      className="min-w-0 text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleCopy()}
+                    >
+                      {copyState === "copied" ? (
+                        <CheckIcon className="mr-1 h-3.5 w-3.5" />
+                      ) : (
+                        <CopyIcon className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      {t("invitations.copy")}
+                    </Button>
+                  </div>
+                  <p
+                    id="invite-link-status"
+                    role="status"
+                    className={
+                      copyState === "manual"
+                        ? "text-sm text-destructive"
+                        : "text-sm text-muted-foreground"
+                    }
                   >
-                    {copyState === "copied" ? (
-                      <CheckIcon className="mr-1 h-3.5 w-3.5" />
-                    ) : (
-                      <CopyIcon className="mr-1 h-3.5 w-3.5" />
-                    )}
-                    {t("invitations.copy")}
-                  </Button>
+                    {copyState === "copied" && t("invitations.copied")}
+                    {copyState === "manual" && t("invitations.copyManual")}
+                  </p>
                 </div>
-                <p
-                  id="invite-link-status"
-                  role="status"
-                  className={
-                    copyState === "manual"
-                      ? "text-sm text-destructive"
-                      : "text-sm text-muted-foreground"
-                  }
-                >
-                  {copyState === "copied" && t("invitations.copied")}
-                  {copyState === "manual" && t("invitations.copyManual")}
+                <p className="text-xs text-muted-foreground">
+                  {t("invitations.expiresAt", {
+                    date: formatExpiry(created.invitation.expiresAt),
+                  })}
                 </p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t("invitations.expiresAt", {
-                  date: formatExpiry(created.invitation.expiresAt),
-                })}
-              </p>
-              <Button
-                type="button"
-                className="w-full"
-                onClick={() => {
-                  setOpen(false);
-                  reset();
-                }}
-              >
-                {t("actions.close")}
-              </Button>
-            </div>
+              </DialogBody>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => {
+                    setOpen(false);
+                    reset();
+                  }}
+                >
+                  {t("actions.close")}
+                </Button>
+              </DialogFooter>
+            </>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-              <div className="space-y-2">
-                <Label htmlFor="invite-email">{t("invitations.email")}</Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-role">{t("invitations.role")}</Label>
-                <select
-                  id="invite-role"
-                  value={role}
-                  onChange={(e) =>
-                    setRole(e.target.value as (typeof INVITABLE_ROLES)[number])
-                  }
-                  className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
-                >
-                  {INVITABLE_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {t(`roles.${r}`)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>{t("permissionsField.label")}</Label>
-                <PermissionCheckboxes
-                  value={permissions}
-                  onChange={setPermissions}
-                  assignable={authContext?.effectivePermissions ?? []}
-                  disabled={saving}
-                  allGranted={roleGrantsAllPermissions(role)}
-                />
-              </div>
-              {error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-              <Button type="submit" className="w-full" disabled={saving}>
-                {saving ? t("creating") : t("invitations.submit")}
-              </Button>
+            <form
+              onSubmit={handleSubmit}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <DialogBody>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-email">{t("invitations.email")}</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-role">{t("invitations.role")}</Label>
+                  <select
+                    id="invite-role"
+                    value={role}
+                    onChange={(e) =>
+                      setRole(
+                        e.target.value as (typeof INVITABLE_ROLES)[number],
+                      )
+                    }
+                    className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
+                  >
+                    {INVITABLE_ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {t(`roles.${r}`)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("permissionsField.label")}</Label>
+                  <PermissionCheckboxes
+                    value={permissions}
+                    onChange={setPermissions}
+                    assignable={authContext?.effectivePermissions ?? []}
+                    disabled={saving}
+                    allGranted={roleGrantsAllPermissions(role)}
+                  />
+                </div>
+              </DialogBody>
+              <DialogFooter>
+                {error && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
+                <Button type="submit" className="w-full" disabled={saving}>
+                  {saving ? t("creating") : t("invitations.submit")}
+                </Button>
+              </DialogFooter>
             </form>
           )}
         </DialogContent>

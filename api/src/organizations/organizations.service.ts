@@ -108,6 +108,34 @@ export interface SelectableOrganization {
 
 export const ORGANIZATION_ACCESS_DENIED = 'ORGANIZATION_ACCESS_DENIED';
 
+/**
+ * Suspension administrative (administration de la plateforme) : refus
+ * DISTINCT, réservé aux membres ACTIFS de l'organisation (qui la
+ * connaissent déjà). Un tiers reçoit toujours le refus uniforme. Le message
+ * destiné au commerce n'est joint que pour le propriétaire ; le motif
+ * interne ne l'est jamais.
+ */
+export const ORGANIZATION_SUSPENDED = 'ORGANIZATION_SUSPENDED';
+
+export interface OrganizationSuspendedView {
+  organizationId: string;
+  organizationName: string;
+  suspendedAt: Date | null;
+  isOwner: boolean;
+  /** Propriétaire seulement. */
+  message: string | null;
+}
+
+export function organizationSuspendedException(
+  view: OrganizationSuspendedView,
+): ForbiddenException {
+  return new ForbiddenException({
+    code: ORGANIZATION_SUSPENDED,
+    message: 'Ce commerce est suspendu.',
+    suspension: view,
+  });
+}
+
 /** Erreur pilote MongoDB E11000 (clé dupliquée) — jamais un cast fragile. */
 function isDuplicateKeyError(err: unknown): boolean {
   return (
@@ -280,8 +308,13 @@ export class OrganizationsService {
       .findById(membership.organizationId)
       .exec();
 
-    if (!organization || organization.status !== OrganizationStatus.ACTIVE) {
-      throw this.accessDenied();
+    if (!organization) throw this.accessDenied();
+    if (organization.status !== OrganizationStatus.ACTIVE) {
+      // Membre actif : la suspension lui est signalée (données, droits et
+      // périodes conservés) ; aucune autre donnée de l'organisation.
+      throw organizationSuspendedException(
+        this.suspendedView(organization, membership.role),
+      );
     }
 
     return {
@@ -334,6 +367,53 @@ export class OrganizationsService {
       if (byName !== 0) return byName;
       return a.organizationId.localeCompare(b.organizationId);
     });
+  }
+
+  /**
+   * Organisations SUSPENDUES où l'utilisateur a une membership ACTIVE
+   * (connexion : le propriétaire peut ouvrir l'espace limité). Nom et
+   * identifiant seulement ; tri par nom.
+   */
+  async listSuspendedOrganizations(
+    userId: string,
+  ): Promise<SelectableOrganization[]> {
+    if (!isStrictObjectId(userId)) return [];
+    const memberships = await this.membershipModel
+      .find({
+        userId: new Types.ObjectId(userId),
+        status: MembershipStatus.ACTIVE,
+      })
+      .select({ organizationId: 1 })
+      .lean()
+      .exec();
+    if (memberships.length === 0) return [];
+    const organizations = await this.organizationModel
+      .find({
+        _id: { $in: memberships.map((m) => m.organizationId) },
+        status: OrganizationStatus.SUSPENDED,
+      })
+      .select({ name: 1 })
+      .lean()
+      .exec();
+    return organizations
+      .map((o) => ({ organizationId: o._id.toString(), name: o.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private suspendedView(
+    organization: OrganizationDocument,
+    role: OrganizationRole,
+  ): OrganizationSuspendedView {
+    const isOwner = role === OrganizationRole.OWNER;
+    return {
+      organizationId: organization._id.toString(),
+      organizationName: organization.name,
+      suspendedAt: organization.suspension?.suspendedAt ?? null,
+      isOwner,
+      message: isOwner
+        ? (organization.suspension?.clientMessage ?? null)
+        : null,
+    };
   }
 
   /**

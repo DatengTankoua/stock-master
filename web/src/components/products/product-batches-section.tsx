@@ -641,7 +641,7 @@ function EnableTrackingDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("batches.enableTitle")}</DialogTitle>
           <DialogDescription>{t("batches.enableText")}</DialogDescription>
@@ -911,7 +911,7 @@ function ReceiveDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {batch
@@ -1069,7 +1069,7 @@ function EditBatchDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {t("batches.editTitle", { reference: batch.reference })}

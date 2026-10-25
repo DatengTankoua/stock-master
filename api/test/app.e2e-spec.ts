@@ -1088,8 +1088,9 @@ describe('App (e2e — MongoDB éphémère totalement isolée)', () => {
           .get('/auth/me')
           .set('Authorization', `Bearer ${sellerToken}`);
         expect(denied.status).toBe(403);
-        expect(denied.body.code).toBe('ORGANIZATION_ACCESS_DENIED');
-        expect(denied.body.message).toBe("Accès à l'organisation refusé.");
+        // Administration de la plateforme : membre ACTIF d'une organisation suspendue → refus distinct (un tiers garde le refus uniforme).
+        expect(denied.body.code).toBe('ORGANIZATION_SUSPENDED');
+        expect(denied.body.message).toBe('Ce commerce est suspendu.');
       });
       const back = await request(app.getHttpServer())
         .get('/auth/me')

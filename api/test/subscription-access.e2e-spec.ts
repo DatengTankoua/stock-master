@@ -886,13 +886,14 @@ describe('Contrôle commercial de l’accès API (e2e 1-14C.1)', () => {
       { $set: { status: 'suspended' } },
     );
     const suspended = await call('get', '/products', fresh);
+    // Administration de la plateforme : membre ACTIF d'une organisation suspendue → refus distinct (un tiers garde le refus uniforme).
     expect([suspended.status, suspended.body.code]).toEqual([
       403,
-      'ORGANIZATION_ACCESS_DENIED',
+      'ORGANIZATION_SUSPENDED',
     ]);
     const suspendedLogin = await loginRaw(email);
     expect(suspendedLogin.status).toBe(403);
-    expect(suspendedLogin.body.code).toBe('ORGANIZATION_ACCESS_DENIED');
+    expect(suspendedLogin.body.code).toBe('ORGANIZATION_SUSPENDED');
     expect(suspendedLogin.body.restrictedToken).toBeUndefined();
     const org = await organizationModel.findById(orgId).lean();
     expect(org!.status).toBe('suspended');

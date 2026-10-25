@@ -114,6 +114,26 @@ export class SocketRegistryService {
     return closed;
   }
 
+  /**
+   * Suspension d'une organisation (écriture déjà validée) : ferme toutes les
+   * sockets connues de CE processus pour cette organisation. Autres
+   * instances : relecture périodique de l'adhésion
+   * (`SOCKET_MEMBERSHIP_RECHECK_SECONDS`, 60 s par défaut), qui refuse
+   * l'organisation suspendue. Une reconnexion est refusée au handshake.
+   */
+  disconnectOrganization(organizationId: string): number {
+    let closed = 0;
+    for (const [key, sockets] of this.sockets) {
+      if (!key.startsWith(`${organizationId}:`)) continue;
+      for (const socket of sockets) {
+        socket.disconnect(true);
+        closed += 1;
+      }
+      this.sockets.delete(key);
+    }
+    return closed;
+  }
+
   disconnectMember(organizationId: string, userId: string): void {
     const key = this.key(organizationId, userId);
     const existing = this.sockets.get(key);

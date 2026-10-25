@@ -391,17 +391,18 @@ describe('Assistance depuis l’organisation (e2e 1-16C.1)', () => {
     expect(supportSender.calls).toHaveLength(0);
   });
 
-  it('organisation suspendue : refus uniforme (ORGANIZATION_ACCESS_DENIED), sans registre ni envoi', async () => {
+  it('organisation suspendue : refus distinct (ORGANIZATION_SUSPENDED) pour le membre actif, sans registre ni envoi', async () => {
     const owner = await registerIsolatedOwner('suspended');
     expect((await context(owner.token)).status).toBe(200);
     await organizationModel.updateOne(
       { _id: new Types.ObjectId(owner.orgId) },
       { $set: { status: 'suspended' } },
     );
+    // Administration de la plateforme : membre ACTIF d'une organisation suspendue → refus distinct (un tiers garde le refus uniforme).
     await expectRefusedWithoutEffect(
       owner.token,
       403,
-      'ORGANIZATION_ACCESS_DENIED',
+      'ORGANIZATION_SUSPENDED',
     );
   });
 

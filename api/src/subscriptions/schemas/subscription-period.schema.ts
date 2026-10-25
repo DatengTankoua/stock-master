@@ -6,6 +6,8 @@ import {
   SubscriptionPeriodKind,
   SubscriptionSource,
   SubscriptionTerm,
+  OFFERED_EXTENSION_MAX_DAYS,
+  OFFERED_EXTENSION_MIN_DAYS,
 } from '../subscription-terms';
 
 export type SubscriptionPeriodDocument = HydratedDocument<SubscriptionPeriod>;
@@ -64,14 +66,40 @@ export class SubscriptionPeriod {
         this: SubscriptionPeriod,
         value: SubscriptionTerm | null,
       ) {
+        // Prolongation offerte : durée en jours (`offeredDays`), aucun forfait.
+        if (this.source === SubscriptionSource.OFFERED) return value === null;
         return this.kind === SubscriptionPeriodKind.TRIAL
           ? value === null
           : value !== null;
       },
-      message: "term requis pour un abonnement, interdit pour l'essai.",
+      message:
+        "term requis pour un abonnement, interdit pour l'essai et la prolongation offerte.",
     },
   })
   term: SubscriptionTerm | null;
+
+  /**
+   * Prolongation offerte uniquement : nombre de jours accordés (1 à 90).
+   * Absent pour toute autre source.
+   */
+  @Prop({
+    type: Number,
+    default: undefined,
+    validate: {
+      validator: function (this: SubscriptionPeriod, value: unknown) {
+        if (this.source !== SubscriptionSource.OFFERED) {
+          return value === undefined || value === null;
+        }
+        return (
+          Number.isInteger(value) &&
+          (value as number) >= OFFERED_EXTENSION_MIN_DAYS &&
+          (value as number) <= OFFERED_EXTENSION_MAX_DAYS
+        );
+      },
+      message: 'offeredDays : 1 à 90 jours, prolongation offerte seulement.',
+    },
+  })
+  offeredDays?: number;
 
   @Prop({ type: Date, required: true })
   startsAt: Date;

@@ -49,6 +49,7 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
       none: "No subscription",
     },
     trial: "Free trial",
+    offered: "Extension offered by Stock Master",
     subscriptionTerm: "{{term}} subscription",
     lessThanDay: "less than a day",
     days_one: "{{count}} day",

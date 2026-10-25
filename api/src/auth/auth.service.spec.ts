@@ -110,6 +110,7 @@ describe('AuthService', () => {
   let organizations: {
     resolveActiveContext: jest.Mock;
     listActiveOrganizations: jest.Mock;
+    listSuspendedOrganizations: jest.Mock;
     createOwnerOrganization: jest.Mock;
   };
   let connectionFixture: ReturnType<typeof makeConnectionFixture>;
@@ -156,6 +157,7 @@ describe('AuthService', () => {
         }),
       ),
       listActiveOrganizations: jest.fn(),
+      listSuspendedOrganizations: jest.fn().mockResolvedValue([]),
       createOwnerOrganization: jest.fn(),
     };
     connectionFixture = makeConnectionFixture();

@@ -7,6 +7,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { XIcon } from "lucide-react";
 import { useT } from "next-i18next/client";
+import {
+  DIALOG_VIEWPORT_CLASSES,
+  DialogViewportSync,
+} from "@/components/ui/dialog-viewport";
 
 // 1-16G : libellé du bouton de fermeture dans la langue courante.
 function CloseLabel() {
@@ -46,33 +50,62 @@ function DialogOverlay({
   );
 }
 
+type DialogLayout = "default" | "form";
+
+// Mise en page de la fenêtre ouverte, lue par l'en-tête, le corps et le pied.
+const DialogLayoutContext = React.createContext<{
+  layout: DialogLayout;
+  showCloseButton: boolean;
+}>({ layout: "default", showCloseButton: false });
+
+const POPUP_BASE =
+  "fixed z-50 w-full -translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-sm break-words text-popover-foreground ring-1 ring-foreground/10 transition-none duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
+
+// « default » : la fenêtre entière défile si son contenu dépasse (petites
+// fenêtres, confirmations). « form » : en-tête et pied fixes, seul
+// `DialogBody` défile (formulaires longs : titre, fermeture et actions
+// toujours visibles).
+const POPUP_LAYOUT: Record<DialogLayout, string> = {
+  default:
+    "grid grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto overscroll-contain p-4 sm:p-6",
+  form: "flex flex-col overflow-hidden",
+};
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  layout = "default",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
+  layout?: DialogLayout;
 }) {
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        data-layout={layout}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 sm:p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          POPUP_BASE,
+          DIALOG_VIEWPORT_CLASSES,
+          POPUP_LAYOUT[layout],
           className,
         )}
         {...props}
       >
-        {children}
+        <DialogViewportSync />
+        <DialogLayoutContext.Provider value={{ layout, showCloseButton }}>
+          {children}
+        </DialogLayoutContext.Provider>
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
             render={
               <Button
                 variant="ghost"
-                className="absolute top-2 right-2"
+                className="absolute top-2 right-2 max-sm:size-9"
                 size="icon-sm"
               />
             }
@@ -89,10 +122,34 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+  const { layout, showCloseButton } = React.useContext(DialogLayoutContext);
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn(
+        "flex flex-col gap-2",
+        // Le titre ne passe jamais sous le bouton de fermeture.
+        showCloseButton && "pr-9",
+        layout === "form" &&
+          "shrink-0 border-b px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4",
+        layout === "form" && showCloseButton && "pr-12 sm:pr-12",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+// Zone défilante d'une fenêtre `layout="form"`. Dans un formulaire, celui-ci
+// doit transmettre la hauteur : `className="flex min-h-0 flex-1 flex-col"`.
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn(
+        "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6",
+        className,
+      )}
       {...props}
     />
   );
@@ -106,11 +163,14 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean;
 }) {
+  const { layout } = React.useContext(DialogLayoutContext);
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        layout === "form"
+          ? "flex shrink-0 flex-col gap-2 border-t bg-muted/50 px-4 py-3 sm:px-6"
+          : "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:-mx-6 sm:-mb-6 sm:flex-row sm:justify-end sm:px-6",
         className,
       )}
       {...props}
@@ -130,7 +190,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "font-heading text-base leading-none font-medium",
+        "font-heading text-base leading-snug font-medium",
         className,
       )}
       {...props}
@@ -156,6 +216,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,

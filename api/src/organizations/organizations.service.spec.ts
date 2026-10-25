@@ -248,16 +248,68 @@ describe('OrganizationsService.resolveActiveContext', () => {
   });
 
   // 8. organisation suspendue
-  it('organisation suspendue → refus uniforme', async () => {
+  // Administration de la plateforme : la suspension est signalée aux SEULS
+  // membres actifs (refus distinct) ; un tiers garde le refus uniforme.
+  it('organisation suspendue, membre actif → ORGANIZATION_SUSPENDED (message au propriétaire seul)', async () => {
     await build();
-    membershipChain.exec.mockResolvedValue(activeMembership());
+    membershipChain.exec.mockResolvedValue(
+      activeMembership({ role: OrganizationRole.OWNER }),
+    );
+    organizationChain.exec.mockResolvedValue(
+      activeOrganization({
+        status: OrganizationStatus.SUSPENDED,
+        name: 'Boutique',
+        suspension: {
+          suspendedAt: new Date('2026-10-01T00:00:00Z'),
+          internalReason: 'Motif interne confidentiel',
+          clientMessage: 'Contactez le support Stock Master.',
+        },
+      }),
+    );
+    const error = (await service
+      .resolveActiveContext(USER_OBJECT_ID, ORG_OBJECT_ID)
+      .catch((e: unknown) => e)) as ForbiddenException;
+    expect(error).toBeInstanceOf(ForbiddenException);
+    const body = error.getResponse() as {
+      code: string;
+      suspension: { isOwner: boolean; message: string | null };
+    };
+    expect(body.code).toBe('ORGANIZATION_SUSPENDED');
+    expect(JSON.stringify(body)).not.toContain('Motif interne');
+    expect(body.suspension.isOwner).toBe(true);
+    expect(body.suspension.message).toBe('Contactez le support Stock Master.');
+    expect(organizationModel.findById).toHaveBeenCalledTimes(1);
+
+    await build();
+    membershipChain.exec.mockResolvedValue(
+      activeMembership({ role: OrganizationRole.SELLER }),
+    );
+    organizationChain.exec.mockResolvedValue(
+      activeOrganization({
+        status: OrganizationStatus.SUSPENDED,
+        name: 'Boutique',
+        suspension: { clientMessage: 'Message propriétaire' },
+      }),
+    );
+    const seller = (await service
+      .resolveActiveContext(USER_OBJECT_ID, ORG_OBJECT_ID)
+      .catch((e: unknown) => e)) as ForbiddenException;
+    expect(JSON.stringify(seller.getResponse())).not.toContain(
+      'Message propriétaire',
+    );
+  });
+
+  it('organisation suspendue, membership inactive → refus uniforme', async () => {
+    await build();
+    membershipChain.exec.mockResolvedValue(
+      activeMembership({ status: MembershipStatus.REVOKED }),
+    );
     organizationChain.exec.mockResolvedValue(
       activeOrganization({ status: OrganizationStatus.SUSPENDED }),
     );
     await expectAccessDenied(() =>
       service.resolveActiveContext(USER_OBJECT_ID, ORG_OBJECT_ID),
     );
-    expect(organizationModel.findById).toHaveBeenCalledTimes(1);
   });
 
   // 9. requête membership contenant simultanément userId et organizationId
@@ -342,14 +394,7 @@ describe('OrganizationsService.resolveActiveContext', () => {
         organizationChain.exec.mockResolvedValue(null);
         return service.resolveActiveContext(USER_OBJECT_ID, ORG_OBJECT_ID);
       },
-      async () => {
-        await build();
-        membershipChain.exec.mockResolvedValue(activeMembership());
-        organizationChain.exec.mockResolvedValue(
-          activeOrganization({ status: OrganizationStatus.SUSPENDED }),
-        );
-        return service.resolveActiveContext(USER_OBJECT_ID, ORG_OBJECT_ID);
-      },
+      // Organisation suspendue + membre actif : refus distinct (test dédié).
     ];
 
     const responses: unknown[] = [];

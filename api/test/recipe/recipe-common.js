@@ -44,7 +44,28 @@ const FAKE = Object.freeze({
   // 1-21B : faux SasPay (préfixe de bac à sable, valeurs fictives).
   saspayKey: 'sk_test_fake-recipe-saspay-0001',
   saspayWebhookSecret: 'recipe-21b-fictitious-saspay-webhook-secret',
+  // Administration de la plateforme (`start --platform-admin`) : clé de
+  // chiffrement TOTP (32 octets) et secret du BFF FICTIFS, recette seulement.
+  platformAdminMfaKey: 'cmVjaXBlLWZpY3RpdGlvdXMtdG90cC1rZXktMzJieXQ=',
+  platformAdminProxySecret: 'recipe-fictitious-platform-admin-bff-secret-0001',
 });
+
+/**
+ * Administration de la plateforme, recette SEULEMENT et sur demande
+ * (`start --platform-admin`) : fermée par défaut comme en production.
+ */
+const platformAdminEnabled = () => process.env.RECIPE_PLATFORM_ADMIN === '1';
+
+function platformAdminApiEnv() {
+  return platformAdminEnabled()
+    ? {
+        PLATFORM_ADMIN_ENABLED: 'true',
+        PLATFORM_ADMIN_MFA_KEYS: `recipe1:${FAKE.platformAdminMfaKey}`,
+        PLATFORM_ADMIN_MFA_ACTIVE_KEY: 'recipe1',
+        PLATFORM_ADMIN_PROXY_SECRET: FAKE.platformAdminProxySecret,
+      }
+    : {};
+}
 
 const PASSWORD = 'Recette-locale-14d2h!';
 const PHONE = '677123456';
@@ -179,6 +200,7 @@ function apiEnv(uri, extra = {}) {
     EMAIL_FROM: '',
     // 1-18C : anti-robot SIMULÉ (aucun réseau), seulement sur demande.
     ...(simulatedAntiBot() ? { TURNSTILE_SIMULATED: 'true' } : {}),
+    ...platformAdminApiEnv(),
     ...extra,
   });
 }
@@ -205,6 +227,15 @@ function webEnv(extra = {}) {
       : {}),
     // 1-22F : origine des images signées (stockage simulé) pour la CSP.
     CSP_IMAGE_ORIGINS: process.env.RECIPE_S3_SIGNING_ENDPOINT || STORAGE_URL,
+    // Administration : BFF `/api/admin` (lu à l'exécution, serveur seulement).
+    ...(platformAdminEnabled()
+      ? {
+          PLATFORM_ADMIN_ENABLED: 'true',
+          PLATFORM_ADMIN_PROXY_SECRET: FAKE.platformAdminProxySecret,
+          PLATFORM_ADMIN_ALLOWED_ORIGIN: WEB_ORIGIN,
+          PLATFORM_ADMIN_API_URL: API_URL,
+        }
+      : {}),
     NEXT_TELEMETRY_DISABLED: '1',
     __NEXT_PROCESSED_ENV: 'true',
     ...extra,

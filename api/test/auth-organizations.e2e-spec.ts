@@ -364,6 +364,7 @@ describe('GET /auth/organizations + POST /auth/switch-organization (e2e 1-9B)', 
   it("régression : une route protégée SANS @SkipOrganizationContext (GET /organizations/current) reste bloquée par l'organisation courante suspendue", async () => {
     const res = await getCurrent(strandedToken);
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('ORGANIZATION_ACCESS_DENIED');
+    // Administration de la plateforme : membre ACTIF d'une organisation suspendue → refus distinct (un tiers garde le refus uniforme).
+    expect(res.body.code).toBe('ORGANIZATION_SUSPENDED');
   });
 });

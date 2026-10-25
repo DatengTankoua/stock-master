@@ -26,6 +26,10 @@ import {
   isGrantableSubscriptionSource,
   isSubscriptionTerm,
   trialSourceReference,
+  OFFERED_EXTENSION_MAX_DAYS,
+  OFFERED_EXTENSION_MIN_DAYS,
+  planOfferedExtension,
+  type OfferedExtensionPlan,
 } from './subscription-terms';
 import { subscriptionDuplicateKeyIndex } from './subscription-period-indexes';
 import type { SubscriptionAccessDecision } from './subscription-access';
@@ -84,7 +88,11 @@ export type SubscriptionGrantErrorCode =
   | 'TRIAL_ALREADY_GRANTED'
   | 'GRANT_CONTENTION'
   | 'GRANT_TIMEOUT'
-  | 'TRANSACTION_REQUIRED';
+  | 'TRANSACTION_REQUIRED'
+  /** Prolongation offerte refusée (situation ambiguë, voir `planOfferedExtension`). */
+  | 'EXTENSION_REFUSED'
+  /** La couverture a changé depuis l'aperçu confirmé. */
+  | 'COVERAGE_CHANGED';
 
 /** Erreur métier d'attribution (CLI / code serveur), jamais une réponse HTTP. */
 export class SubscriptionGrantError extends Error {
@@ -120,10 +128,33 @@ interface ValidatedGrantRequest {
   grantedBy: string;
 }
 
+/** Prolongation offerte (administration de la plateforme). */
+export interface OfferedExtensionInput {
+  organizationId: Types.ObjectId;
+  days: number;
+  /** Clé d'idempotence (`offered:<identifiant d'opération>`). */
+  sourceReference: string;
+  grantedBy: string;
+  /** Fin de couverture présentée à la confirmation (`null` : aucune). */
+  expectedCoverageEndsAt: Date | null;
+}
+
+export interface OfferedExtensionResult {
+  periodId: string;
+  sequence: number;
+  days: number;
+  startsAt: Date;
+  endsAt: Date;
+  /** `true` : référence déjà appliquée, aucune durée ajoutée. */
+  replayed: boolean;
+}
+
 /** 1-14C.2 — entrée d'historique exposable (aucun champ interne). */
 export interface SubscriptionPeriodHistoryEntry {
   kind: SubscriptionPeriodKind;
   term: SubscriptionTerm | null;
+  /** Prolongation offerte par Stock Master (aucune source détaillée exposée). */
+  offered: boolean;
   startsAt: Date;
   endsAt: Date;
 }
@@ -381,7 +412,14 @@ export class SubscriptionsService {
   }> {
     const periods = await this.periodModel
       .find({ organizationId: new Types.ObjectId(organizationId) })
-      .select({ sequence: 1, kind: 1, term: 1, startsAt: 1, endsAt: 1 })
+      .select({
+        sequence: 1,
+        kind: 1,
+        term: 1,
+        startsAt: 1,
+        endsAt: 1,
+        source: 1,
+      })
       .lean()
       .exec();
     return {
@@ -395,6 +433,7 @@ export class SubscriptionsService {
         .map((p) => ({
           kind: p.kind,
           term: p.term,
+          offered: p.source === SubscriptionSource.OFFERED,
           startsAt: p.startsAt,
           endsAt: p.endsAt,
         })),
@@ -422,6 +461,148 @@ export class SubscriptionsService {
       active: view.state === 'active',
       coverageEndsAt: view.coverageEndsAt,
       checkedAt,
+    };
+  }
+
+  /**
+   * Prolongation offerte — aperçu en lecture seule à l'heure serveur :
+   * état courant et plan (`planOfferedExtension`), sans écriture.
+   */
+  async previewOfferedExtension(
+    organizationId: string,
+    days: number,
+  ): Promise<{ state: SubscriptionStateView; plan: OfferedExtensionPlan }> {
+    const now = this.clock();
+    const periods = await this.periodModel
+      .find({ organizationId: new Types.ObjectId(organizationId) })
+      .select({ sequence: 1, kind: 1, term: 1, startsAt: 1, endsAt: 1 })
+      .lean()
+      .exec();
+    return {
+      state: computeSubscriptionState(periods, now),
+      plan: planOfferedExtension(periods, now, days),
+    };
+  }
+
+  /**
+   * Prolongation offerte dans la transaction ACTIVE de l'appelant (même
+   * contrat que `grantSubscriptionInSession`) :
+   * - idempotente sur `{ source: offered, sourceReference }` : même
+   *   organisation et même durée → période existante, `replayed: true` ;
+   *   sinon `SUBSCRIPTION_REFERENCE_CONFLICT` ;
+   * - plan recalculé ICI, dans la transaction (lectures de la session) ;
+   *   refus si situation ambiguë (`EXTENSION_REFUSED`) ou si la fin de
+   *   couverture diffère de celle confirmée (`COVERAGE_CHANGED`) : aucune
+   *   double prolongation involontaire ;
+   * - nouveau maillon `sequence + 1` : deux attributions concurrentes (autre
+   *   prolongation, paiement confirmé) entrent en collision sur l'index
+   *   `{ organizationId, sequence }` et l'appelant rejoue la transaction
+   *   (`runInGrantTransaction`), qui relit alors la couverture.
+   * Aucune période existante n'est modifiée ; aucun paiement n'est écrit ;
+   * `Organization` (suspension) n'est jamais touchée.
+   */
+  async grantOfferedExtensionInSession(
+    input: OfferedExtensionInput,
+    session: MongooseSession,
+  ): Promise<OfferedExtensionResult> {
+    if (
+      typeof session?.inTransaction !== 'function' ||
+      !session.inTransaction()
+    ) {
+      throw new SubscriptionGrantError(
+        'TRANSACTION_REQUIRED',
+        'Une transaction active de l’appelant est requise.',
+      );
+    }
+    if (
+      !Number.isInteger(input.days) ||
+      input.days < OFFERED_EXTENSION_MIN_DAYS ||
+      input.days > OFFERED_EXTENSION_MAX_DAYS
+    ) {
+      throw new SubscriptionGrantError('INVALID_INPUT', 'Durée invalide.');
+    }
+    const sourceReference = boundedText(
+      input.sourceReference,
+      SUBSCRIPTION_REFERENCE_MAX_LENGTH,
+    );
+    const grantedBy = boundedText(
+      input.grantedBy,
+      SUBSCRIPTION_GRANTOR_MAX_LENGTH,
+    );
+    if (!sourceReference || !grantedBy) {
+      throw new SubscriptionGrantError('INVALID_INPUT', 'Référence invalide.');
+    }
+    const existing = await this.periodModel
+      .findOne({ source: SubscriptionSource.OFFERED, sourceReference })
+      .session(session)
+      .exec();
+    if (existing) {
+      if (
+        !existing.organizationId.equals(input.organizationId) ||
+        existing.offeredDays !== input.days
+      ) {
+        throw new SubscriptionGrantError(
+          'SUBSCRIPTION_REFERENCE_CONFLICT',
+          'Référence déjà utilisée pour une autre attribution.',
+        );
+      }
+      return this.toOfferedView(existing, true);
+    }
+    const periods = await this.periodModel
+      .find({ organizationId: input.organizationId })
+      .select({ sequence: 1, startsAt: 1, endsAt: 1 })
+      .session(session)
+      .lean()
+      .exec();
+    const plan = planOfferedExtension(periods, this.clock(), input.days);
+    if (!plan.ok) {
+      throw new SubscriptionGrantError('EXTENSION_REFUSED', plan.refusal);
+    }
+    if (
+      (plan.previousCoverageEndsAt?.getTime() ?? null) !==
+      (input.expectedCoverageEndsAt?.getTime() ?? null)
+    ) {
+      throw new SubscriptionGrantError(
+        'COVERAGE_CHANGED',
+        'La couverture a changé depuis la confirmation.',
+      );
+    }
+    const last = periods.reduce<(typeof periods)[number] | null>(
+      (max, p) => (!max || p.sequence > max.sequence ? p : max),
+      null,
+    );
+    const [period] = await this.periodModel.create(
+      [
+        {
+          organizationId: input.organizationId,
+          sequence: (last?.sequence ?? 0) + 1,
+          kind: SubscriptionPeriodKind.SUBSCRIPTION,
+          term: null,
+          offeredDays: input.days,
+          startsAt: plan.startsAt,
+          endsAt: plan.endsAt,
+          source: SubscriptionSource.OFFERED,
+          sourceReference,
+          grantedBy,
+          previousPeriodId: last?._id ?? null,
+        },
+      ],
+      { session },
+    );
+    return this.toOfferedView(period, false);
+  }
+
+  private toOfferedView(
+    period: SubscriptionPeriodDocument,
+    replayed: boolean,
+  ): OfferedExtensionResult {
+    return {
+      periodId: period._id.toString(),
+      sequence: period.sequence,
+      days: period.offeredDays ?? 0,
+      startsAt: period.startsAt,
+      endsAt: period.endsAt,
+      replayed,
     };
   }
 

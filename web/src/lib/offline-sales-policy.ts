@@ -363,6 +363,7 @@ export type OperationErrorKey =
   | "inconsistency"
   | "accessDenied"
   | "subscriptionInactive"
+  | "organizationSuspended"
   | "network"
   | "server"
   | "auth"
@@ -420,6 +421,9 @@ export function describeOperationError(
     case "SUBSCRIPTION_INACTIVE":
     case "SUBSCRIPTION_ACCESS_LIMITED":
       return "subscriptionInactive";
+    // Suspension du commerce : vente conservée, envoi après réactivation.
+    case "ORGANIZATION_SUSPENDED":
+      return "organizationSuspended";
   }
   switch (error.kind) {
     case "network":

@@ -26,6 +26,93 @@ export enum SubscriptionSource {
   MANUAL = 'manual',
   /** 1-14D.2A : attribution consécutive à un paiement confirmé (serveur). */
   PAYMENT = 'payment',
+  /**
+   * Prolongation commerciale OFFERTE par l'administration de la plateforme
+   * (1 à 90 jours, aucune durée de forfait, aucun paiement).
+   */
+  OFFERED = 'offered',
+}
+
+/** Bornes de la prolongation offerte (jours de 24 h). */
+export const OFFERED_EXTENSION_MIN_DAYS = 1;
+export const OFFERED_EXTENSION_MAX_DAYS = 90;
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type OfferedExtensionRefusal =
+  /** Aucune période en cours mais une période programmée : début ambigu. */
+  | 'SCHEDULED_WITHOUT_CURRENT'
+  /** Couverture en cours suivie d'une interruption avant une période future. */
+  | 'DISCONTINUOUS_COVERAGE';
+
+export type OfferedExtensionPlan =
+  | {
+      ok: true;
+      /** `extend-coverage` : à la fin de la couverture continue ; `start-now` : heure serveur. */
+      basis: 'extend-coverage' | 'start-now';
+      /** Fin de couverture avant l'opération (`null` : aucune couverture). */
+      previousCoverageEndsAt: Date | null;
+      startsAt: Date;
+      endsAt: Date;
+      /** Périodes futures déjà programmées, conservées telles quelles. */
+      scheduledPeriods: number;
+    }
+  | { ok: false; refusal: OfferedExtensionRefusal };
+
+/**
+ * Calcul PUR de la prolongation offerte, à l'heure serveur `now` :
+ * - une période couvre `now` : la prolongation commence à la fin de la
+ *   couverture CONTINUE (périodes futures jointives comprises, donc après
+ *   les périodes déjà programmées, qui restent inchangées) ;
+ * - aucune période ne couvre `now` et aucune n'est programmée (essai ou
+ *   abonnement expiré, ou aucune période) : elle commence à `now` ;
+ * - refus, sans rien réécrire : période programmée sans couverture en cours
+ *   (le début serait ambigu) ou interruption entre la couverture continue et
+ *   une période future.
+ * Durée : `days` × 24 h exactement (pas de mois calendaires).
+ */
+export function planOfferedExtension(
+  periods: readonly Pick<SubscriptionPeriodSnapshot, 'startsAt' | 'endsAt'>[],
+  now: Date,
+  days: number,
+): OfferedExtensionPlan {
+  const at = now.getTime();
+  const sorted = [...periods].sort(
+    (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+  );
+  const covering = sorted.some(
+    (p) => p.startsAt.getTime() <= at && at < p.endsAt.getTime(),
+  );
+  const future = sorted.filter((p) => p.startsAt.getTime() > at);
+  if (!covering) {
+    if (future.length > 0) {
+      return { ok: false, refusal: 'SCHEDULED_WITHOUT_CURRENT' };
+    }
+    return {
+      ok: true,
+      basis: 'start-now',
+      previousCoverageEndsAt: null,
+      startsAt: new Date(at),
+      endsAt: new Date(at + days * DAY_MS),
+      scheduledPeriods: 0,
+    };
+  }
+  let end = at;
+  for (const p of sorted) {
+    if (p.startsAt.getTime() <= end && p.endsAt.getTime() > end) {
+      end = p.endsAt.getTime();
+    }
+  }
+  if (future.some((p) => p.startsAt.getTime() > end)) {
+    return { ok: false, refusal: 'DISCONTINUOUS_COVERAGE' };
+  }
+  return {
+    ok: true,
+    basis: 'extend-coverage',
+    previousCoverageEndsAt: new Date(end),
+    startsAt: new Date(end),
+    endsAt: new Date(end + days * DAY_MS),
+    scheduledPeriods: future.length,
+  };
 }
 
 /** Sources d'un abonnement (jamais l'essai, attribué à la création seule). */

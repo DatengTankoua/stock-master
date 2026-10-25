@@ -287,6 +287,7 @@ describe('GET /auth/context (e2e 1-9C)', () => {
   it('organisation courante suspendue → 403 (pas de @SkipOrganizationContext sur cette route)', async () => {
     const res = await getContext(strandedToken);
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('ORGANIZATION_ACCESS_DENIED');
+    // Administration de la plateforme : membre ACTIF d'une organisation suspendue → refus distinct (un tiers garde le refus uniforme).
+    expect(res.body.code).toBe('ORGANIZATION_SUSPENDED');
   });
 });

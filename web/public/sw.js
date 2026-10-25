@@ -154,6 +154,14 @@ function isAppOrApiPath(pathname) {
   );
 }
 
+function isPlatformAdminPath(pathname) {
+  return (
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname.startsWith("/api/admin")
+  );
+}
+
 function isVersionedAsset(pathname) {
   return (
     pathname.startsWith("/_next/static/") ||
@@ -405,6 +413,9 @@ self.addEventListener("fetch", (event) => {
   if (isEmailVerificationPath(url.pathname)) return; // 1-13A : idem (lien de vérification)
   if (isPasswordResetPath(url.pathname)) return; // 1-13B : idem (lien de réinitialisation)
   if (isRscRequest(request, url)) return; // 1-22C.1 : données Next.js, réseau natif
+  // Administration de la plateforme : pages et données jamais interceptées,
+  // jamais mises en cache (ni écran hors ligne, ni copie).
+  if (isPlatformAdminPath(url.pathname)) return;
 
   // Exception UNIQUE et étroite (1-11B) : uniquement la navigation exacte
   // vers /app/catalog, SANS aucune query string (clé précachée invariante,

@@ -15,7 +15,9 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -117,7 +119,7 @@ export function CreateProductDialog({
         {t("product.add")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <DialogContent layout="form">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               {t("product.newTitle")}
@@ -131,92 +133,99 @@ export function CreateProductDialog({
               </button>
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label htmlFor="p-name">{t("product.name")}</Label>
-              <Input
-                id="p-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <DialogBody>
               <div className="space-y-2">
-                <Label htmlFor="p-buy">{t("product.purchasePrice")}</Label>
+                <Label htmlFor="p-name">{t("product.name")}</Label>
                 <Input
-                  id="p-buy"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={purchasePrice}
-                  onChange={(e) => setPurchasePrice(e.target.value)}
+                  id="p-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   required
                 />
-                {purchasePrice && !isNaN(parseFloat(purchasePrice)) && (
-                  <p className="text-xs text-muted-foreground">
-                    ≈ {format.eur(parseFloat(purchasePrice) / EUR_TO_XOF)}
-                  </p>
-                )}
               </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="p-buy">{t("product.purchasePrice")}</Label>
+                  <Input
+                    id="p-buy"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={purchasePrice}
+                    onChange={(e) => setPurchasePrice(e.target.value)}
+                    required
+                  />
+                  {purchasePrice && !isNaN(parseFloat(purchasePrice)) && (
+                    <p className="text-xs text-muted-foreground">
+                      ≈ {format.eur(parseFloat(purchasePrice) / EUR_TO_XOF)}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="p-sell">{t("product.salePrice")}</Label>
+                  <Input
+                    id="p-sell"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(e.target.value)}
+                    required
+                  />
+                  {salePrice && !isNaN(parseFloat(salePrice)) && (
+                    <p className="text-xs text-muted-foreground">
+                      ≈ {format.eur(parseFloat(salePrice) / EUR_TO_XOF)}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground bg-muted rounded px-2 py-1">
+                {rich(t("product.priceHint"), {
+                  b: (chunk) => <strong>{chunk}</strong>,
+                })}
+              </p>
               <div className="space-y-2">
-                <Label htmlFor="p-sell">{t("product.salePrice")}</Label>
+                <Label htmlFor="p-qty">{t("product.initialQuantity")}</Label>
                 <Input
-                  id="p-sell"
+                  id="p-qty"
                   type="number"
-                  min="0"
+                  min="1"
                   step="1"
-                  value={salePrice}
-                  onChange={(e) => setSalePrice(e.target.value)}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
                   required
                 />
-                {salePrice && !isNaN(parseFloat(salePrice)) && (
-                  <p className="text-xs text-muted-foreground">
-                    ≈ {format.eur(parseFloat(salePrice) / EUR_TO_XOF)}
-                  </p>
-                )}
               </div>
-            </div>
-            <p className="text-xs text-muted-foreground bg-muted rounded px-2 py-1">
-              {rich(t("product.priceHint"), {
-                b: (chunk) => <strong>{chunk}</strong>,
-              })}
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="p-qty">{t("product.initialQuantity")}</Label>
-              <Input
-                id="p-qty"
-                type="number"
-                min="1"
-                step="1"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
+              <ProductOptionalFields
+                idPrefix="p"
+                showExpiry={canManageExpiry}
+                showThreshold={canManageThreshold}
+                expiryDate={expiryDate}
+                onExpiryDateChange={setExpiryDate}
+                threshold={threshold}
+                onThresholdChange={setThreshold}
+                disabled={loading}
               />
-            </div>
-            <ProductOptionalFields
-              idPrefix="p"
-              showExpiry={canManageExpiry}
-              showThreshold={canManageThreshold}
-              expiryDate={expiryDate}
-              onExpiryDateChange={setExpiryDate}
-              threshold={threshold}
-              onThresholdChange={setThreshold}
-              disabled={loading}
-            />
-            <div className="space-y-2">
-              <Label htmlFor="p-img">{t("product.photo")}</Label>
-              <Input
-                id="p-img"
-                type="file"
-                accept="image/*"
-                onChange={(e) => setImage(e.target.files?.[0] ?? null)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? t("saving") : t("actions.add")}
-            </Button>
+              <div className="space-y-2">
+                <Label htmlFor="p-img">{t("product.photo")}</Label>
+                <Input
+                  id="p-img"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+                  required
+                />
+              </div>
+            </DialogBody>
+            <DialogFooter>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? t("saving") : t("actions.add")}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

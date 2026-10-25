@@ -62,17 +62,23 @@ export function PermissionCheckboxes({
           {t("permissionsField.adminAll")}
         </p>
       )}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {/* Ligne entière cliquable (≥ 44 px), libellés longs à la ligne. */}
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
         {options.map((permission) => (
-          <label key={permission} className="flex items-center gap-2 text-sm">
+          <label
+            key={permission}
+            className="flex min-h-11 min-w-0 cursor-pointer items-start gap-3 rounded-md px-2 py-2.5 text-sm hover:bg-muted has-disabled:cursor-default has-disabled:hover:bg-transparent"
+          >
             <input
               type="checkbox"
               checked={allGranted || value.includes(permission)}
               onChange={() => toggle(permission)}
               disabled={disabled || allGranted}
-              className="h-4 w-4 rounded border-input"
+              className="mt-px size-5 shrink-0 rounded border-input accent-primary"
             />
-            {t(`permissions.${permission}`)}
+            <span className="min-w-0 leading-snug break-words">
+              {t(`permissions.${permission}`)}
+            </span>
           </label>
         ))}
       </div>

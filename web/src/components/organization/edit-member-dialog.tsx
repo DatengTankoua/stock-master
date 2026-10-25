@@ -6,7 +6,9 @@ import { useT } from "next-i18next/client";
 import { useMessage } from "@/i18n/use-message";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -88,67 +90,71 @@ export function EditMemberDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent layout="form" className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {t("members.editTitle", { name: member.user.name })}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-2">
-            <Label htmlFor="member-role">{t("invitations.role")}</Label>
-            <select
-              id="member-role"
-              value={role}
-              onChange={(e) =>
-                setRole(
-                  e.target.value as (typeof ASSIGNABLE_MEMBER_ROLES)[number],
-                )
-              }
-              className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
-            >
-              {ASSIGNABLE_MEMBER_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {t(`roles.${r}`)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("permissionsField.label")}</Label>
-            <PermissionCheckboxes
-              value={permissions}
-              onChange={setPermissions}
-              assignable={assignablePermissions}
-              disabled={saving}
-              allGranted={allGranted}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="member-status">{t("members.status")}</Label>
-            <select
-              id="member-status"
-              value={status}
-              onChange={(e) =>
-                setStatus(e.target.value as (typeof STATUS_OPTIONS)[number])
-              }
-              className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {t(`memberStatus.${s}`)}
-                </option>
-              ))}
-            </select>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button type="submit" className="w-full" disabled={saving}>
-            {saving ? t("saving") : t("actions.save")}
-          </Button>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <DialogBody>
+            <div className="space-y-2">
+              <Label htmlFor="member-role">{t("invitations.role")}</Label>
+              <select
+                id="member-role"
+                value={role}
+                onChange={(e) =>
+                  setRole(
+                    e.target.value as (typeof ASSIGNABLE_MEMBER_ROLES)[number],
+                  )
+                }
+                className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
+              >
+                {ASSIGNABLE_MEMBER_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {t(`roles.${r}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>{t("permissionsField.label")}</Label>
+              <PermissionCheckboxes
+                value={permissions}
+                onChange={setPermissions}
+                assignable={assignablePermissions}
+                disabled={saving}
+                allGranted={allGranted}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-status">{t("members.status")}</Label>
+              <select
+                id="member-status"
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as (typeof STATUS_OPTIONS)[number])
+                }
+                className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`memberStatus.${s}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            <Button type="submit" className="w-full" disabled={saving}>
+              {saving ? t("saving") : t("actions.save")}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
