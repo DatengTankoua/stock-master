@@ -40,7 +40,10 @@ const adminEn: Translation<typeof adminFr> = {
     credentials: "Incorrect email or password.",
     emailNotVerified: "Email address not confirmed.",
     challengeRequired:
-      "Too many attempts on this account. Sign in through the regular login after the anti-bot check, or wait.",
+      "Too many attempts on this account. Complete the anti-bot check below, then sign in again.",
+    antiBotFailed: "The anti-bot check failed or expired. Do it again.",
+    antiBotUnavailable:
+      "The anti-bot check is temporarily unavailable. Try again later.",
     codeInvalid: "Incorrect code.",
     challengeInvalid:
       "Verification expired or already used. Start the step again.",
@@ -60,6 +63,7 @@ const adminEn: Translation<typeof adminFr> = {
     submitting: "Checking…",
     expired: "Your administration session has expired. Sign in again.",
     loggedOut: "You are signed out of administration.",
+    antiBot: "Anti-bot check (Cloudflare) required after several failures.",
   },
   verify: {
     title: "Second factor",

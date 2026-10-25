@@ -40,7 +40,11 @@ const adminFr = {
     credentials: "Email ou mot de passe incorrect.",
     emailNotVerified: "Adresse email non confirmée.",
     challengeRequired:
-      "Trop de tentatives sur ce compte. Reconnectez-vous depuis la connexion habituelle après la vérification anti-robot, ou patientez.",
+      "Trop de tentatives sur ce compte. Validez la vérification anti-robot ci-dessous, puis reconnectez-vous.",
+    antiBotFailed:
+      "La vérification anti-robot a échoué ou a expiré. Recommencez-la.",
+    antiBotUnavailable:
+      "La vérification anti-robot est momentanément indisponible. Réessayez plus tard.",
     codeInvalid: "Code incorrect.",
     challengeInvalid:
       "Vérification expirée ou déjà utilisée. Recommencez l'étape.",
@@ -61,6 +65,8 @@ const adminFr = {
     submitting: "Vérification…",
     expired: "Votre session administrative a expiré. Reconnectez-vous.",
     loggedOut: "Vous êtes déconnecté de l'administration.",
+    antiBot:
+      "Vérification anti-robot (Cloudflare) exigée après plusieurs échecs.",
   },
   verify: {
     title: "Second facteur",

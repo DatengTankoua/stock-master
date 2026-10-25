@@ -680,6 +680,35 @@ describe('Administration de la plateforme (e2e)', () => {
       expect(JSON.stringify(bucket)).not.toContain(a.userId);
     });
 
+    it('défi anti-robot (Turnstile) exigé après trop d’échecs sur le compte, à usage unique', async () => {
+      const { userId, email } = await createUser();
+      await grant(userId);
+      const send = (password: string, challengeToken?: string) =>
+        admin('post', '/auth/login', { ip: ip(13) }).send({
+          email,
+          password,
+          ...(challengeToken ? { challengeToken } : {}),
+        });
+      for (let i = 0; i < 10; i++) {
+        expect((await send('mauvais-mot-de-passe')).status).toBe(401);
+      }
+      const blocked = await send(PASSWORD);
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.code).toBe('AUTH_CHALLENGE_REQUIRED');
+      // Jeton d'une autre action (inscription) : refusé, compte toujours bloqué.
+      const wrongAction = await send(
+        PASSWORD,
+        simulatedTurnstileToken('register'),
+      );
+      expect(wrongAction.status).not.toBe(200);
+      expect((await send(PASSWORD)).body.code).toBe('AUTH_CHALLENGE_REQUIRED');
+      const passed = await send(PASSWORD, simulatedTurnstileToken('login'));
+      expect(passed.status).toBe(200);
+      expect(passed.body.stage).toBe('enroll');
+      // Défi réussi + bon mot de passe : fenêtre du compte refermée (1-18C).
+      expect((await send(PASSWORD)).status).toBe(200);
+    });
+
     it('plafond de connexions par origine réseau', async () => {
       const statuses: number[] = [];
       for (let i = 0; i < 21; i++) {
