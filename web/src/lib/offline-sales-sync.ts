@@ -1,6 +1,7 @@
 import {
   createSaleIdempotent,
   isCommercialRefusalCode,
+  ORGANIZATION_SUSPENDED,
   setForcedLogoutListener,
   toSaleSyncOutcome,
 } from "./api";
@@ -297,6 +298,7 @@ async function processPartition(
     if (
       meta.blocked.reason === "corruption" ||
       meta.blocked.reason === "subscription" ||
+      meta.blocked.reason === "suspended" ||
       meta.blocked.tokenFingerprint === fingerprint
     ) {
       return { status: "blocked" };
@@ -455,14 +457,21 @@ async function applyDecision(
       // 1-14C.2 : refus COMMERCIAL distinct des refus de permissions ou
       // d'accès administratif.
       const commercial = isCommercialRefusalCode(decision.error.code);
+      // Suspension du commerce : ventes conservées, partition de CE commerce
+      // seulement, reprise après réactivation (jamais un abandon).
+      const suspended = decision.error.code === ORGANIZATION_SUSPENDED;
       await setPartitionBlocked(s.partitionKey, {
-        reason: commercial ? "subscription" : "access_denied",
+        reason: suspended
+          ? "suspended"
+          : commercial
+            ? "subscription"
+            : "access_denied",
         tokenFingerprint: fingerprint,
         at: now,
       });
       return {
         status: "stopped",
-        reason: commercial ? "subscription" : "access-denied",
+        reason: commercial || suspended ? "subscription" : "access-denied",
       };
     }
     case "aborted":

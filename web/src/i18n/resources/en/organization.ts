@@ -7,6 +7,22 @@ const organizationEn: Translation<typeof organizationFr> = {
   saving: "Saving…",
   creating: "Creating…",
   deleting: "Deleting…",
+  suspended: {
+    title: "Shop suspended",
+    since: "Since {{date}}",
+    messageLabel: "Message from Stock Master",
+    ownerText:
+      "Online access to this shop is suspended. Contact Stock Master support for the reasons and the steps to reactivate it.",
+    memberText:
+      "Access to this shop is suspended by Stock Master. Contact its owner.",
+    kept: "Data, sales, members and subscription are kept. Your other shops stay accessible.",
+    offline:
+      "Sales recorded offline stay on this device and will be sent after reactivation.",
+    contact: "Contact support",
+    retry: "Check again",
+    otherShop: "Choose another shop",
+    suspendedTag: "suspended",
+  },
   actions: {
     save: "Save",
     cancel: "Cancel",

@@ -1,3 +1,4 @@
+import adminEn from "./en/admin";
 import analyticsEn from "./en/analytics";
 import authEn from "./en/auth";
 import catalogEn from "./en/catalog";
@@ -8,6 +9,7 @@ import organizationEn from "./en/organization";
 import publicEn from "./en/public";
 import salesEn from "./en/sales";
 import subscriptionEn from "./en/subscription";
+import adminFr from "./fr/admin";
 import analyticsFr from "./fr/analytics";
 import authFr from "./fr/auth";
 import catalogFr from "./fr/catalog";
@@ -33,6 +35,7 @@ export const resourcesFr = {
   subscription: subscriptionFr,
   notifications: notificationsFr,
   legal: legalFr,
+  admin: adminFr,
 } as const;
 
 export const resourcesEn = {
@@ -46,6 +49,7 @@ export const resourcesEn = {
   subscription: subscriptionEn,
   notifications: notificationsEn,
   legal: legalEn,
+  admin: adminEn,
 };
 
 export const resources = {

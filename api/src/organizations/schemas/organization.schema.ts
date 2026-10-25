@@ -1,9 +1,40 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 import { OrganizationCurrency, OrganizationStatus } from '../permissions';
 import { ORGANIZATION_NAME_MAX_LENGTH } from '../../common/validation/name-rules';
 
 export type OrganizationDocument = HydratedDocument<Organization>;
+
+/**
+ * Suspension administrative (administration de la plateforme), présente
+ * seulement quand `status = suspended` posé par cette administration.
+ * Distincte de l'expiration de l'abonnement (périodes), du statut des
+ * membres (memberships) et d'une suppression (aucune). Le motif interne
+ * n'est JAMAIS renvoyé au commerce ; seul `clientMessage` l'est, au
+ * propriétaire.
+ */
+@Schema({ _id: false })
+export class OrganizationSuspension {
+  @Prop({ type: Date, required: true })
+  suspendedAt: Date;
+
+  /** Administrateur de la plateforme (User). */
+  @Prop({ type: Types.ObjectId, required: true })
+  suspendedBy: Types.ObjectId;
+
+  @Prop({ type: String, required: true, maxlength: 500 })
+  internalReason: string;
+
+  @Prop({ type: String, required: true, maxlength: 500 })
+  clientMessage: string;
+
+  @Prop({ type: String, required: true, maxlength: 64 })
+  operationId: string;
+}
+
+export const OrganizationSuspensionSchema = SchemaFactory.createForClass(
+  OrganizationSuspension,
+);
 
 @Schema({ timestamps: true })
 export class Organization {
@@ -74,6 +105,10 @@ export class Organization {
     default: OrganizationStatus.ACTIVE,
   })
   status: OrganizationStatus;
+
+  /** Suspension administrative en cours (`null` sinon). */
+  @Prop({ type: OrganizationSuspensionSchema, default: null })
+  suspension?: OrganizationSuspension | null;
 
   /**
    * 1-21D — jeton TECHNIQUE de sérialisation des créations de fiches

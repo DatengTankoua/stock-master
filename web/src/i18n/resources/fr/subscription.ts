@@ -52,6 +52,7 @@ const subscriptionFr = {
       none: "Aucun abonnement",
     },
     trial: "Essai gratuit",
+    offered: "Prolongation offerte par Stock Master",
     subscriptionTerm: "Abonnement {{term}}",
     lessThanDay: "moins d'un jour",
     days_one: "{{count}} jour",

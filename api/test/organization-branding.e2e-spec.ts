@@ -1559,7 +1559,8 @@ describe('Branding d’organisation + logo tenant (e2e 1-8A)', () => {
       try {
         const res = await getCurrent(ownerAToken);
         expect(res.status).toBe(403);
-        expect(res.body.code).toBe('ORGANIZATION_ACCESS_DENIED');
+        // Administration de la plateforme : membre ACTIF d'une organisation suspendue → refus distinct (un tiers garde le refus uniforme).
+        expect(res.body.code).toBe('ORGANIZATION_SUSPENDED');
       } finally {
         // Restauration : d'autres tests de ce fichier réutilisent org A.
         await organizationModel.updateOne(

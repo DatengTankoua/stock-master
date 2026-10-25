@@ -238,9 +238,11 @@ export function PendingSalesPanel() {
           <p>
             {blocked.reason === "subscription"
               ? t("outbox.blocked.subscription")
-              : blocked.reason === "access_denied"
-                ? t("outbox.blocked.accessDenied")
-                : t("outbox.blocked.corruption")}
+              : blocked.reason === "suspended"
+                ? t("outbox.blocked.suspended")
+                : blocked.reason === "access_denied"
+                  ? t("outbox.blocked.accessDenied")
+                  : t("outbox.blocked.corruption")}
           </p>
         </div>
       )}

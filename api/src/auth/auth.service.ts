@@ -76,6 +76,12 @@ export type LoginResult =
   | {
       organizationSelectionRequired: true;
       organizations: SelectableOrganization[];
+      /**
+       * Organisations suspendues de l'utilisateur (membership active) : à
+       * afficher comme telles ; les choisir ouvre l'espace limité (refus
+       * `ORGANIZATION_SUSPENDED`), jamais une session applicative.
+       */
+      suspendedOrganizations?: SelectableOrganization[];
     };
 
 /**
@@ -438,14 +444,25 @@ export class AuthService implements OnApplicationShutdown {
 
     const organizations =
       await this.organizationsService.listActiveOrganizations(userId);
+    const suspended =
+      await this.organizationsService.listSuspendedOrganizations(userId);
+
+    // Seule organisation suspendue : `resolveActiveContext` lève le refus
+    // `ORGANIZATION_SUSPENDED` (message du commerce pour le propriétaire).
+    if (organizations.length === 0 && suspended.length === 1) {
+      await this.organizationsService.resolveActiveContext(
+        userId,
+        suspended[0].organizationId,
+      );
+    }
 
     // Aucune organisation active : même refus uniforme (l'organisation
     // ciblée par le login n'existe pas pour cet utilisateur).
-    if (organizations.length === 0) {
+    if (organizations.length === 0 && suspended.length === 0) {
       throw this.organizationAccessDenied();
     }
 
-    if (organizations.length === 1) {
+    if (organizations.length === 1 && suspended.length === 0) {
       // 1-14C.1 : contexte résolu (rôle réel requis pour `canRenew`) —
       // mêmes contrôles membership/organisation, refus uniforme inchangé.
       const context = await this.organizationsService.resolveActiveContext(
@@ -458,11 +475,15 @@ export class AuthService implements OnApplicationShutdown {
     // Plusieurs organisations : le client doit choisir. Aucune donnée
     // sensible (permissions, membershipId), liste triée par nom
     // (ordre déterministe).
+    // Avec une organisation suspendue, toujours un choix explicite : le
+    // propriétaire voit son commerce suspendu (espace limité) sans perdre
+    // l'accès à ses autres commerces.
     return {
       organizationSelectionRequired: true,
       organizations: [...organizations].sort((a, b) =>
         a.name.localeCompare(b.name),
       ),
+      ...(suspended.length > 0 ? { suspendedOrganizations: suspended } : {}),
     };
   }
 

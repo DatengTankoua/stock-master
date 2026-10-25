@@ -16,7 +16,11 @@ import {
 } from "@/contexts/auth-context";
 import { EmailVerificationResend } from "@/components/auth/email-verification-resend";
 import { AuthLegalLinks } from "@/components/legal/auth-legal-links";
-import type { SelectableOrganization } from "@/lib/api";
+import type {
+  OrganizationSuspendedView,
+  SelectableOrganization,
+} from "@/lib/api";
+import { OrganizationSuspendedNotice } from "@/components/organization/organization-suspended-notice";
 import { Wordmark } from "@/components/brand/wordmark";
 import { BackToHome } from "@/components/landing/back-to-home";
 import { useHydratedOnlineStatus } from "@/hooks/use-online-status";
@@ -39,6 +43,7 @@ const noSubscription = () => () => {};
 
 export default function LoginPage() {
   const { t } = useT("auth");
+  const { t: to } = useT("organization");
   const { login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -61,6 +66,13 @@ export default function LoginPage() {
   const [organizations, setOrganizations] = useState<
     SelectableOrganization[] | null
   >(null);
+  // Commerces suspendus par Stock Master : listés à part ; les choisir
+  // ouvre l'espace limité (aucune session installée).
+  const [suspendedOrganizations, setSuspendedOrganizations] = useState<
+    SelectableOrganization[]
+  >([]);
+  const [suspension, setSuspension] =
+    useState<OrganizationSuspendedView | null>(null);
   // 0B.5 : masque le lien d'inscription (affichage seulement — le backend
   // reste l'autorité finale). Par défaut : désactivée.
   const registrationEnabled =
@@ -212,6 +224,11 @@ export default function LoginPage() {
       setChallengeRequired(false);
       if (outcome.status === "organizationSelectionRequired") {
         setOrganizations(outcome.organizations);
+        setSuspendedOrganizations(outcome.suspendedOrganizations);
+        return;
+      }
+      if (outcome.status === "organizationSuspended") {
+        setSuspension(outcome.suspension);
         return;
       }
       setPassword("");
@@ -270,6 +287,8 @@ export default function LoginPage() {
   };
 
   const handleBack = () => {
+    setSuspension(null);
+    setSuspendedOrganizations([]);
     setOrganizations(null);
     setPassword("");
     setError(null);
@@ -330,6 +349,33 @@ export default function LoginPage() {
     );
   }
 
+  if (suspension) {
+    const canChooseOther = (organizations?.length ?? 0) > 0;
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 py-12 pb-[max(3rem,env(safe-area-inset-bottom))]">
+        <div className="flex w-full max-w-md flex-col items-center gap-6">
+          <Wordmark className="mx-auto" size="large" />
+          <OrganizationSuspendedNotice suspension={suspension}>
+            <div className="flex flex-wrap gap-2">
+              {canChooseOther && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSuspension(null)}
+                >
+                  {to("suspended.otherShop")}
+                </Button>
+              )}
+              <Button type="button" variant="ghost" onClick={handleBack}>
+                {t("login.back")}
+              </Button>
+            </div>
+          </OrganizationSuspendedNotice>
+        </div>
+      </div>
+    );
+  }
+
   if (organizations) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-12 pb-[max(3rem,env(safe-area-inset-bottom))]">
@@ -358,6 +404,20 @@ export default function LoginPage() {
                 className="w-full rounded-md border px-4 py-2.5 text-left text-sm font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
               >
                 {org.name}
+              </button>
+            ))}
+            {suspendedOrganizations.map((org) => (
+              <button
+                key={org.organizationId}
+                type="button"
+                disabled={loading}
+                onClick={() => void submit(org.organizationId)}
+                className="flex w-full items-center justify-between gap-2 rounded-md border border-dashed px-4 py-2.5 text-left text-sm font-medium text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+              >
+                <span className="min-w-0 truncate">{org.name}</span>
+                <span className="shrink-0 rounded-full border border-destructive/40 px-2 text-xs text-destructive">
+                  {to("suspended.suspendedTag")}
+                </span>
               </button>
             ))}
           </div>

@@ -41,13 +41,26 @@ import {
 import { purgeAllOfflineData } from "@/lib/offline-purge";
 import { releasePushOnLogout } from "@/lib/push-notifications";
 import { clearTenantBrand } from "@/lib/offline-tenant-brand-db";
+import {
+  endAdminSessionQuietly,
+  retryPendingAdminLogout,
+} from "@/lib/admin/admin-api";
+import {
+  readOrganizationSuspended,
+  type OrganizationSuspendedView,
+} from "@/lib/api";
 
 export type LoginOutcome =
   | { status: "success" }
   | {
       status: "organizationSelectionRequired";
       organizations: SelectableOrganization[];
+      /** Commerces suspendus : affichés comme tels, espace limité. */
+      suspendedOrganizations: SelectableOrganization[];
     }
+  // Commerce suspendu par l'administration de la plateforme : aucune
+  // session ouverte, espace limité (statut, message, assistance).
+  | { status: "organizationSuspended"; suspension: OrganizationSuspendedView }
   // 1-14C.2 : identifiants valides, abonnement du commerce inactif — session
   // LIMITÉE ouverte (jeton séparé), jamais de JWT applicatif.
   | { status: "subscriptionInactive" };
@@ -132,6 +145,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, [markInstalled]);
 
+  // Déconnexion d'administration restée en attente (hors ligne au moment
+  // de la déconnexion) : rejouée au chargement et au retour du réseau.
+  useEffect(() => {
+    void retryPendingAdminLogout();
+    const onOnline = () => void retryPendingAdminLogout();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
   // 1-15A — la session applicative est partagée par les onglets (même
   // `localStorage`). Une connexion ou une déconnexion dans un AUTRE onglet
   // remplace le jeton utilisé par cet onglet pour ses requêtes : l'onglet
@@ -187,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return {
             status: "organizationSelectionRequired",
             organizations: result.organizations,
+            suspendedOrganizations: result.suspendedOrganizations ?? [],
           };
         }
         // 1-12A : nouvelle session → identité visuelle hors ligne de la
@@ -211,6 +234,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 1-14C.2 : abonnement inactif → session LIMITÉE. Le JWT applicatif
         // éventuel d'une session précédente est retiré (jamais mélangé) ;
         // l'outbox locale n'est jamais touchée.
+        // Commerce suspendu : aucune session installée ni retirée, l'outbox
+        // locale n'est jamais touchée.
+        const suspension = readOrganizationSuspended(err);
+        if (suspension) return { status: "organizationSuspended", suspension };
         const inactive = readSubscriptionInactive(err);
         if (inactive?.restrictedToken) {
           await clearTenantBrand();
@@ -243,6 +270,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     epochRef.current += 1;
     await releasePushOnLogout(getToken() ?? getRestrictedToken());
+    // Déconnexion générale : la session d'administration de la plateforme
+    // (cookie HttpOnly de cet appareil) est fermée aussi.
+    await endAdminSessionQuietly();
     await purgeAllOfflineData();
     clearAuth();
     markInstalled();

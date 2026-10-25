@@ -129,6 +129,9 @@ describe('SubscriptionPeriod schema (1-14B)', () => {
         'productCreationSerial',
         'slug',
         'status',
+        // Administration de la plateforme : suspension administrative
+        // (motif, message), pas un champ d'abonnement.
+        'suspension',
         'updatedAt',
       ].sort(),
     );

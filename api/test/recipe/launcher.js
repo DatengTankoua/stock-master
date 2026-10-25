@@ -47,6 +47,8 @@ const MIGRATIONS = [
   'create-support-request-indexes.js',
   // 1-16C.2 : collections et index des preuves d'acceptation.
   'create-legal-acceptance-indexes.js',
+  // Administration de la plateforme : index seuls (aucun accès accordé).
+  'create-platform-admin-indexes.js',
 ];
 const NEXT_BIN = path.join(
   C.WEB_DIR,

@@ -176,6 +176,8 @@ const salesFr = {
       abandoned: "Abandonnée",
     },
     blocked: {
+      suspended:
+        "Envoi suspendu : ce commerce est suspendu par Stock Master. Les ventes restent sur cet appareil et repartiront après la réactivation.",
       subscription:
         "Envoi suspendu : l'abonnement de ce commerce n'est pas actif. Les ventes restent sur cet appareil et repartiront après le renouvellement.",
       accessDenied:
@@ -229,6 +231,8 @@ const salesFr = {
       accessDenied: "Accès refusé par le serveur.",
       subscriptionInactive:
         "Abonnement du commerce inactif : vente conservée, envoi après renouvellement.",
+      organizationSuspended:
+        "Commerce suspendu : vente conservée, envoi après réactivation.",
       network: "Réseau indisponible, nouvel essai automatique.",
       server: "Envoi momentanément impossible, nouvel essai automatique.",
       auth: "Session expirée ou accès refusé.",

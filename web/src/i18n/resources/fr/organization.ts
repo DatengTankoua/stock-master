@@ -7,6 +7,23 @@ const organizationFr = {
   saving: "Enregistrement…",
   creating: "Création…",
   deleting: "Suppression…",
+  // Suspension par l'administration de la plateforme (espace limité).
+  suspended: {
+    title: "Commerce suspendu",
+    since: "Depuis le {{date}}",
+    messageLabel: "Message de Stock Master",
+    ownerText:
+      "L'accès en ligne à ce commerce est suspendu. Contactez l'assistance Stock Master pour en connaître les raisons et les étapes de réactivation.",
+    memberText:
+      "L'accès à ce commerce est suspendu par Stock Master. Contactez son propriétaire.",
+    kept: "Les données, ventes, membres et abonnement sont conservés. Vos autres commerces restent accessibles.",
+    offline:
+      "Les ventes saisies hors ligne restent sur cet appareil et seront envoyées après la réactivation.",
+    contact: "Contacter l'assistance",
+    retry: "Vérifier à nouveau",
+    otherShop: "Choisir un autre commerce",
+    suspendedTag: "suspendu",
+  },
   actions: {
     save: "Enregistrer",
     cancel: "Annuler",
