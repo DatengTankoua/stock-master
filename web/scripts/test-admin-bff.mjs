@@ -223,3 +223,60 @@ test("service worker : l'administration n'est jamais interceptée ni mise en cac
   assert.ok(guard > 0, "garde présente dans le gestionnaire fetch");
   assert.ok(guard < handler.indexOf("respondWith"), "garde avant toute réponse du service worker");
 });
+
+// ─── Messages d'erreur de l'administration (src/lib/admin/admin-api.ts) ────
+const apiSource = readFileSync(path.join(here, "..", "src", "lib", "admin", "admin-api.ts"), "utf8");
+const apiModule = { exports: {} };
+new Function("module", "exports", "require", ts.transpileModule(apiSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText)(apiModule, apiModule.exports, (id) => (id === "@/lib/admin/bff-policy" ? loaded.exports : require(id)));
+const { AdminApiError, adminErrorKey, adminErrorReference } = apiModule.exports;
+
+test("erreurs publiques : aucune information sur l'infrastructure ni sur l'existence d'un compte", () => {
+  const { publicError } = loaded.exports;
+  // Connexion : mot de passe faux, compte non administrateur ou non confirmé → refus unique.
+  for (const [status, code] of [[401, null], [403, "PLATFORM_ADMIN_ACCESS_DENIED"], [403, "EMAIL_NOT_VERIFIED"]]) {
+    assert.deepEqual(publicError("auth/login", status, code), { status: 401, code: "PLATFORM_ADMIN_LOGIN_FAILED" });
+  }
+  // Défi anti-robot et plafonds : conservés (identiques pour un compte connu ou non).
+  assert.deepEqual(publicError("auth/login", 429, "AUTH_CHALLENGE_REQUIRED"), { status: 429, code: "AUTH_CHALLENGE_REQUIRED" });
+  assert.deepEqual(publicError("auth/login", 429, "PLATFORM_ADMIN_RATE_LIMITED"), { status: 429, code: "PLATFORM_ADMIN_RATE_LIMITED" });
+  // Infrastructure : secret du BFF refusé, route absente, API en panne ou injoignable → « indisponible ».
+  for (const [status, code] of [[403, "PLATFORM_ADMIN_PROXY_REQUIRED"], [404, null], [500, null], [502, null], [0, null], [503, "PLATFORM_ADMIN_UNAVAILABLE"], [418, "QUELQUE_CHOSE"]]) {
+    assert.deepEqual(publicError("auth/login", status, code), { status: 503, code: "PLATFORM_ADMIN_UNAVAILABLE" });
+  }
+  // Validation : jamais le détail des champs.
+  assert.deepEqual(publicError("security/step-up", 400, null), { status: 400, code: "PLATFORM_ADMIN_INVALID_REQUEST" });
+  // Session ouverte : codes utiles à l'interface conservés.
+  assert.deepEqual(publicError("overview", 401, "PLATFORM_ADMIN_SESSION_EXPIRED"), { status: 401, code: "PLATFORM_ADMIN_SESSION_EXPIRED" });
+  assert.deepEqual(publicError("organizations/x/suspend", 409, "PLATFORM_ADMIN_STATE_CHANGED"), { status: 409, code: "PLATFORM_ADMIN_STATE_CHANGED" });
+  // Référence : aléatoire, opaque.
+  const { newErrorReference } = loaded.exports;
+  const a = newErrorReference();
+  assert.match(a, /^[0-9a-f]{12}$/);
+  assert.notEqual(a, newErrorReference());
+});
+
+test("route : corps d'erreur de l'API jamais relayé, détail au journal serveur seulement", () => {
+  const route = readFileSync(path.join(here, "..", "src", "app", "api", "admin", "[...path]", "route.ts"), "utf8");
+  assert.match(route, /if \(upstream\.ok\) \{\s+response = reply\(upstream\.status, safeBody\);/);
+  assert.match(route, /publicError\(path, upstream\.status, upstreamCode\)/);
+  assert.doesNotMatch(route, /PLATFORM_ADMIN_UPSTREAM|PAYLOAD_TOO_LARGE|message:/);
+});
+
+test("messages : codes publics seulement ; référence opaque, sans code ni statut", () => {
+  const key = (status, code) => adminErrorKey(new AdminApiError(status, code, null)).key;
+  assert.equal(key(401, "PLATFORM_ADMIN_LOGIN_FAILED"), "errors.loginFailed");
+  assert.equal(key(503, "PLATFORM_ADMIN_UNAVAILABLE"), "errors.unavailable");
+  assert.equal(key(400, "PLATFORM_ADMIN_INVALID_REQUEST"), "errors.invalidRequest");
+  assert.equal(key(502, null), "errors.unavailable");
+  assert.equal(key(418, null), "errors.generic");
+  assert.equal(adminErrorReference(new AdminApiError(503, "PLATFORM_ADMIN_UNAVAILABLE", null, "a1b2c3d4e5f6")), "a1b2c3d4e5f6");
+  assert.equal(adminErrorReference(new AdminApiError(503, "PLATFORM_ADMIN_UNAVAILABLE", null)), null);
+  for (const lang of ["fr", "en"]) {
+    const texts = readFileSync(path.join(here, "..", "src", "i18n", "resources", lang, "admin.ts"), "utf8");
+    const start = texts.indexOf("\n  errors: {");
+    const errors = texts.slice(start, texts.indexOf("\n  },", start));
+    assert.doesNotMatch(errors, /PLATFORM_ADMIN_|API|secret|proxy|BFF|URL|n'a pas accès|non confirmée|not confirmed/i, lang);
+  }
+});

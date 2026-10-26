@@ -9,6 +9,8 @@ export class AdminApiError extends Error {
     readonly status: number,
     readonly code: string | null,
     readonly retryAfter: number | null,
+    /** Référence opaque (journaux serveur), jamais une information. */
+    readonly reference: string | null = null,
   ) {
     super(code ?? `HTTP ${status}`);
     this.name = "AdminApiError";
@@ -42,10 +44,14 @@ export async function adminRequest<T>(
         ? (data as { code: string }).code
         : null;
     const retry = Number(response.headers.get("retry-after"));
+    const reference = (data as { reference?: unknown } | null)?.reference;
     throw new AdminApiError(
       response.status,
       code,
       Number.isFinite(retry) && retry > 0 ? retry : null,
+      typeof reference === "string" && /^[0-9a-f]{12}$/.test(reference)
+        ? reference
+        : null,
     );
   }
   return data as T;
@@ -117,8 +123,7 @@ export function needsSignIn(error: unknown): boolean {
   return (
     error instanceof AdminApiError &&
     (error.code === "PLATFORM_ADMIN_SESSION_EXPIRED" ||
-      error.code === "PLATFORM_ADMIN_MFA_REQUIRED" ||
-      error.code === "PLATFORM_ADMIN_ACCESS_DENIED")
+      error.code === "PLATFORM_ADMIN_MFA_REQUIRED")
   );
 }
 
@@ -127,9 +132,8 @@ export type AdminErrorKey =
   | "errors.csrf"
   | "errors.network"
   | "errors.sessionExpired"
-  | "errors.accessDenied"
-  | "errors.credentials"
-  | "errors.emailNotVerified"
+  | "errors.loginFailed"
+  | "errors.invalidRequest"
   | "errors.challengeRequired"
   | "errors.antiBotFailed"
   | "errors.antiBotUnavailable"
@@ -145,7 +149,20 @@ export type AdminErrorKey =
   | "errors.extensionRefused"
   | "errors.generic";
 
-/** Clé de traduction d'une erreur (jamais le texte brut de l'API). */
+/**
+ * Référence affichée sous un message d'erreur : identifiant opaque et
+ * aléatoire posé par le BFF, à rapprocher de son journal serveur. Ne
+ * contient aucune information sur l'application (ni code, ni statut).
+ */
+export function adminErrorReference(error: unknown): string | null {
+  return error instanceof AdminApiError ? error.reference : null;
+}
+
+/**
+ * Clé de traduction d'une erreur, à partir des seuls codes PUBLICS du BFF
+ * (`bff-policy.ts`, `publicError`). Les messages ne citent ni configuration,
+ * ni composant, ni l'existence d'un compte.
+ */
 export function adminErrorKey(error: unknown): {
   key: AdminErrorKey;
   seconds: number;
@@ -160,7 +177,8 @@ export function adminErrorKey(error: unknown): {
     PLATFORM_ADMIN_CSRF_REJECTED: "errors.csrf",
     PLATFORM_ADMIN_SESSION_EXPIRED: "errors.sessionExpired",
     PLATFORM_ADMIN_MFA_REQUIRED: "errors.sessionExpired",
-    PLATFORM_ADMIN_ACCESS_DENIED: "errors.accessDenied",
+    PLATFORM_ADMIN_LOGIN_FAILED: "errors.loginFailed",
+    PLATFORM_ADMIN_INVALID_REQUEST: "errors.invalidRequest",
     PLATFORM_ADMIN_CODE_INVALID: "errors.codeInvalid",
     PLATFORM_ADMIN_CHALLENGE_INVALID: "errors.challengeInvalid",
     PLATFORM_ADMIN_RATE_LIMITED: "errors.rateLimited",
@@ -176,13 +194,12 @@ export function adminErrorKey(error: unknown): {
     PLATFORM_ADMIN_OPERATION_CONFLICT: "errors.operationConflict",
     PLATFORM_ADMIN_STATE_CHANGED: "errors.stateChanged",
     PLATFORM_ADMIN_EXTENSION_REFUSED: "errors.extensionRefused",
-    EMAIL_NOT_VERIFIED: "errors.emailNotVerified",
   };
   if (error.code && byCode[error.code])
     return { key: byCode[error.code], seconds };
-  if (error.status === 401) return { key: "errors.credentials", seconds };
-  if (error.status === 404) return { key: "errors.notFound", seconds };
-  if (error.status === 503) return { key: "errors.unavailable", seconds };
+  // Mot de passe faux pendant une vérification renforcée (session ouverte).
+  if (error.status === 401) return { key: "errors.loginFailed", seconds };
+  if (error.status >= 500) return { key: "errors.unavailable", seconds };
   return { key: "errors.generic", seconds };
 }
 

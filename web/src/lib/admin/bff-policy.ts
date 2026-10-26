@@ -273,3 +273,92 @@ export function extractSession(body: unknown): {
       SESSION_CLEARING_CODES.has(record.code));
   return { body: record, token, clear };
 }
+
+// ─── Erreurs publiques ───────────────────────────────────────────────────
+//
+// Le navigateur ne reçoit qu'un CODE PUBLIC (liste ci-dessous), le statut et
+// une référence opaque aléatoire. Jamais : message de l'API, détail de
+// validation (noms de champs), chemin, code interne d'infrastructure (secret
+// du BFF, API injoignable, configuration), ni ce qui distinguerait un
+// mot de passe juste d'un compte non administrateur ou non confirmé. Le
+// détail part dans les journaux SERVEUR, sous la même référence.
+
+/** Codes que l'interface peut recevoir tels quels. */
+const PUBLIC_CODES = new Set([
+  "PLATFORM_ADMIN_SESSION_EXPIRED",
+  "PLATFORM_ADMIN_MFA_REQUIRED",
+  "PLATFORM_ADMIN_ENROLLMENT_REQUIRED",
+  "PLATFORM_ADMIN_ALREADY_ENROLLED",
+  "PLATFORM_ADMIN_CHALLENGE_INVALID",
+  "PLATFORM_ADMIN_CODE_INVALID",
+  "PLATFORM_ADMIN_STEP_UP_REQUIRED",
+  "PLATFORM_ADMIN_RATE_LIMITED",
+  "PLATFORM_ADMIN_NOT_FOUND",
+  "PLATFORM_ADMIN_CAPABILITY_REQUIRED",
+  "PLATFORM_ADMIN_OPERATION_CONFLICT",
+  "PLATFORM_ADMIN_STATE_CHANGED",
+  "PLATFORM_ADMIN_EXTENSION_REFUSED",
+  "AUTH_RATE_LIMITED",
+  "AUTH_CHALLENGE_REQUIRED",
+  "TURNSTILE_FAILED",
+  "TURNSTILE_REQUIRED",
+  "TURNSTILE_UNAVAILABLE",
+]);
+
+/**
+ * Refus de connexion UNIQUE : mot de passe faux, compte inconnu, compte sans
+ * accès plateforme ou adresse non confirmée répondent à l'identique.
+ */
+const LOGIN_REFUSAL_CODES = new Set([
+  "PLATFORM_ADMIN_ACCESS_DENIED",
+  "EMAIL_NOT_VERIFIED",
+]);
+
+export const PUBLIC_UNAVAILABLE = "PLATFORM_ADMIN_UNAVAILABLE";
+export const PUBLIC_LOGIN_FAILED = "PLATFORM_ADMIN_LOGIN_FAILED";
+export const PUBLIC_INVALID_REQUEST = "PLATFORM_ADMIN_INVALID_REQUEST";
+
+export interface PublicError {
+  status: number;
+  code: string;
+}
+
+/**
+ * Erreur relayée au navigateur, à partir de la réponse de l'API (`status`
+ * HTTP ; `upstreamCode` : code de l'API, `null` si absent ; `status = 0` :
+ * API injoignable).
+ */
+export function publicError(
+  path: string,
+  status: number,
+  upstreamCode: string | null,
+): PublicError {
+  if (
+    path === "auth/login" &&
+    (status === 401 ||
+      (upstreamCode !== null && LOGIN_REFUSAL_CODES.has(upstreamCode)))
+  ) {
+    return { status: 401, code: PUBLIC_LOGIN_FAILED };
+  }
+  if (
+    upstreamCode !== null &&
+    PUBLIC_CODES.has(upstreamCode) &&
+    status >= 400 &&
+    status < 500
+  ) {
+    return { status, code: upstreamCode };
+  }
+  if (status === 400 || status === 413) {
+    return { status: 400, code: PUBLIC_INVALID_REQUEST };
+  }
+  // Tout le reste (API injoignable, 5xx, route ou secret refusés par l'API,
+  // espace fermé, code inconnu) : un seul « indisponible ».
+  return { status: 503, code: PUBLIC_UNAVAILABLE };
+}
+
+/** Référence opaque d'une erreur (journaux serveur ↔ écran). */
+export function newErrorReference(): string {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
