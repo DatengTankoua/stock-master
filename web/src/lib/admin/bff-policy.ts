@@ -335,11 +335,17 @@ export function publicError(
 ): PublicError {
   if (
     path === "auth/login" &&
-    (status === 401 || (upstreamCode !== null && LOGIN_REFUSAL_CODES.has(upstreamCode)))
+    (status === 401 ||
+      (upstreamCode !== null && LOGIN_REFUSAL_CODES.has(upstreamCode)))
   ) {
     return { status: 401, code: PUBLIC_LOGIN_FAILED };
   }
-  if (upstreamCode !== null && PUBLIC_CODES.has(upstreamCode) && status >= 400 && status < 500) {
+  if (
+    upstreamCode !== null &&
+    PUBLIC_CODES.has(upstreamCode) &&
+    status >= 400 &&
+    status < 500
+  ) {
     return { status, code: upstreamCode };
   }
   if (status === 400 || status === 413) {

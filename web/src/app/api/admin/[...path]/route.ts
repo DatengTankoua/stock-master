@@ -58,7 +58,12 @@ const unavailable = (method: string, path: string, detail: string) =>
 
 async function relay(request: NextRequest, context: Context) {
   const config = resolveAdminBffConfig(process.env);
-  if (!config) return unavailable(request.method, "-", "BFF configuration missing or invalid");
+  if (!config)
+    return unavailable(
+      request.method,
+      "-",
+      "BFF configuration missing or invalid",
+    );
 
   const { path: segments } = await context.params;
   const method = request.method;
@@ -83,7 +88,13 @@ async function relay(request: NextRequest, context: Context) {
   if (method === "POST") {
     body = await request.text();
     if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-      return failure(method, path, 400, PUBLIC_INVALID_REQUEST, "request body too large");
+      return failure(
+        method,
+        path,
+        400,
+        PUBLIC_INVALID_REQUEST,
+        "request body too large",
+      );
     }
     if (body === "") body = "{}";
   }
@@ -134,7 +145,7 @@ async function relay(request: NextRequest, context: Context) {
     // Erreur : jamais le corps de l'API (message, validation, chemin).
     const upstreamCode =
       typeof (safeBody as { code?: unknown } | null)?.code === "string"
-        ? ((safeBody as { code: string }).code)
+        ? (safeBody as { code: string }).code
         : null;
     const shown = publicError(path, upstream.status, upstreamCode);
     response = failure(

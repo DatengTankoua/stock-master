@@ -47,7 +47,8 @@ const adminFr = {
       "Confirmez d'abord votre mot de passe et votre second facteur.",
     alreadyEnrolled: "La double authentification est déjà configurée.",
     notFound: "Élément introuvable.",
-    unavailable: "Administration momentanément indisponible. Réessayez plus tard.",
+    unavailable:
+      "Administration momentanément indisponible. Réessayez plus tard.",
     loginFailed: "Identifiants incorrects ou accès non autorisé.",
     invalidRequest: "Requête refusée. Vérifiez votre saisie.",
     generic: "Une erreur est survenue. Réessayez.",
