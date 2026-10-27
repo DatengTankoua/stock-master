@@ -16,6 +16,13 @@ export const PLATFORM_CAPABILITIES = [
   'platform.organizations.suspend',
   /** Accorder une prolongation commerciale offerte. */
   'platform.subscriptions.extend',
+  /**
+   * Envoyer (ou relancer) un message de service aux membres d'un commerce
+   * par le centre de notifications (et le push qui l'accompagne).
+   */
+  'platform.communications.notify',
+  /** Envoyer (ou relancer) un message de service par e-mail. */
+  'platform.communications.email',
 ] as const;
 
 export type PlatformCapability = (typeof PLATFORM_CAPABILITIES)[number];

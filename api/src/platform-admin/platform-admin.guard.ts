@@ -5,6 +5,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  NotFoundException,
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -14,6 +15,7 @@ import type { Observable } from 'rxjs';
 import { clientKeyFor } from '../common/auth-rate-limiting';
 import type { PlatformCapability } from './platform-admin-capabilities';
 import {
+  PlatformAdminHiddenRoute,
   PlatformAdminService,
   UNATTRIBUTED_CLIENT,
   type AccessLevel,
@@ -76,7 +78,7 @@ export class PlatformAdminGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AdminRequest>();
     const proxySecret = header(request, ADMIN_PROXY_HEADER);
     const forwarded = header(request, ADMIN_CLIENT_IP_HEADER)?.trim();
-    request.platformAdmin = await this.service.authenticate(level, {
+    request.platformAdmin = await this.authenticate(request, level, {
       proxySecret,
       sessionToken: header(request, ADMIN_SESSION_HEADER),
       // Adresse retenue SEULEMENT si le BFF en relaie une (en-tête déclaré
@@ -96,6 +98,24 @@ export class PlatformAdminGuard implements CanActivate {
       this.service.requireCapability(request.platformAdmin, capability);
     }
     return true;
+  }
+
+  /** Route masquée : même 404 que le routeur de Nest pour une URL inconnue. */
+  private async authenticate(
+    request: AdminRequest,
+    level: AccessLevel,
+    input: Parameters<PlatformAdminService['authenticate']>[1],
+  ): Promise<PlatformAdminRequestContext> {
+    try {
+      return await this.service.authenticate(level, input);
+    } catch (error) {
+      if (error instanceof PlatformAdminHiddenRoute) {
+        throw new NotFoundException(
+          `Cannot ${request.method} ${request.originalUrl}`,
+        );
+      }
+      throw error;
+    }
   }
 }
 

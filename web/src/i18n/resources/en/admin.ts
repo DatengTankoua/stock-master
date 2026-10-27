@@ -31,14 +31,17 @@ const adminEn: Translation<typeof adminFr> = {
       "The situation changed since your confirmation (another administrator or a payment). Reload the record, check and start again.",
     extensionRefused:
       "Extension impossible without rewriting existing periods (gap, or scheduled period without current coverage).",
-    unavailable:
-      "Platform administration is unavailable (disabled or incomplete configuration).",
+    messageRecipientLimit: "Too many recipients for a single message.",
+    messageRateLimited:
+      "Message sending limit reached. Try again in {{seconds}} s.",
+    messageRecipientsChanged:
+      "A recipient is no longer an active member of this shop. The list was reloaded: check the selection and start again.",
+    messageNotRetryable: "This delivery cannot be retried.",
+    messageRetryWindowExpired:
+      "The outcome has been uncertain for more than 23 h: a retry could create a duplicate.",
     csrf: "Request refused. Reload the page.",
     network: "Server unreachable. Check your connection.",
     sessionExpired: "Your administration session has expired. Sign in again.",
-    accessDenied: "This account has no access to platform administration.",
-    credentials: "Incorrect email or password.",
-    emailNotVerified: "Email address not confirmed.",
     challengeRequired:
       "Too many attempts on this account. Complete the anti-bot check below, then sign in again.",
     antiBotFailed: "The anti-bot check failed or expired. Do it again.",
@@ -51,7 +54,11 @@ const adminEn: Translation<typeof adminFr> = {
     stepUpRequired: "First confirm your password and your second factor.",
     alreadyEnrolled: "Two-factor authentication is already set up.",
     notFound: "Not found.",
+    unavailable: "Administration temporarily unavailable. Try again later.",
+    loginFailed: "Incorrect credentials or access not allowed.",
+    invalidRequest: "Request refused. Check your input.",
     generic: "Something went wrong. Try again.",
+    reference: "Reference: {{reference}}",
   },
   login: {
     title: "Platform administration",
@@ -166,6 +173,8 @@ const adminEn: Translation<typeof adminFr> = {
     actions: "Actions",
     noActionCapability:
       "Your access is read-only. Actions are granted with the operator command.",
+    noStateActionCapability:
+      "Your access allows neither suspension nor extension. These actions are granted with the operator command.",
     history: "Action history",
     noHistory: "No action on this shop.",
     back: "Back to organizations",
@@ -294,7 +303,103 @@ const adminEn: Translation<typeof adminFr> = {
       organization_view: "Organization record viewed",
       payments_view: "Payments viewed",
       audit_view: "Audit viewed",
+      organization_message: "Service message sent",
+      organization_message_retry: "Service message retried",
     },
+  },
+  messages: {
+    section: "Service messages",
+    send: "Send a message",
+    noCapability:
+      "Your access does not allow sending messages (notification or email capability required).",
+    acceptedNotice:
+      "“Accepted” means the email provider took charge of the send: neither delivery nor reading is confirmed. “Notification created” means it is in the member's notification center.",
+    empty: "No message sent to this shop.",
+    suspendedNotice:
+      "This shop is suspended: its members cannot open the notification center while it is, and no push is sent. Email remains possible. Sending never reactivates the shop or any account.",
+    recipients: "Recipients",
+    modes: {
+      one: "One member",
+      several: "Several members",
+      all: "All active members",
+    },
+    allFrozen:
+      "{{count}} reachable active member(s) right now. Members added later will not receive this message.",
+    noMembers: "No active member.",
+    notReachable: "not reachable (unverified account)",
+    maxRecipients: "{{max}} recipients at most",
+    channels: "Channels",
+    channelNames: {
+      in_app: "In-app notification",
+      email: "Email",
+    },
+    channelHints: {
+      in_app:
+        "The app's notification center, plus push on the devices where the member enabled it.",
+      email:
+        "The member's account address; replies reach Stock Master support.",
+    },
+    channelNotAllowed: "Not allowed for your access.",
+    title: "Title",
+    body: "Message",
+    counter: "{{count}} / {{max}} characters",
+    plainText:
+      "Plain text only: no HTML rendered, no link or attachment added.",
+    limits:
+      "At most {{max}} recipients per message. Messages sent to this shop: {{used}} / {{orgMax}} over {{hours}} h.",
+    preview: "Preview",
+    categoryLabel: "Message from Stock Master",
+    reviewChannels: "Channels",
+    reviewRecipients: "{{count}} recipient(s):",
+    reviewInApp:
+      "In-app notification: created only if the member has not turned off Stock Master messages in their preferences; push depends on their devices and their preferences.",
+    reviewEmail:
+      "Email: “accepted” by the provider guarantees neither delivery nor reading.",
+    reviewNoReactivation:
+      "A member who becomes ineligible before delivery is skipped, with a reason.",
+    confirm: "Send the message",
+    sending: "Sending…",
+    networkLost:
+      "The response did not arrive. Try again: the same message will never be recorded or sent twice.",
+    done: "Message recorded",
+    doneDetail:
+      "{{count}} delivery(ies) being processed. Their outcome appears in the history.",
+    replayed:
+      "This message had already been recorded: existing result, nothing sent again.",
+    showBody: "Show the message",
+    statuses: {
+      pending: "Pending",
+      sending: "In progress",
+      created: "Notification created",
+      accepted: "Accepted by the provider",
+      skipped: "Skipped",
+      failed: "Failed",
+      uncertain: "Uncertain outcome",
+    },
+    reasons: {
+      membership_inactive: "no longer an active member",
+      account_missing: "account deleted",
+      account_inactive: "unverified account",
+      organization_missing: "shop not found",
+      preference_off: "messages turned off by the member",
+      email_not_configured: "email sending not configured",
+      retry_window_expired: "duplicate-safe retry window passed",
+      timeout: "timed out",
+      network: "network",
+      internal_error: "internal error",
+      message_missing: "message not found",
+      unexpected: "unexpected error",
+      rejected: "refused by the provider ({{status}})",
+    },
+    retryChannel: "Retry “{{channel}}” ({{count}})",
+    retryTitle: "Retry deliveries",
+    retryText: "Retry the “{{channel}}” channel for {{count}} recipient(s):",
+    retryOnly:
+      "Only these deliveries are retried. Channels and recipients already served are never sent again; an email with an uncertain outcome is resent with the same key, which the provider deduplicates.",
+    retryConfirm: "Retry",
+    retryDone: "Retry recorded.",
+    windowExpiredNotice:
+      "An uncertain outcome older than 23 h can no longer be retried without risking a duplicate.",
   },
   actions: {
     suspend: "Suspend the shop",

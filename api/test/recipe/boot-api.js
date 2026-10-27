@@ -167,6 +167,11 @@ function activateSimulatedPush(app) {
     transport,
   );
   app.get(PushDispatcherService).start(1000);
+  // Messages de service de l'administration (e-mails dans mail.jsonl).
+  const { PlatformMessageDeliveryService } = C.dist(
+    'platform-admin/platform-message-delivery.service',
+  );
+  app.get(PlatformMessageDeliveryService).start(1000);
 }
 
 function assertImplicitWritesDisabled() {

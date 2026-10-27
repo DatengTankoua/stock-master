@@ -23,7 +23,6 @@ import {
   adminCodeInvalid,
   adminEnrollmentRequired,
   adminMfaRequired,
-  adminProxyRequired,
   adminRateLimited,
   adminSessionExpired,
   adminStepUpRequired,
@@ -48,8 +47,9 @@ import {
   type PlatformCapability,
 } from './platform-admin-capabilities';
 import {
-  ACTION_CAPABILITY,
   actionContentHash,
+  auditCapability,
+  intentCapabilities,
   type ActionIntent,
 } from './platform-admin-action-intent';
 import { generateTotpSecret, totpProvisioning, verifyTotpCode } from './totp';
@@ -90,6 +90,12 @@ export const ADMIN_MFA_IP_POLICY: FixedWindowPolicy = {
   limit: 20,
   windowMs: FIFTEEN_MINUTES,
 };
+
+/**
+ * Appel sans le secret du BFF, ou espace fermé : la garde répond comme pour
+ * une route inexistante (aucune information sur l'administration).
+ */
+export class PlatformAdminHiddenRoute extends Error {}
 
 /** Requête relayée sans adresse de confiance (voir le BFF). */
 export const UNATTRIBUTED_CLIENT = 'unattributed';
@@ -165,15 +171,18 @@ export class PlatformAdminService {
     level: AccessLevel,
     input: AuthenticationInput,
   ): Promise<PlatformAdminRequestContext> {
-    if (!(await this.runtime.isOpen())) throw adminUnavailable();
+    // Sans le secret du BFF (ou espace fermé) : la route n'existe pas pour
+    // l'appelant (404 identique à une route inconnue). Seul le BFF apprend
+    // ensuite si l'espace est ouvert (503).
     const config = this.runtime.config;
     if (
       !config.enabled ||
       !input.proxySecret ||
       !constantTimeEquals(input.proxySecret, config.proxySecret)
     ) {
-      throw adminProxyRequired();
+      throw new PlatformAdminHiddenRoute();
     }
+    if (!(await this.runtime.isOpen())) throw adminUnavailable();
     const context: PlatformAdminRequestContext = {
       clientKey: input.clientKey,
       clientKeyHash: this.clientKeyHash(input.clientKey),
@@ -561,7 +570,9 @@ export class PlatformAdminService {
     const factor = context.factor;
     if (!factor?.active) throw adminEnrollmentRequired();
     if (intent) {
-      this.requireCapability(context, ACTION_CAPABILITY[intent.action]);
+      for (const capability of intentCapabilities(intent)) {
+        this.requireCapability(context, capability);
+      }
     }
     const limits = await this.consumeMfaAttempt(
       context,
@@ -619,7 +630,7 @@ export class PlatformAdminService {
                 targetType: 'organization' as const,
                 targetId: intent.organizationId,
                 operationId: intent.operationId,
-                capability: ACTION_CAPABILITY[intent.action],
+                capability: auditCapability(intent),
               }
             : {}),
           sessionId: session._id,

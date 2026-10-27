@@ -72,6 +72,13 @@ export class AppNotification {
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
   regularizationId?: Types.ObjectId | null;
 
+  /**
+   * Message de Stock Master (`platform-message`) : référence seule ; titre
+   * et texte restent dans `platform_messages` (jamais recopiés ici).
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  platformMessageId?: Types.ObjectId | null;
+
   @Prop({ type: Date, default: null })
   coverageEndsAt: Date | null;
 

@@ -18,6 +18,7 @@ import {
   OrganizationActions,
   OrganizationSuspensionPanel,
 } from "@/components/admin/organization-actions";
+import { OrganizationMessages } from "@/components/admin/organization-messages";
 import {
   AdminApiError,
   type AdminOrganizationDetail,
@@ -86,6 +87,7 @@ export default function AdminOrganizationPage() {
           </header>
           <OrganizationSuspensionPanel organization={data} />
           <OrganizationActions organization={data} onChanged={retry} />
+          <OrganizationMessages organization={data} />
           <div className="grid gap-4 lg:grid-cols-2">
             <AdminSection title={t("organization.identity")}>
               <dl className="divide-y divide-border">

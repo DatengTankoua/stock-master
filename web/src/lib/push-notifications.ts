@@ -29,7 +29,9 @@ export type PushCategory =
   // Lot C.
   | "expiry-soon"
   | "expiry-expired"
-  | "regularization-requested";
+  | "regularization-requested"
+  // Messages de service de Stock Master (administration).
+  | "platform-message";
 
 export interface PushPreferences {
   stockDepleted: boolean;
@@ -43,6 +45,7 @@ export interface PushPreferences {
   expirySoon: boolean;
   expiryExpired: boolean;
   regularizationRequested: boolean;
+  platformMessage: boolean;
 }
 
 export interface PushConfig {

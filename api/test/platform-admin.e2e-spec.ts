@@ -261,14 +261,33 @@ describe('Administration de la plateforme (e2e)', () => {
   }, 60_000);
 
   describe('Autorisation plateforme séparée', () => {
-    it('sans le secret du BFF : refus, quelle que soit la session', async () => {
-      const res = await admin('get', '/overview', { proxy: null });
-      expect(res.status).toBe(403);
-      expect(res.body.code).toBe('PLATFORM_ADMIN_PROXY_REQUIRED');
-      const wrong = await admin('get', '/overview', {
-        proxy: randomBytes(32).toString('base64url'),
+    it('sans le secret du BFF : route masquée, identique à une URL inconnue', async () => {
+      const strip = (r: request.Response) => ({
+        status: r.status,
+        body: { ...r.body, path: undefined, timestamp: undefined },
+        cacheControl: r.headers['cache-control'],
+        robots: r.headers['x-robots-tag'],
       });
-      expect(wrong.status).toBe(403);
+      const unknown = await http().get('/route-inconnue-xyz');
+      const base = strip(unknown);
+      for (const proxy of [null, randomBytes(32).toString('base64url')]) {
+        const res = await admin('post', '/auth/login', { proxy }).send({
+          email: 'x@example.test',
+          password: 'x',
+        });
+        expect(res.status).toBe(404);
+        expect(res.body.message).toBe('Cannot POST /platform-admin/auth/login');
+        expect(strip(res)).toEqual({
+          ...base,
+          body: {
+            ...base.body,
+            message: 'Cannot POST /platform-admin/auth/login',
+          },
+        });
+        expect(JSON.stringify(res.body)).not.toMatch(
+          /PLATFORM_ADMIN|secret|BFF/,
+        );
+      }
     });
 
     it('un JWT de commerce (propriétaire) n’ouvre aucune route plateforme', async () => {
@@ -1120,9 +1139,10 @@ describe('Administration de la plateforme (e2e)', () => {
         expect(audit + bodies.join('')).not.toContain(code);
       expect(sessions).not.toContain(a.token);
       expect(audit).not.toContain(a.token);
-      // Erreurs aussi : privées, jamais en cache.
-      const denied = await admin('get', '/overview', { proxy: null });
-      expect(denied.headers['cache-control']).toContain('no-store');
+      // Erreurs vues par le BFF : privées, jamais en cache.
+      const refused = await admin('get', '/overview', { ip: ip(30) });
+      expect(refused.status).toBe(401);
+      expect(refused.headers['cache-control']).toContain('no-store');
     });
   });
 
@@ -1167,7 +1187,7 @@ describe('Administration de la plateforme (e2e)', () => {
       expect(context.body.role).toBe('owner');
     });
 
-    it('espace fermé (configuration absente) : 503, commerces fonctionnels', async () => {
+    it('espace fermé (configuration absente) : routes masquées (404), commerces fonctionnels', async () => {
       const closed = await Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(EMAIL_SENDER)
         .useValue(emailSender)
@@ -1181,8 +1201,8 @@ describe('Administration de la plateforme (e2e)', () => {
         const res = await request(closedApp.getHttpServer())
           .get('/platform-admin/overview')
           .set('x-platform-admin-proxy', PROXY_SECRET);
-        expect(res.status).toBe(503);
-        expect(res.body.code).toBe('PLATFORM_ADMIN_UNAVAILABLE');
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBeUndefined();
         const context = await request(closedApp.getHttpServer())
           .get('/auth/context')
           .set('Authorization', `Bearer ${ownerToken}`);

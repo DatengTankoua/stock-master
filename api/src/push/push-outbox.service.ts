@@ -192,6 +192,29 @@ export class PushOutboxService {
     }
   }
 
+  /**
+   * Message de Stock Master : push du SEUL destinataire, après création de
+   * sa notification du centre (même clé d'événement). Clé
+   * `platform-message:<message>:<destinataire>` : une reprise du traitement
+   * de fond ne crée jamais un second travail.
+   */
+  async platformMessage(input: {
+    organizationId: Types.ObjectId;
+    userId: Types.ObjectId;
+    messageId: Types.ObjectId;
+    notificationId: Types.ObjectId;
+    eventKey: string;
+  }): Promise<void> {
+    await this.record(null, {
+      eventKey: input.eventKey,
+      category: PushCategory.PLATFORM_MESSAGE,
+      organizationId: input.organizationId,
+      recipientUserId: input.userId,
+      platformMessageId: input.messageId,
+      notificationId: input.notificationId,
+    });
+  }
+
   /** Paiement `succeeded` ET période attribuée dans cette transaction. */
   async paymentSucceededInSession(
     session: MongooseSession,
@@ -216,6 +239,9 @@ export class PushOutboxService {
       saleId?: Types.ObjectId;
       actorId?: Types.ObjectId;
       regularizationId?: Types.ObjectId;
+      recipientUserId?: Types.ObjectId;
+      platformMessageId?: Types.ObjectId;
+      notificationId?: Types.ObjectId;
       activity?: {
         entity: MemberActivityEntity;
         action: MemberActivityAction;

@@ -36,6 +36,12 @@ export enum PushCategory {
   /** Lot C — nouvelle demande de régularisation d'une vente (lot B). */
   REGULARIZATION_REQUESTED = 'regularization-requested',
   /**
+   * Message de service envoyé par l'administration de Stock Master à un
+   * membre précis (jamais une campagne). Contenu relu dans le stockage des
+   * communications à l'ouverture.
+   */
+  PLATFORM_MESSAGE = 'platform-message',
+  /**
    * 1-16A.1 — INTERNE, push seulement : regroupement des ventes d'une
    * organisation sur une fenêtre fixe d'une minute (jamais une notification
    * du centre, jamais une préférence).
@@ -56,6 +62,7 @@ export const PUSH_CATEGORIES: readonly PushCategory[] = Object.freeze([
   PushCategory.EXPIRY_SOON,
   PushCategory.EXPIRY_EXPIRED,
   PushCategory.REGULARIZATION_REQUESTED,
+  PushCategory.PLATFORM_MESSAGE,
 ]);
 
 /** Préférences push par appareil ; toutes actives à l'activation. */
@@ -73,6 +80,8 @@ export interface PushPreferences {
   expirySoon: boolean;
   expiryExpired: boolean;
   regularizationRequested: boolean;
+  /** Messages de Stock Master : absente des préférences existantes → active. */
+  platformMessage: boolean;
 }
 
 export const DEFAULT_PUSH_PREFERENCES: Readonly<PushPreferences> =
@@ -88,6 +97,7 @@ export const DEFAULT_PUSH_PREFERENCES: Readonly<PushPreferences> =
     expirySoon: true,
     expiryExpired: true,
     regularizationRequested: true,
+    platformMessage: true,
   });
 
 export const PREFERENCE_BY_CATEGORY: Readonly<
@@ -104,6 +114,7 @@ export const PREFERENCE_BY_CATEGORY: Readonly<
   [PushCategory.EXPIRY_SOON]: 'expirySoon',
   [PushCategory.EXPIRY_EXPIRED]: 'expiryExpired',
   [PushCategory.REGULARIZATION_REQUESTED]: 'regularizationRequested',
+  [PushCategory.PLATFORM_MESSAGE]: 'platformMessage',
   // Le regroupement suit la préférence « nouvelle vente ».
   [PushCategory.SALE_DIGEST]: 'saleCreated',
 });
@@ -155,6 +166,9 @@ export function canAccessCategory(
       return granted.has('analytics.read');
     case PushCategory.MEMBER_JOINED:
       return granted.has('members.manage');
+    // Adressé nommément par Stock Master : tout membre actif destinataire.
+    case PushCategory.PLATFORM_MESSAGE:
+      return true;
   }
 }
 

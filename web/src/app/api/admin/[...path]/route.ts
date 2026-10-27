@@ -9,6 +9,10 @@ import {
   clientAddress,
   extractSession,
   filterAdminQuery,
+  newErrorReference,
+  PUBLIC_INVALID_REQUEST,
+  PUBLIC_UNAVAILABLE,
+  publicError,
   resolveAdminBffConfig,
   resolveAdminRoute,
 } from "@/lib/admin/bff-policy";
@@ -21,7 +25,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 16_384;
+// Un message de service (5 000 caractères, jusqu'à 3 octets chacun en UTF-8,
+// échappements JSON, 50 destinataires) dépasse 16 Kio : 64 Kio au plus.
+const MAX_BODY_BYTES = 65_536;
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
 type Context = { params: Promise<{ path: string[] }> };
@@ -30,16 +36,36 @@ function reply(status: number, body: unknown): NextResponse {
   return NextResponse.json(body, { status, headers: ADMIN_RESPONSE_HEADERS });
 }
 
-const unavailable = () =>
-  reply(503, {
-    statusCode: 503,
-    code: "PLATFORM_ADMIN_UNAVAILABLE",
-    message: "Administration unavailable.",
-  });
+/**
+ * Erreur relayée : code PUBLIC et référence opaque seulement ; le détail
+ * (route, statut et code de l'API) part dans le journal serveur sous la même
+ * référence. Aucun secret, jeton ni donnée saisie n'y figure.
+ */
+function failure(
+  method: string,
+  path: string,
+  status: number,
+  code: string,
+  detail: string,
+): NextResponse {
+  const reference = newErrorReference();
+  console.warn(
+    `[admin-bff] ref=${reference} ${method} ${path} → ${status} ${code} (${detail})`,
+  );
+  return reply(status, { statusCode: status, code, reference });
+}
+
+const unavailable = (method: string, path: string, detail: string) =>
+  failure(method, path, 503, PUBLIC_UNAVAILABLE, detail);
 
 async function relay(request: NextRequest, context: Context) {
   const config = resolveAdminBffConfig(process.env);
-  if (!config) return unavailable();
+  if (!config)
+    return unavailable(
+      request.method,
+      "-",
+      "BFF configuration missing or invalid",
+    );
 
   const { path: segments } = await context.params;
   const method = request.method;
@@ -64,7 +90,13 @@ async function relay(request: NextRequest, context: Context) {
   if (method === "POST") {
     body = await request.text();
     if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-      return reply(413, { statusCode: 413, code: "PAYLOAD_TOO_LARGE" });
+      return failure(
+        method,
+        path,
+        400,
+        PUBLIC_INVALID_REQUEST,
+        "request body too large",
+      );
     }
     if (body === "") body = "{}";
   }
@@ -96,10 +128,7 @@ async function relay(request: NextRequest, context: Context) {
       },
     );
   } catch {
-    const failed = reply(502, {
-      statusCode: 502,
-      code: "PLATFORM_ADMIN_UPSTREAM",
-    });
+    const failed = unavailable(method, path, "API unreachable or timed out");
     if (clearsCookieAlways(path)) {
       failed.cookies.set(cookieName, "", {
         ...adminCookieOptions(config.secureCookie),
@@ -111,7 +140,24 @@ async function relay(request: NextRequest, context: Context) {
 
   const parsed: unknown = await upstream.json().catch(() => null);
   const { body: safeBody, token, clear } = extractSession(parsed);
-  const response = reply(upstream.status, safeBody);
+  let response: NextResponse;
+  if (upstream.ok) {
+    response = reply(upstream.status, safeBody);
+  } else {
+    // Erreur : jamais le corps de l'API (message, validation, chemin).
+    const upstreamCode =
+      typeof (safeBody as { code?: unknown } | null)?.code === "string"
+        ? (safeBody as { code: string }).code
+        : null;
+    const shown = publicError(path, upstream.status, upstreamCode);
+    response = failure(
+      method,
+      path,
+      shown.status,
+      shown.code,
+      `API ${upstream.status} ${upstreamCode ?? "no-code"}`,
+    );
+  }
   const retryAfter = upstream.headers.get("retry-after");
   if (retryAfter && /^\d{1,6}$/.test(retryAfter)) {
     response.headers.set("Retry-After", retryAfter);

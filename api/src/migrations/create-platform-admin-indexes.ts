@@ -1,7 +1,8 @@
 /**
  * Administration de la plateforme — migration d'INDEX idempotente (aucune
- * donnée lue ni écrite, aucun accès accordé) : index des collections
- * `platform_admin_*` et index `createdAt_-1` de `organizations`.
+ * donnée lue ni écrite, aucun accès accordé, aucun message envoyé) : index
+ * des collections `platform_admin_*`, `platform_messages`,
+ * `platform_message_deliveries` et index `createdAt_-1` de `organizations`.
  *
  * Usage (après `pnpm --filter api build`) :
  *   MONGODB_URI=... pnpm --filter api migrate:platform-admin-indexes

@@ -41,6 +41,8 @@ export enum PushJobStatus {
  * - `member-activity:<identifiant d'action>` (après succès de l'action) et
  *   `member-activity:<org>:<auteur>:<cible>:<action>:<fenêtre ms>` (push
  *   seul, regroupement d'une minute).
+ * Communications : `platform-message:<message>:<destinataire>` (après
+ * création de la notification du centre, push du seul destinataire).
  * Aucune donnée personnelle ni financière : identifiants seuls, plus, pour
  * une activité, le NOM de la cible figé à l'action (une cible supprimée
  * définitivement reste compréhensible).
@@ -81,6 +83,20 @@ export class PushJob {
   /** Lot C : demande de régularisation (lot B). */
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
   regularizationId?: Types.ObjectId | null;
+
+  /**
+   * Message de Stock Master (`platform-message`) : UN destinataire nommé
+   * (jamais tous les membres), le message et la notification du centre
+   * déjà créée (lien du push).
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  recipientUserId?: Types.ObjectId | null;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  platformMessageId?: Types.ObjectId | null;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null })
+  notificationId?: Types.ObjectId | null;
 
   /** 1-16A.1 : vente créée (`sale-created`). */
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null })

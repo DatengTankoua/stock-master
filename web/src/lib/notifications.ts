@@ -105,7 +105,20 @@ export type NotificationDetails =
   | MonthlyReportDetails
   | { kind: "monthly-report"; missing: true }
   | MemberJoinedDetails
-  | MemberActivityDetails;
+  | MemberActivityDetails
+  | PlatformMessageDetails;
+
+// Message de service de Stock Master : texte brut saisi par l'administration,
+// affiché échappé (jamais interprété comme HTML).
+export type PlatformMessageDetails =
+  | {
+      kind: "platform-message";
+      missing: false;
+      title: string;
+      body: string;
+      sentAt: string;
+    }
+  | { kind: "platform-message"; missing: true };
 
 // 1-19A — Nouveau membre : nom figé, rôle ACTUEL s'il est encore actif.
 export interface MemberJoinedDetails {
@@ -238,4 +251,5 @@ export const CATEGORY_KEYS: Record<PushCategory, keyof PushPreferences> = {
   "expiry-soon": "expirySoon",
   "expiry-expired": "expiryExpired",
   "regularization-requested": "regularizationRequested",
+  "platform-message": "platformMessage",
 };

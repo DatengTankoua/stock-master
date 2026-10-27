@@ -154,6 +154,7 @@ export const PUSH_EVENT_MAX_AGE_MS: Readonly<
   [PushCategory.EXPIRY_SOON]: 24 * 60 * 60 * 1000,
   [PushCategory.EXPIRY_EXPIRED]: 24 * 60 * 60 * 1000,
   [PushCategory.REGULARIZATION_REQUESTED]: 24 * 60 * 60 * 1000,
+  [PushCategory.PLATFORM_MESSAGE]: 24 * 60 * 60 * 1000,
   // Pertinent jusqu'à l'échéance visée elle-même.
   [PushCategory.SUBSCRIPTION_ENDING]: null,
 });
@@ -1055,14 +1056,23 @@ export class PushDispatcherService implements OnApplicationShutdown {
   /**
    * Membres actifs autorisés à cet instant (règle unique), hors auteur de
    * l'événement (1-19A), sans doublon (une membership par utilisateur et
-   * organisation, index unique).
+   * organisation, index unique). Message de Stock Master : son SEUL
+   * destinataire nommé, s'il est encore membre actif.
    */
   private async eligibleMembers(job: JobRecord): Promise<Types.ObjectId[]> {
+    // Jamais diffusé à tous les membres faute de destinataire.
+    if (
+      job.category === PushCategory.PLATFORM_MESSAGE &&
+      !job.recipientUserId
+    ) {
+      return [];
+    }
     const actor = await this.eventActor(job);
     const memberships = await this.membershipModel
       .find({
         organizationId: job.organizationId,
         status: MembershipStatus.ACTIVE,
+        ...(job.recipientUserId ? { userId: job.recipientUserId } : {}),
       })
       .select({ userId: 1, role: 1, permissions: 1 })
       .lean<
@@ -1246,6 +1256,7 @@ export class PushDispatcherService implements OnApplicationShutdown {
         paymentId: job.paymentId?.toHexString() ?? null,
         saleId: job.saleId?.toHexString() ?? null,
         reportId: job.reportId?.toHexString() ?? null,
+        notificationId: job.notificationId?.toHexString() ?? null,
         periodKind: job.periodKind,
         eventKey: job.eventKey,
       },
@@ -1435,10 +1446,12 @@ export class PushDispatcherService implements OnApplicationShutdown {
           .exec();
         return sale ? null : 'sale-cancelled';
       }
-      // 1-19A : adhésion validée et action réussie sont des faits accomplis.
+      // 1-19A : adhésion validée et action réussie sont des faits accomplis ;
+      // message de Stock Master : notification du centre déjà créée.
       case PushCategory.SALE_DIGEST:
       case PushCategory.MEMBER_JOINED:
       case PushCategory.MEMBER_ACTIVITY:
+      case PushCategory.PLATFORM_MESSAGE:
         return null;
       case PushCategory.PAYMENT_SUCCEEDED: {
         const payment = await this.paymentModel

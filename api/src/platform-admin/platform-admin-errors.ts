@@ -14,7 +14,6 @@ import { RateLimitedException } from '../common/auth-rate-limiting';
  */
 export const PlatformAdminErrorCode = Object.freeze({
   UNAVAILABLE: 'PLATFORM_ADMIN_UNAVAILABLE',
-  PROXY_REQUIRED: 'PLATFORM_ADMIN_PROXY_REQUIRED',
   ACCESS_DENIED: 'PLATFORM_ADMIN_ACCESS_DENIED',
   SESSION_EXPIRED: 'PLATFORM_ADMIN_SESSION_EXPIRED',
   MFA_REQUIRED: 'PLATFORM_ADMIN_MFA_REQUIRED',
@@ -29,6 +28,11 @@ export const PlatformAdminErrorCode = Object.freeze({
   OPERATION_CONFLICT: 'PLATFORM_ADMIN_OPERATION_CONFLICT',
   STATE_CHANGED: 'PLATFORM_ADMIN_STATE_CHANGED',
   EXTENSION_REFUSED: 'PLATFORM_ADMIN_EXTENSION_REFUSED',
+  MESSAGE_RECIPIENT_LIMIT: 'PLATFORM_ADMIN_MESSAGE_RECIPIENT_LIMIT',
+  MESSAGE_RATE_LIMITED: 'PLATFORM_ADMIN_MESSAGE_RATE_LIMITED',
+  MESSAGE_RECIPIENTS_CHANGED: 'PLATFORM_ADMIN_MESSAGE_RECIPIENTS_CHANGED',
+  MESSAGE_NOT_RETRYABLE: 'PLATFORM_ADMIN_MESSAGE_NOT_RETRYABLE',
+  MESSAGE_RETRY_WINDOW_EXPIRED: 'PLATFORM_ADMIN_MESSAGE_RETRY_WINDOW_EXPIRED',
 });
 
 const body = (code: string, message: string) => ({ code, message });
@@ -39,11 +43,6 @@ export const adminUnavailable = () =>
       PlatformAdminErrorCode.UNAVAILABLE,
       "L'administration de la plateforme n'est pas disponible.",
     ),
-  );
-
-export const adminProxyRequired = () =>
-  new ForbiddenException(
-    body(PlatformAdminErrorCode.PROXY_REQUIRED, 'Accès refusé.'),
   );
 
 export const adminAccessDenied = () =>
@@ -156,5 +155,45 @@ export const adminExtensionRefused = (refusal: string) =>
       ),
       refusal,
     },
+    HttpStatus.CONFLICT,
+  );
+
+/** Limite de fréquence des messages (organisation ou administrateur). */
+export const adminMessageRateLimited = (retryAfterSeconds: number) =>
+  new RateLimitedException(
+    {
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      code: PlatformAdminErrorCode.MESSAGE_RATE_LIMITED,
+      message: 'Limite d’envoi de messages atteinte. Réessayez plus tard.',
+    },
+    retryAfterSeconds,
+  );
+
+/** Un destinataire confirmé n'est plus membre actif ou son compte inactif. */
+export const adminMessageRecipientsChanged = () =>
+  new HttpException(
+    body(
+      PlatformAdminErrorCode.MESSAGE_RECIPIENTS_CHANGED,
+      'Un destinataire n’est plus membre actif de ce commerce. Rechargez la liste.',
+    ),
+    HttpStatus.CONFLICT,
+  );
+
+export const adminMessageNotRetryable = () =>
+  new HttpException(
+    body(
+      PlatformAdminErrorCode.MESSAGE_NOT_RETRYABLE,
+      'Cette livraison ne peut pas être relancée.',
+    ),
+    HttpStatus.CONFLICT,
+  );
+
+/** Résultat incertain hors de la fenêtre d'idempotence du prestataire. */
+export const adminMessageRetryWindowExpired = () =>
+  new HttpException(
+    body(
+      PlatformAdminErrorCode.MESSAGE_RETRY_WINDOW_EXPIRED,
+      'Le résultat est incertain et ne peut plus être relancé sans risque de doublon.',
+    ),
     HttpStatus.CONFLICT,
   );
