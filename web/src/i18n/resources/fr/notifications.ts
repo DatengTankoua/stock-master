@@ -53,6 +53,10 @@ const notificationsFr = {
       label: "Régularisations à examiner",
       help: "Quand un vendeur transmet une vente hors ligne à régulariser.",
     },
+    platformMessage: {
+      label: "Message de Stock Master",
+      help: "Messages de service que l'équipe Stock Master vous adresse (assistance, maintenance).",
+    },
   },
   bell: {
     noneUnread: "Notifications, aucune non lue",
@@ -78,6 +82,12 @@ const notificationsFr = {
     physicalStock: "Stock physique",
     batchRemoved: "Ce lot n'existe plus.",
     missing: "Notification introuvable ou plus disponible.",
+    platformMessageFrom: "Message de Stock Master",
+    platformMessageMissing: "Ce message n'est plus disponible.",
+    sentOn: "Envoyé le {{date}}",
+    supportLink: "Assistance",
+    platformMessageReply:
+      "Pour répondre, utilisez la page Assistance ou répondez à l'e-mail si vous l'avez reçu.",
     open: "Ouvrir",
     productRemoved: "Ce produit a été supprimé définitivement.",
     product: "Produit",

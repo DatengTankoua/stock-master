@@ -47,8 +47,9 @@ import {
   type PlatformCapability,
 } from './platform-admin-capabilities';
 import {
-  ACTION_CAPABILITY,
   actionContentHash,
+  auditCapability,
+  intentCapabilities,
   type ActionIntent,
 } from './platform-admin-action-intent';
 import { generateTotpSecret, totpProvisioning, verifyTotpCode } from './totp';
@@ -569,7 +570,9 @@ export class PlatformAdminService {
     const factor = context.factor;
     if (!factor?.active) throw adminEnrollmentRequired();
     if (intent) {
-      this.requireCapability(context, ACTION_CAPABILITY[intent.action]);
+      for (const capability of intentCapabilities(intent)) {
+        this.requireCapability(context, capability);
+      }
     }
     const limits = await this.consumeMfaAttempt(
       context,
@@ -627,7 +630,7 @@ export class PlatformAdminService {
                 targetType: 'organization' as const,
                 targetId: intent.organizationId,
                 operationId: intent.operationId,
-                capability: ACTION_CAPABILITY[intent.action],
+                capability: auditCapability(intent),
               }
             : {}),
           sessionId: session._id,

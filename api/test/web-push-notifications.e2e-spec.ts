@@ -512,6 +512,8 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
       'monthly-report',
       'member-joined',
       'member-activity',
+      // Message de Stock Master : adressé nommément à tout membre.
+      'platform-message',
     ]);
     expect((await categories(admin.token)).categories).toEqual([
       'stock-depleted',
@@ -519,8 +521,11 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
       'sale-created',
       'monthly-report',
       'member-joined',
+      'platform-message',
     ]);
-    expect((await categories(seller.token)).categories).toEqual([]);
+    expect((await categories(seller.token)).categories).toEqual([
+      'platform-message',
+    ]);
 
     // Destinations refusées : hôte arbitraire, IP privée, http, clés invalides.
     for (const bad of [
@@ -568,6 +573,7 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
       expirySoon: true,
       expiryExpired: true,
       regularizationRequested: true,
+      platformMessage: true,
     });
 
     const status = (token: string) =>
@@ -617,6 +623,7 @@ describe('Notifications Web Push métier (e2e 1-16A)', () => {
       expirySoon: true,
       expiryExpired: true,
       regularizationRequested: true,
+      platformMessage: true,
     });
     // Aucune réponse ne renvoie l'endpoint ni les clés.
     expect(JSON.stringify(patch.body)).not.toContain('fcm.googleapis.com');

@@ -25,7 +25,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 16_384;
+// Un message de service (5 000 caractères, jusqu'à 3 octets chacun en UTF-8,
+// échappements JSON, 50 destinataires) dépasse 16 Kio : 64 Kio au plus.
+const MAX_BODY_BYTES = 65_536;
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
 type Context = { params: Promise<{ path: string[] }> };

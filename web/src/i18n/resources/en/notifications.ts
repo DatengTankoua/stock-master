@@ -53,6 +53,10 @@ const notificationsEn: Translation<typeof notificationsFr> = {
       label: "Regularisations to review",
       help: "When a seller sends an offline sale to be regularised.",
     },
+    platformMessage: {
+      label: "Message from Stock Master",
+      help: "Service messages the Stock Master team sends you (support, maintenance).",
+    },
   },
   bell: {
     noneUnread: "Notifications, none unread",
@@ -77,6 +81,12 @@ const notificationsEn: Translation<typeof notificationsFr> = {
     physicalStock: "Physical stock",
     batchRemoved: "This batch no longer exists.",
     missing: "Notification not found or no longer available.",
+    platformMessageFrom: "Message from Stock Master",
+    platformMessageMissing: "This message is no longer available.",
+    sentOn: "Sent on {{date}}",
+    supportLink: "Support",
+    platformMessageReply:
+      "To reply, use the Support page or answer the email if you received it.",
     open: "Open",
     productRemoved: "This product has been permanently deleted.",
     product: "Product",

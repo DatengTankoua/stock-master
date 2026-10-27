@@ -88,4 +88,8 @@ export class NotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   regularizationRequested?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  platformMessage?: boolean;
 }

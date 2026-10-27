@@ -17,6 +17,7 @@ import type { ExpressSettings } from './common/trust-proxy';
 import { API_APPLICATION_OPTIONS } from './common/application-options';
 import { resolveWebPushConfig } from './push/push-config';
 import { startNotifications } from './push/push-bootstrap';
+import { PlatformMessageDeliveryService } from './platform-admin/platform-message-delivery.service';
 import { configureProcessTimeZone } from './analytics/month-range';
 import { startStorageRecovery } from './storage-quota/storage-recovery';
 import { startPaymentReconciliationSweep } from './subscriptions/payments/payment-reconciliation-sweep';
@@ -157,6 +158,9 @@ async function bootstrap() {
   // configuré : démarrage HTTP UNIQUEMENT (les CLI chargent `AppModule` sans
   // jamais passer par ici).
   await startNotifications(app, webPush);
+  // Messages de service de l'administration : livraisons (centre, push,
+  // e-mail) traitées en fond, processus HTTP uniquement.
+  app.get(PlatformMessageDeliveryService).start();
   // 1-17B : reprise des envois et suppressions de fichiers interrompus
   // (processus HTTP uniquement).
   startStorageRecovery(app);

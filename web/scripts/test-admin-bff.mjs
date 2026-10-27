@@ -280,3 +280,32 @@ test("messages : codes publics seulement ; référence opaque, sans code ni stat
     assert.doesNotMatch(errors, /PLATFORM_ADMIN_|API|secret|proxy|BFF|URL|n'a pas accès|non confirmée|not confirmed/i, lang);
   }
 });
+
+test("messages de service : routes relayées et codes publics", () => {
+  const org = "0123456789abcdef01234567";
+  assert.equal(resolveAdminRoute("GET", ["organizations", org, "message-recipients"]), `organizations/${org}/message-recipients`);
+  assert.equal(resolveAdminRoute("GET", ["organizations", org, "messages"]), `organizations/${org}/messages`);
+  assert.equal(resolveAdminRoute("POST", ["organizations", org, "messages"]), `organizations/${org}/messages`);
+  assert.equal(resolveAdminRoute("POST", ["organizations", org, "message-retry"]), `organizations/${org}/message-retry`);
+  for (const [method, segments] of [
+    ["POST", ["organizations", org, "message-recipients"]],
+    ["GET", ["organizations", org, "message-retry"]],
+    ["POST", ["organizations", "all", "messages"]],
+    ["POST", ["messages"]],
+  ]) {
+    assert.equal(resolveAdminRoute(method, segments), null, `${method} ${segments}`);
+  }
+  const { publicError } = loaded.exports;
+  for (const [status, code] of [
+    [400, "PLATFORM_ADMIN_MESSAGE_RECIPIENT_LIMIT"],
+    [429, "PLATFORM_ADMIN_MESSAGE_RATE_LIMITED"],
+    [409, "PLATFORM_ADMIN_MESSAGE_RECIPIENTS_CHANGED"],
+    [409, "PLATFORM_ADMIN_MESSAGE_NOT_RETRYABLE"],
+    [409, "PLATFORM_ADMIN_MESSAGE_RETRY_WINDOW_EXPIRED"],
+  ]) {
+    assert.deepEqual(publicError(`organizations/${org}/messages`, status, code), { status, code });
+  }
+  // Corps d'un message de 5 000 caractères accepté, borne conservée.
+  const route = readFileSync(path.join(here, "..", "src", "app", "api", "admin", "[...path]", "route.ts"), "utf8");
+  assert.match(route, /const MAX_BODY_BYTES = 65_536;/);
+});

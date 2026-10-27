@@ -605,6 +605,24 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
   'Introuvable.': {
     en: 'Not found.',
   },
+  // Messages de service de l'administration.
+  'Trop de destinataires pour un seul message.': {
+    en: 'Too many recipients for a single message.',
+  },
+  'Limite d’envoi de messages atteinte. Réessayez plus tard.': {
+    en: 'Message sending limit reached. Try again later.',
+  },
+  'Un destinataire n’est plus membre actif de ce commerce. Rechargez la liste.':
+    {
+      en: 'A recipient is no longer an active member of this business. Reload the list.',
+    },
+  'Cette livraison ne peut pas être relancée.': {
+    en: 'This delivery cannot be retried.',
+  },
+  'Le résultat est incertain et ne peut plus être relancé sans risque de doublon.':
+    {
+      en: 'The outcome is uncertain and can no longer be retried without risking a duplicate.',
+    },
 });
 
 const VARIABLE = '${…}';

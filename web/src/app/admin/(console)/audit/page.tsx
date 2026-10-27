@@ -39,6 +39,8 @@ const ACTIONS = [
   "organization_suspend",
   "organization_reactivate",
   "subscription_extend",
+  "organization_message",
+  "organization_message_retry",
 ] as const;
 type Action = (typeof ACTIONS)[number];
 const OUTCOMES = ["success", "failure", "denied"] as const;

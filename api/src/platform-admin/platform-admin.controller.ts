@@ -23,12 +23,21 @@ import {
 } from './platform-admin.service';
 import { PlatformAdminDataService } from './platform-admin-data.service';
 import { PlatformAdminActionsService } from './platform-admin-actions.service';
-import { normalizeIntent } from './platform-admin-action-intent';
+import {
+  normalizeIntent,
+  normalizeOrganizationAction,
+  type MessageIntent,
+  type MessageRetryIntent,
+} from './platform-admin-action-intent';
+import { PlatformAdminCommunicationsService } from './platform-admin-communications.service';
 import {
   AdminAuditQuery,
   AdminCodeDto,
   AdminExtendDto,
   AdminExtensionPreviewQuery,
+  AdminMessageDto,
+  AdminMessageRetryDto,
+  AdminMessagesQuery,
   AdminReactivateDto,
   AdminSuspendDto,
   AdminLoginDto,
@@ -56,6 +65,7 @@ export class PlatformAdminController {
     private readonly service: PlatformAdminService,
     private readonly data: PlatformAdminDataService,
     private readonly actions: PlatformAdminActionsService,
+    private readonly communications: PlatformAdminCommunicationsService,
   ) {}
 
   // ─── Connexion et second facteur ──────────────────────────────────────
@@ -244,7 +254,7 @@ export class PlatformAdminController {
   ) {
     return this.actions.execute(
       context,
-      normalizeIntent({
+      normalizeOrganizationAction({
         action: 'organization_suspend',
         organizationId: id,
         operationId: dto.operationId,
@@ -265,7 +275,7 @@ export class PlatformAdminController {
   ) {
     return this.actions.execute(
       context,
-      normalizeIntent({
+      normalizeOrganizationAction({
         action: 'organization_reactivate',
         organizationId: id,
         operationId: dto.operationId,
@@ -285,7 +295,7 @@ export class PlatformAdminController {
   ) {
     return this.actions.execute(
       context,
-      normalizeIntent({
+      normalizeOrganizationAction({
         action: 'subscription_extend',
         organizationId: id,
         operationId: dto.operationId,
@@ -293,6 +303,69 @@ export class PlatformAdminController {
         reason: dto.reason,
         expectedCoverageEndsAt: dto.expectedCoverageEndsAt,
       }),
+      dto.stepUpToken,
+    );
+  }
+
+  // ─── Messages de service (capacité par canal, preuve liée) ─────────────
+
+  @PlatformAdminAccess('mfa')
+  @Get('organizations/:id/message-recipients')
+  messageRecipients(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+  ) {
+    return this.communications.recipients(context, id);
+  }
+
+  @PlatformAdminAccess('mfa')
+  @PlatformAdminCapability('platform.read')
+  @Get('organizations/:id/messages')
+  messages(@Param('id') id: string, @Query() query: AdminMessagesQuery) {
+    return this.communications.history(id, query.page ?? 1);
+  }
+
+  @HttpCode(200)
+  @PlatformAdminAccess('mfa')
+  @Post('organizations/:id/messages')
+  sendMessage(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Body() dto: AdminMessageDto,
+  ) {
+    return this.communications.send(
+      context,
+      normalizeIntent({
+        action: 'organization_message',
+        organizationId: id,
+        operationId: dto.operationId,
+        channels: dto.channels,
+        recipientUserIds: dto.recipientUserIds,
+        title: dto.title,
+        body: dto.body,
+      }) as MessageIntent,
+      dto.stepUpToken,
+    );
+  }
+
+  @HttpCode(200)
+  @PlatformAdminAccess('mfa')
+  @Post('organizations/:id/message-retry')
+  retryMessage(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Body() dto: AdminMessageRetryDto,
+  ) {
+    return this.communications.retry(
+      context,
+      normalizeIntent({
+        action: 'organization_message_retry',
+        organizationId: id,
+        operationId: dto.operationId,
+        messageId: dto.messageId,
+        channel: dto.channel,
+        deliveryIds: dto.deliveryIds,
+      }) as MessageRetryIntent,
       dto.stepUpToken,
     );
   }

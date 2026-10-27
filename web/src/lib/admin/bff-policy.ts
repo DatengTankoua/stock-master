@@ -63,6 +63,15 @@ const ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp }> = [
     method: "POST",
     pattern: /^organizations\/[0-9a-f]{24}\/(suspend|reactivate|extend)$/,
   },
+  // Messages de service : préparation, historique, envoi, relance.
+  {
+    method: "GET",
+    pattern: /^organizations\/[0-9a-f]{24}\/(message-recipients|messages)$/,
+  },
+  {
+    method: "POST",
+    pattern: /^organizations\/[0-9a-f]{24}\/(messages|message-retry)$/,
+  },
   { method: "GET", pattern: /^payments$/ },
   { method: "GET", pattern: /^audit$/ },
 ];
@@ -298,6 +307,11 @@ const PUBLIC_CODES = new Set([
   "PLATFORM_ADMIN_OPERATION_CONFLICT",
   "PLATFORM_ADMIN_STATE_CHANGED",
   "PLATFORM_ADMIN_EXTENSION_REFUSED",
+  "PLATFORM_ADMIN_MESSAGE_RECIPIENT_LIMIT",
+  "PLATFORM_ADMIN_MESSAGE_RATE_LIMITED",
+  "PLATFORM_ADMIN_MESSAGE_RECIPIENTS_CHANGED",
+  "PLATFORM_ADMIN_MESSAGE_NOT_RETRYABLE",
+  "PLATFORM_ADMIN_MESSAGE_RETRY_WINDOW_EXPIRED",
   "AUTH_RATE_LIMITED",
   "AUTH_CHALLENGE_REQUIRED",
   "TURNSTILE_FAILED",

@@ -203,6 +203,31 @@ function Details({
       ) : (
         <MonthlyReport id={id} report={details as MonthlyReportDetails} />
       );
+    case "platform-message":
+      return details.missing ? (
+        <p className="text-sm text-muted-foreground">
+          {t("detail.platformMessageMissing")}
+        </p>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <p className="text-xs font-medium text-primary">
+            {t("detail.platformMessageFrom")} ·{" "}
+            {t("detail.sentOn", { date: f.dateTime(details.sentAt) })}
+          </p>
+          {/* Texte brut saisi par Stock Master : échappé, jamais du HTML. */}
+          <p className="whitespace-pre-wrap break-words">{details.body}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("detail.platformMessageReply")}{" "}
+            <Link
+              prefetch={false}
+              href="/app/organization/support"
+              className="text-primary hover:underline"
+            >
+              {t("detail.supportLink")}
+            </Link>
+          </p>
+        </div>
+      );
     case "member-joined":
       return <MemberJoined details={details} />;
     case "member-activity":

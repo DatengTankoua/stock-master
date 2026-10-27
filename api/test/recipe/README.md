@@ -312,3 +312,10 @@ Capacités possibles : `platform.read` (accordée par `grant`),
 `platform.organizations.suspend`, `platform.subscriptions.extend` ; retrait
 par `capability-remove` (mêmes options).
 Rapport : [platform-admin-actions.md](../../../docs/architecture/platform-admin-actions.md).
+
+**Messages de service** : ajouter les capacités
+`platform.communications.notify` et `platform.communications.email`
+(`$R platform-admin capability-add …`), puis « Envoyer un message » sur la
+fiche d'une organisation. Les e-mails sont consignés dans `mail.jsonl`
+(clé `platform-message/…`), les push dans `push.jsonl` ; aucun envoi réel.
+Rapport : [platform-admin-communications.md](../../../docs/architecture/platform-admin-communications.md).

@@ -30,6 +30,14 @@ const adminFr = {
       "La situation a changé depuis votre confirmation (autre administrateur ou paiement). Rechargez la fiche, vérifiez puis recommencez.",
     extensionRefused:
       "Prolongation impossible sans réécrire les périodes existantes (interruption ou période programmée sans couverture en cours).",
+    messageRecipientLimit: "Trop de destinataires pour un seul message.",
+    messageRateLimited:
+      "Limite d'envoi de messages atteinte. Réessayez dans {{seconds}} s.",
+    messageRecipientsChanged:
+      "Un destinataire n'est plus membre actif de ce commerce. La liste a été rechargée : vérifiez la sélection puis recommencez.",
+    messageNotRetryable: "Cette livraison ne peut pas être relancée.",
+    messageRetryWindowExpired:
+      "Le résultat est incertain depuis plus de 23 h : une relance risquerait un doublon.",
     csrf: "Requête refusée. Rechargez la page.",
     network: "Serveur injoignable. Vérifiez votre connexion.",
     sessionExpired: "Votre session administrative a expiré. Reconnectez-vous.",
@@ -168,6 +176,8 @@ const adminFr = {
     actions: "Actions",
     noActionCapability:
       "Votre accès est en lecture seule. Les actions sont accordées par la commande opérateur.",
+    noStateActionCapability:
+      "Votre accès ne permet ni suspension ni prolongation. Ces actions sont accordées par la commande opérateur.",
     history: "Historique des actions",
     noHistory: "Aucune action sur ce commerce.",
     back: "Retour aux organisations",
@@ -296,7 +306,104 @@ const adminFr = {
       organization_view: "Fiche organisation consultée",
       payments_view: "Paiements consultés",
       audit_view: "Audit consulté",
+      organization_message: "Message de service envoyé",
+      organization_message_retry: "Message de service relancé",
     },
+  },
+  messages: {
+    section: "Messages de service",
+    send: "Envoyer un message",
+    noCapability:
+      "Votre accès ne permet pas d'envoyer de message (capacité de notification ou d'e-mail requise).",
+    acceptedNotice:
+      "« Accepté » signifie que le prestataire d'e-mail a pris l'envoi en charge : ni la réception ni la lecture ne sont confirmées. « Notification créée » signifie qu'elle figure dans le centre de notifications du membre.",
+    empty: "Aucun message envoyé à ce commerce.",
+    suspendedNotice:
+      "Ce commerce est suspendu : ses membres ne peuvent pas ouvrir le centre de notifications tant qu'il l'est, et aucun push n'est envoyé. L'e-mail reste possible. L'envoi ne réactive ni le commerce ni les comptes.",
+    recipients: "Destinataires",
+    modes: {
+      one: "Un membre",
+      several: "Plusieurs membres",
+      all: "Tous les membres actifs",
+    },
+    allFrozen:
+      "{{count}} membre(s) actif(s) joignable(s) à cet instant. Les membres ajoutés plus tard ne recevront pas ce message.",
+    noMembers: "Aucun membre actif.",
+    notReachable: "non joignable (compte non vérifié)",
+    maxRecipients: "{{max}} destinataires au plus",
+    channels: "Canaux",
+    channelNames: {
+      in_app: "Notification interne",
+      email: "E-mail",
+    },
+    channelHints: {
+      in_app:
+        "Centre de notifications de l'application, et push sur les appareils où le membre l'a activé.",
+      email:
+        "Adresse du compte du membre ; les réponses arrivent à l'assistance Stock Master.",
+    },
+    channelNotAllowed: "Non autorisé pour votre accès.",
+    title: "Titre",
+    body: "Message",
+    counter: "{{count}} / {{max}} caractères",
+    plainText:
+      "Texte brut uniquement : aucun HTML interprété, aucun lien ni pièce jointe ajoutés.",
+    limits:
+      "Au plus {{max}} destinataires par message. Messages envoyés à ce commerce : {{used}} / {{orgMax}} sur {{hours}} h.",
+    preview: "Aperçu",
+    categoryLabel: "Message de Stock Master",
+    reviewChannels: "Canaux",
+    reviewRecipients: "{{count}} destinataire(s) :",
+    reviewInApp:
+      "Notification interne : créée seulement si le membre n'a pas désactivé les messages de Stock Master dans ses préférences ; le push dépend de ses appareils et de leurs préférences.",
+    reviewEmail:
+      "E-mail : « accepté » par le prestataire ne garantit ni la réception ni la lecture.",
+    reviewNoReactivation:
+      "Un membre devenu inéligible avant la livraison sera ignoré, avec un motif.",
+    confirm: "Envoyer le message",
+    sending: "Envoi…",
+    networkLost:
+      "La réponse n'est pas parvenue. Réessayez : le même message ne sera jamais enregistré ni envoyé deux fois.",
+    done: "Message enregistré",
+    doneDetail:
+      "{{count}} livraison(s) en cours de traitement. Leur résultat apparaît dans l'historique.",
+    replayed:
+      "Ce message avait déjà été enregistré : résultat existant, aucun nouvel envoi.",
+    showBody: "Afficher le message",
+    statuses: {
+      pending: "En attente",
+      sending: "En cours",
+      created: "Notification créée",
+      accepted: "Accepté par le prestataire",
+      skipped: "Ignoré",
+      failed: "Échec",
+      uncertain: "Résultat incertain",
+    },
+    reasons: {
+      membership_inactive: "plus membre actif",
+      account_missing: "compte supprimé",
+      account_inactive: "compte non vérifié",
+      organization_missing: "commerce introuvable",
+      preference_off: "messages désactivés par le membre",
+      email_not_configured: "envoi d'e-mails non configuré",
+      retry_window_expired: "délai de relance sans doublon dépassé",
+      timeout: "délai dépassé",
+      network: "réseau",
+      internal_error: "erreur interne",
+      message_missing: "message introuvable",
+      unexpected: "erreur inattendue",
+      rejected: "refusé par le prestataire ({{status}})",
+    },
+    retryChannel: "Relancer « {{channel}} » ({{count}})",
+    retryTitle: "Relancer des livraisons",
+    retryText:
+      "Relancer le canal « {{channel}} » pour {{count}} destinataire(s) :",
+    retryOnly:
+      "Seules ces livraisons repartent. Les canaux et destinataires déjà servis ne sont jamais renvoyés ; un e-mail au résultat incertain est renvoyé avec la même clé, que le prestataire déduplique.",
+    retryConfirm: "Relancer",
+    retryDone: "Relance enregistrée.",
+    windowExpiredNotice:
+      "Un résultat incertain de plus de 23 h ne peut plus être relancé sans risque de doublon.",
   },
   actions: {
     suspend: "Suspendre le commerce",

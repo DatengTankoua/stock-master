@@ -147,6 +147,11 @@ export type AdminErrorKey =
   | "errors.operationConflict"
   | "errors.stateChanged"
   | "errors.extensionRefused"
+  | "errors.messageRecipientLimit"
+  | "errors.messageRateLimited"
+  | "errors.messageRecipientsChanged"
+  | "errors.messageNotRetryable"
+  | "errors.messageRetryWindowExpired"
   | "errors.generic";
 
 /**
@@ -194,6 +199,13 @@ export function adminErrorKey(error: unknown): {
     PLATFORM_ADMIN_OPERATION_CONFLICT: "errors.operationConflict",
     PLATFORM_ADMIN_STATE_CHANGED: "errors.stateChanged",
     PLATFORM_ADMIN_EXTENSION_REFUSED: "errors.extensionRefused",
+    PLATFORM_ADMIN_MESSAGE_RECIPIENT_LIMIT: "errors.messageRecipientLimit",
+    PLATFORM_ADMIN_MESSAGE_RATE_LIMITED: "errors.messageRateLimited",
+    PLATFORM_ADMIN_MESSAGE_RECIPIENTS_CHANGED:
+      "errors.messageRecipientsChanged",
+    PLATFORM_ADMIN_MESSAGE_NOT_RETRYABLE: "errors.messageNotRetryable",
+    PLATFORM_ADMIN_MESSAGE_RETRY_WINDOW_EXPIRED:
+      "errors.messageRetryWindowExpired",
   };
   if (error.code && byCode[error.code])
     return { key: byCode[error.code], seconds };
@@ -335,7 +347,9 @@ export interface AdminProvisioning {
 export type PlatformCapability =
   | "platform.read"
   | "platform.organizations.suspend"
-  | "platform.subscriptions.extend";
+  | "platform.subscriptions.extend"
+  | "platform.communications.notify"
+  | "platform.communications.email";
 
 export type AdminActionKind =
   "organization_suspend" | "organization_reactivate" | "subscription_extend";
@@ -376,6 +390,82 @@ export interface AdminExtensionPreview {
 export interface AdminActionOutcome {
   operationId: string;
   action: AdminActionKind;
+  replayed: boolean;
+  result: Record<string, unknown>;
+}
+
+// ─── Messages de service ────────────────────────────────────────────────
+
+export type MessageChannel = "in_app" | "email";
+
+/** Bornes miroir de l'API (refus au-delà, jamais de troncature). */
+export const MESSAGE_TITLE_MAX = 150;
+export const MESSAGE_BODY_MAX = 5_000;
+
+export interface AdminMessageRecipients {
+  organization: { id: string; name: string; status: "active" | "suspended" };
+  /** Canaux ouverts par les capacités de la session. */
+  channels: MessageChannel[];
+  members: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    role: "owner" | "admin" | "seller";
+    /** Compte vérifié : joignable. */
+    eligible: boolean;
+  }>;
+  limits: {
+    maxRecipients: number;
+    titleMaxLength: number;
+    bodyMaxLength: number;
+    organization: { max: number; windowHours: number; used: number };
+    actor: { max: number; windowHours: number; used: number };
+  };
+}
+
+export type MessageDeliveryStatus =
+  | "pending"
+  | "sending"
+  | "created"
+  | "accepted"
+  | "skipped"
+  | "failed"
+  | "uncertain";
+
+export interface AdminMessageDelivery {
+  id: string;
+  userId: string;
+  channel: MessageChannel;
+  status: MessageDeliveryStatus;
+  reason: string | null;
+  attempts: number;
+  manualRetries: number;
+  updatedAt: string;
+  completedAt: string | null;
+  uncertain: boolean;
+  retryable: boolean;
+  retryWindowExpired: boolean;
+}
+
+export interface AdminMessage {
+  id: string;
+  operationId: string;
+  at: string;
+  actor: string | null;
+  title: string;
+  body: string;
+  channels: MessageChannel[];
+  recipients: Array<{
+    userId: string;
+    name: string | null;
+    email: string | null;
+  }>;
+  deliveries: AdminMessageDelivery[];
+}
+
+export interface AdminMessageOutcome {
+  operationId: string;
+  action: "organization_message" | "organization_message_retry";
   replayed: boolean;
   result: Record<string, unknown>;
 }

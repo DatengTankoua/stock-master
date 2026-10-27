@@ -36,6 +36,8 @@ export interface PushMessageSubject {
   /** 1-16A.1 : identifiants pour les liens du centre. */
   saleId?: string | null;
   reportId?: string | null;
+  /** Message de Stock Master : notification du centre à ouvrir. */
+  notificationId?: string | null;
   /** Clé de l'événement (tag des regroupements). */
   eventKey?: string;
 }
@@ -80,6 +82,9 @@ export function notificationBody(
       return 'Un produit en stock a dépassé sa date de péremption.';
     case PushCategory.REGULARIZATION_REQUESTED:
       return 'Une vente hors ligne attend une régularisation.';
+    // Le titre et le texte saisis ne sont jamais sur l'écran verrouillé.
+    case PushCategory.PLATFORM_MESSAGE:
+      return 'Vous avez reçu un message de Stock Master.';
   }
 }
 
@@ -114,6 +119,8 @@ function notificationBodyEn(
       return 'A product in stock is past its expiry date.';
     case PushCategory.REGULARIZATION_REQUESTED:
       return 'An offline sale is waiting to be regularised.';
+    case PushCategory.PLATFORM_MESSAGE:
+      return 'You have received a message from Stock Master.';
   }
 }
 
@@ -139,6 +146,11 @@ export function pushUrl(subject: PushMessageSubject): string {
       return `/app/catalog/products/${subject.productId}`;
     case PushCategory.REGULARIZATION_REQUESTED:
       return '/app/sales';
+    // Détail du message dans l'application, jamais un lien de l'administrateur.
+    case PushCategory.PLATFORM_MESSAGE:
+      return subject.notificationId
+        ? `/app/notifications/${subject.notificationId}`
+        : '/app/notifications';
   }
 }
 
@@ -167,6 +179,7 @@ function pushTag(subject: PushMessageSubject): string {
     case PushCategory.EXPIRY_SOON:
     case PushCategory.EXPIRY_EXPIRED:
     case PushCategory.REGULARIZATION_REQUESTED:
+    case PushCategory.PLATFORM_MESSAGE:
       return subject.eventKey ?? subject.category;
   }
 }

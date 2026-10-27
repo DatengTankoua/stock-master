@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import type { PlatformCapability } from './platform-admin-capabilities';
-import type { PlatformAdminActionKind } from './platform-admin-store';
+import { MESSAGE_CHANNELS, type MessageChannel } from './platform-admin-store';
 import {
   OFFERED_EXTENSION_MAX_DAYS,
   OFFERED_EXTENSION_MIN_DAYS,
@@ -15,6 +15,34 @@ import {
  * nouvelle vérification.
  */
 export type ActionIntent =
+  OrganizationActionIntent | MessageIntent | MessageRetryIntent;
+
+/**
+ * Message de service : destinataires (identifiants d'utilisateur triés,
+ * sans doublon) et canaux (triés) exacts, titre et texte brut normalisés.
+ */
+export interface MessageIntent {
+  action: 'organization_message';
+  organizationId: string;
+  operationId: string;
+  channels: MessageChannel[];
+  recipientUserIds: string[];
+  title: string;
+  body: string;
+}
+
+/** Relance de livraisons existantes d'UN message, pour UN canal. */
+export interface MessageRetryIntent {
+  action: 'organization_message_retry';
+  organizationId: string;
+  operationId: string;
+  messageId: string;
+  channel: MessageChannel;
+  deliveryIds: string[];
+}
+
+/** Actions sur l'état d'un commerce (lot « actions »). */
+export type OrganizationActionIntent =
   | {
       action: 'organization_suspend';
       organizationId: string;
@@ -39,12 +67,52 @@ export type ActionIntent =
     };
 
 export const ACTION_CAPABILITY: Readonly<
-  Record<PlatformAdminActionKind, PlatformCapability>
+  Record<OrganizationActionIntent['action'], PlatformCapability>
 > = Object.freeze({
   organization_suspend: 'platform.organizations.suspend',
   organization_reactivate: 'platform.organizations.suspend',
   subscription_extend: 'platform.subscriptions.extend',
 });
+
+/** Un canal = une capacité ; « les deux » exige les deux. */
+export const CHANNEL_CAPABILITY: Readonly<
+  Record<MessageChannel, PlatformCapability>
+> = Object.freeze({
+  in_app: 'platform.communications.notify',
+  email: 'platform.communications.email',
+});
+
+/** Capacités TOUTES exigées par une action (preuve et exécution). */
+export function intentCapabilities(intent: ActionIntent): PlatformCapability[] {
+  switch (intent.action) {
+    case 'organization_message':
+      return intent.channels.map((c) => CHANNEL_CAPABILITY[c]);
+    case 'organization_message_retry':
+      return [CHANNEL_CAPABILITY[intent.channel]];
+    default:
+      return [ACTION_CAPABILITY[intent.action]];
+  }
+}
+
+/** Capacité inscrite à l'audit : `null` quand deux sont exigées. */
+export function auditCapability(
+  intent: ActionIntent,
+): PlatformCapability | null {
+  const required = intentCapabilities(intent);
+  return required.length === 1 ? required[0] : null;
+}
+
+export function isOrganizationActionIntent(
+  intent: ActionIntent,
+): intent is OrganizationActionIntent {
+  return intent.action in ACTION_CAPABILITY;
+}
+
+/** Bornes d'un message de service (miroir web : admin-api.ts). */
+export const MESSAGE_TITLE_MAX_LENGTH = 150;
+export const MESSAGE_BODY_MAX_LENGTH = 5_000;
+/** Destinataires d'un message ; au-delà : refus, jamais de troncature. */
+export const MESSAGE_MAX_RECIPIENTS = 50;
 
 export const REASON_MIN_LENGTH = 10;
 export const REASON_MAX_LENGTH = 500;
@@ -69,6 +137,63 @@ function text(value: unknown, field: string): string {
     throw invalid(field);
   }
   return trimmed;
+}
+
+/** Caractères de contrôle refusés (hors tabulation et retour à la ligne). */
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F]/;
+
+/**
+ * Texte brut d'un message : fins de ligne unifiées, espaces de bord
+ * retirés ; titre sur une ligne. Aucun HTML n'est interprété : l'affichage
+ * échappe tout (web, e-mail).
+ */
+function messageText(
+  value: unknown,
+  field: 'title' | 'body',
+  max: number,
+): string {
+  if (typeof value !== 'string') throw invalid(field);
+  const normalized = value.replace(/\r\n?/g, '\n').trim();
+  if (
+    normalized.length === 0 ||
+    normalized.length > max ||
+    CONTROL.test(normalized) ||
+    (field === 'title' && /[\n\t]/.test(normalized))
+  ) {
+    throw invalid(field);
+  }
+  return normalized;
+}
+
+/** Identifiants triés et dédupliqués (1 à `max`) ; au-delà : refus. */
+function objectIdList(value: unknown, field: string, max: number): string[] {
+  if (!Array.isArray(value) || value.length === 0) throw invalid(field);
+  if (!value.every((v) => typeof v === 'string' && OBJECT_ID_PATTERN.test(v))) {
+    throw invalid(field);
+  }
+  const unique = [...new Set(value as string[])].sort();
+  if (unique.length > max) {
+    throw new BadRequestException({
+      code: 'PLATFORM_ADMIN_MESSAGE_RECIPIENT_LIMIT',
+      message: 'Trop de destinataires pour un seul message.',
+      limit: max,
+    });
+  }
+  return unique;
+}
+
+function channel(value: unknown): MessageChannel {
+  if (!(MESSAGE_CHANNELS as readonly unknown[]).includes(value)) {
+    throw invalid('channel');
+  }
+  return value as MessageChannel;
+}
+
+function channelList(value: unknown): MessageChannel[] {
+  if (!Array.isArray(value) || value.length === 0) throw invalid('channels');
+  const unique = [...new Set(value.map(channel))];
+  return MESSAGE_CHANNELS.filter((c) => unique.includes(c));
 }
 
 /**
@@ -135,9 +260,50 @@ export function normalizeIntent(raw: Record<string, unknown>): ActionIntent {
         expectedCoverageEndsAt,
       };
     }
+    case 'organization_message':
+      return {
+        action: 'organization_message',
+        organizationId,
+        operationId,
+        channels: channelList(raw.channels),
+        recipientUserIds: objectIdList(
+          raw.recipientUserIds,
+          'recipientUserIds',
+          MESSAGE_MAX_RECIPIENTS,
+        ),
+        title: messageText(raw.title, 'title', MESSAGE_TITLE_MAX_LENGTH),
+        body: messageText(raw.body, 'body', MESSAGE_BODY_MAX_LENGTH),
+      };
+    case 'organization_message_retry': {
+      const messageId = raw.messageId;
+      if (typeof messageId !== 'string' || !OBJECT_ID_PATTERN.test(messageId)) {
+        throw invalid('messageId');
+      }
+      return {
+        action: 'organization_message_retry',
+        organizationId,
+        operationId,
+        messageId,
+        channel: channel(raw.channel),
+        deliveryIds: objectIdList(
+          raw.deliveryIds,
+          'deliveryIds',
+          MESSAGE_MAX_RECIPIENTS,
+        ),
+      };
+    }
     default:
       throw invalid('action');
   }
+}
+
+/** `normalizeIntent` restreint aux actions sur l'état d'un commerce. */
+export function normalizeOrganizationAction(
+  raw: Record<string, unknown>,
+): OrganizationActionIntent {
+  const intent = normalizeIntent(raw);
+  if (!isOrganizationActionIntent(intent)) throw invalid('action');
+  return intent;
 }
 
 /** Empreinte SHA-256 du contenu canonique (clés dans un ordre fixe). */

@@ -171,15 +171,23 @@ function body(n: NotificationRecord, locale: AppLocale): string {
   return notificationBody(n.category, n.periodKind, locale);
 }
 
+/** Collection du contenu des messages de Stock Master (administration). */
+const PLATFORM_MESSAGES_COLLECTION = 'platform_messages';
+
 function toView(
   n: NotificationRecord,
   locale: AppLocale = 'fr',
+  messageTitles?: ReadonlyMap<string, string>,
 ): NotificationView {
+  // Message de Stock Master : son titre (texte brut, échappé à l'affichage).
+  const messageTitle = n.platformMessageId
+    ? messageTitles?.get(n.platformMessageId.toHexString())
+    : undefined;
   return {
     id: n._id.toHexString(),
     category: n.category,
     title: NOTIFICATION_TITLE,
-    body: body(n, locale),
+    body: messageTitle ?? body(n, locale),
     link: link(n),
     createdAt: n.eventAt,
     readAt: n.readAt,
@@ -274,6 +282,7 @@ export class NotificationCenterService {
               batchId: job.batchId ?? null,
               expiryDate: job.expiryDate ?? null,
               regularizationId: job.regularizationId ?? null,
+              platformMessageId: job.platformMessageId ?? null,
               coverageEndsAt: job.coverageEndsAt ?? null,
               periodKind: job.periodKind ?? null,
               actorId: job.actorId ?? null,
@@ -295,6 +304,59 @@ export class NotificationCenterService {
       }
     }
     return created;
+  }
+
+  /**
+   * Message de Stock Master pour UN destinataire (traitement de fond des
+   * communications) : upsert `{eventKey, userId}` (une reprise ne double
+   * rien). Référence seule : le contenu reste dans `platform_messages`.
+   */
+  async createPlatformMessage(input: {
+    organizationId: Types.ObjectId;
+    userId: Types.ObjectId;
+    messageId: Types.ObjectId;
+    eventKey: string;
+    eventAt: Date;
+  }): Promise<{ notificationId: Types.ObjectId; created: boolean }> {
+    const result = await this.notificationModel
+      .updateOne(
+        { eventKey: input.eventKey, userId: input.userId },
+        {
+          $setOnInsert: {
+            organizationId: input.organizationId,
+            category: PushCategory.PLATFORM_MESSAGE,
+            platformMessageId: input.messageId,
+            productId: null,
+            saleId: null,
+            paymentId: null,
+            reportId: null,
+            coverageEndsAt: null,
+            periodKind: null,
+            actorId: null,
+            actorName: null,
+            eventAt: input.eventAt,
+            readAt: null,
+            expiresAt: null,
+          },
+        },
+        { upsert: true },
+      )
+      .exec();
+    const notification = await this.notificationModel
+      .findOne({ eventKey: input.eventKey, userId: input.userId })
+      .select({ _id: 1 })
+      .lean<{ _id: Types.ObjectId }>()
+      .exec();
+    if (!notification)
+      throw new Error('Platform message notification vanished');
+    const created = result.upsertedCount > 0;
+    if (created) {
+      this.signals.changed(
+        input.organizationId.toHexString(),
+        input.userId.toHexString(),
+      );
+    }
+    return { notificationId: notification._id, created };
   }
 
   /**
@@ -411,7 +473,9 @@ export class NotificationCenterService {
       .limit(limit + 1)
       .lean<NotificationRecord[]>()
       .exec();
-    const items = rows.slice(0, limit).map((n) => toView(n, context.locale));
+    const page = rows.slice(0, limit);
+    const titles = await this.messageTitles(page, context.organizationId);
+    const items = page.map((n) => toView(n, context.locale, titles));
     return {
       items,
       nextCursor: rows.length > limit ? items[items.length - 1].id : null,
@@ -477,7 +541,61 @@ export class NotificationCenterService {
         .lean<NotificationRecord>()
         .exec()) ?? notification,
       context.locale,
+      await this.messageTitles([notification], context.organizationId),
     );
+  }
+
+  /** Titres des messages de Stock Master d'une page (même organisation). */
+  private async messageTitles(
+    records: readonly NotificationRecord[],
+    organizationId: string,
+  ): Promise<Map<string, string>> {
+    const ids = records
+      .map((n) => n.platformMessageId)
+      .filter((id): id is Types.ObjectId => Boolean(id));
+    if (ids.length === 0) return new Map();
+    const rows = await this.notificationModel.db
+      .collection(PLATFORM_MESSAGES_COLLECTION)
+      .find(
+        {
+          _id: { $in: ids },
+          organizationId: new Types.ObjectId(organizationId),
+        },
+        { projection: { title: 1 } },
+      )
+      .toArray();
+    return new Map(rows.map((r) => [String(r._id), String(r.title)]));
+  }
+
+  /**
+   * Détail d'un message de Stock Master : contenu relu dans son stockage
+   * dédié, seulement pour un destinataire du message dans CETTE
+   * organisation. Texte brut (échappé par l'interface).
+   */
+  private async platformMessageDetails(
+    context: NotificationReaderContext,
+    n: NotificationRecord,
+  ): Promise<unknown> {
+    const message = n.platformMessageId
+      ? await this.notificationModel.db
+          .collection(PLATFORM_MESSAGES_COLLECTION)
+          .findOne(
+            {
+              _id: n.platformMessageId,
+              organizationId: new Types.ObjectId(context.organizationId),
+              recipientUserIds: new Types.ObjectId(context.userId),
+            },
+            { projection: { title: 1, body: 1, createdAt: 1 } },
+          )
+      : null;
+    if (!message) return { kind: 'platform-message', missing: true };
+    return {
+      kind: 'platform-message',
+      missing: false,
+      title: String(message.title),
+      body: String(message.body),
+      sentAt: message.createdAt as Date,
+    };
   }
 
   /** Consultation explicite : marque lue puis renvoie le détail revalidé. */
@@ -692,6 +810,8 @@ export class NotificationCenterService {
       }
       case PushCategory.MONTHLY_REPORT:
         return this.reportDetails(n, 0, 20);
+      case PushCategory.PLATFORM_MESSAGE:
+        return this.platformMessageDetails(context, n);
       default:
         throw this.notFound();
     }

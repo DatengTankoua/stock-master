@@ -45,6 +45,8 @@ export class NotificationPreference {
       expirySoon: { type: Boolean, required: true, default: true },
       expiryExpired: { type: Boolean, required: true, default: true },
       regularizationRequested: { type: Boolean, required: true, default: true },
+      // Messages de Stock Master (active par défaut).
+      platformMessage: { type: Boolean, required: true, default: true },
     },
     _id: false,
     required: true,

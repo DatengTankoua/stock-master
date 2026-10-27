@@ -20,6 +20,10 @@ export const PLATFORM_ADMIN_COLLECTIONS = Object.freeze({
   challenges: 'platform_admin_challenges',
   audit: 'platform_admin_audit',
   operations: 'platform_admin_operations',
+  // Communications de service (message figé, livraisons, compteurs).
+  messages: 'platform_messages',
+  messageDeliveries: 'platform_message_deliveries',
+  messageCounters: 'platform_message_counters',
 });
 
 export type GrantStatus = 'active' | 'revoked';
@@ -116,7 +120,98 @@ export interface PlatformAdminChallengeDoc {
 }
 
 export type PlatformAdminActionKind =
-  'organization_suspend' | 'organization_reactivate' | 'subscription_extend';
+  | 'organization_suspend'
+  | 'organization_reactivate'
+  | 'subscription_extend'
+  | 'organization_message'
+  | 'organization_message_retry';
+
+export type MessageChannel = 'in_app' | 'email';
+export const MESSAGE_CHANNELS: readonly MessageChannel[] = Object.freeze([
+  'in_app',
+  'email',
+]);
+
+/**
+ * Message de service FIGÉ à la validation : contenu saisi (texte brut),
+ * canaux et destinataires exacts (dédupliqués). Seul stockage du contenu :
+ * ni l'audit, ni l'opération, ni les journaux ne le recopient.
+ */
+export interface PlatformMessageDoc {
+  _id: Types.ObjectId;
+  operationId: string;
+  organizationId: Types.ObjectId;
+  actorUserId: Types.ObjectId;
+  title: string;
+  body: string;
+  channels: MessageChannel[];
+  recipientUserIds: Types.ObjectId[];
+  createdAt: Date;
+}
+
+/**
+ * - `pending` : à traiter (`nextAttemptAt`) ;
+ * - `sending` : réservé par le traitement de fond (`lockedUntil`) ;
+ * - `created` : notification interne créée dans le centre ;
+ * - `accepted` : e-mail ACCEPTÉ par le prestataire (ni reçu, ni lu) ;
+ * - `skipped` : destinataire devenu inéligible ou préférence désactivée ;
+ * - `failed` : refus certain ou reprises épuisées sans incertitude ;
+ * - `uncertain` : le prestataire a pu accepter l'e-mail sans que la réponse
+ *   arrive (délai, réseau, 5xx) et plus aucune reprise sûre n'est possible.
+ */
+export type MessageDeliveryStatus =
+  | 'pending'
+  | 'sending'
+  | 'created'
+  | 'accepted'
+  | 'skipped'
+  | 'failed'
+  | 'uncertain';
+
+/** Livraison d'UN message à UN destinataire par UN canal (unique). */
+export interface PlatformMessageDeliveryDoc {
+  _id: Types.ObjectId;
+  messageId: Types.ObjectId;
+  organizationId: Types.ObjectId;
+  userId: Types.ObjectId;
+  channel: MessageChannel;
+  status: MessageDeliveryStatus;
+  attempts: number;
+  /** Relances manuelles (bornées). */
+  manualRetries: number;
+  nextAttemptAt: Date;
+  lockedUntil: Date | null;
+  /** Premier envoi au prestataire (fenêtre de sa clé d'idempotence). */
+  firstAttemptAt: Date | null;
+  /** Première issue incertaine (l'e-mail a peut-être été accepté). */
+  uncertainAt: Date | null;
+  /**
+   * E-mail : destinataire, langue et nom du commerce figés au premier envoi
+   * (un renvoi avec la même clé d'idempotence doit être identique).
+   */
+  emailSnapshot: {
+    to: string;
+    locale: 'fr' | 'en';
+    organizationName: string;
+  } | null;
+  /** Motif court (`membership_inactive`, `timeout`, `rejected_422`…). */
+  reason: string | null;
+  /** Notification du centre créée (canal `in_app`). */
+  notificationId: Types.ObjectId | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Compteur touché dans la transaction d'envoi (`org:<id>`, `actor:<id>`) :
+ * deux envois simultanés entrent en conflit d'écriture et l'un relit les
+ * envois de l'autre avant d'appliquer les limites.
+ */
+export interface PlatformMessageCounterDoc {
+  _id: string;
+  lastAt: Date;
+}
 
 /**
  * Opération administrative idempotente : `_id` = identifiant d'opération
@@ -164,6 +259,8 @@ export const PLATFORM_ADMIN_AUDIT_ACTIONS = [
   'organization_suspend',
   'organization_reactivate',
   'subscription_extend',
+  'organization_message',
+  'organization_message_retry',
 ] as const;
 export type PlatformAdminAuditAction =
   (typeof PLATFORM_ADMIN_AUDIT_ACTIONS)[number];
@@ -219,6 +316,15 @@ export function platformAdminCollections(connection: Connection) {
     ),
     operations: db.collection<PlatformAdminOperationDoc>(
       PLATFORM_ADMIN_COLLECTIONS.operations,
+    ),
+    messages: db.collection<PlatformMessageDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.messages,
+    ),
+    messageDeliveries: db.collection<PlatformMessageDeliveryDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.messageDeliveries,
+    ),
+    messageCounters: db.collection<PlatformMessageCounterDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.messageCounters,
     ),
   };
 }

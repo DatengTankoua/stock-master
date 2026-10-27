@@ -131,10 +131,12 @@ describe('Droits par catégorie (1-16A.1)', () => {
       PushCategory.EXPIRY_SOON,
       PushCategory.EXPIRY_EXPIRED,
       PushCategory.REGULARIZATION_REQUESTED,
+      // Message de Stock Master : adressé nommément à tout membre.
+      PushCategory.PLATFORM_MESSAGE,
     ]);
     expect(
       accessibleCategories({ role: OrganizationRole.SELLER, permissions: [] }),
-    ).toEqual([]);
+    ).toEqual([PushCategory.PLATFORM_MESSAGE]);
   });
 
   it('vendeur : stock et bilan par permission, jamais les ventes de tous', () => {

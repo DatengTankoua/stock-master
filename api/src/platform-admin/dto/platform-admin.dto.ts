@@ -1,5 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEmail,
   IsIn,
   IsInt,
@@ -199,3 +201,45 @@ export class AdminAuditQuery extends AdminPageQuery {
   @IsIn(['success', 'failure', 'denied'])
   outcome?: 'success' | 'failure' | 'denied';
 }
+
+/**
+ * Message de service : bornes larges ici (forme), bornes exactes dans
+ * `normalizeIntent` (titre 150, texte 5 000, destinataires 50 : au-delà,
+ * refus explicite et jamais de troncature).
+ */
+export class AdminMessageDto extends AdminActionDto {
+  @IsArray()
+  @ArrayMaxSize(2)
+  @IsString({ each: true })
+  channels: string[];
+
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
+  recipientUserIds: string[];
+
+  @IsString()
+  @MaxLength(1_000)
+  title: string;
+
+  @IsString()
+  @MaxLength(20_000)
+  body: string;
+}
+
+/** Relance de livraisons existantes d'un message, pour un canal. */
+export class AdminMessageRetryDto extends AdminActionDto {
+  @Matches(/^[0-9a-f]{24}$/)
+  messageId: string;
+
+  @IsString()
+  @MaxLength(20)
+  channel: string;
+
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
+  deliveryIds: string[];
+}
+
+export class AdminMessagesQuery extends AdminPageQuery {}

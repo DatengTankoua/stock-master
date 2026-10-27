@@ -81,6 +81,10 @@ export class PushPreferencesDto {
   @IsOptional()
   @IsBoolean()
   regularizationRequested?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  platformMessage?: boolean;
 }
 
 export class RegisterPushSubscriptionDto {

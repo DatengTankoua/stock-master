@@ -92,6 +92,43 @@ export const PLATFORM_ADMIN_INDEXES: readonly PlatformAdminIndexSpec[] =
       name: 'organizationId_1_createdAt_-1',
       key: { organizationId: 1, createdAt: -1 },
     },
+    // Messages de service : identifiant d'opération unique (un message par
+    // opération), historique par organisation, limites par organisation et
+    // par administrateur.
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.messages,
+      name: 'operationId_1_unique',
+      key: { operationId: 1 },
+      unique: true,
+    },
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.messages,
+      name: 'organizationId_1_createdAt_-1',
+      key: { organizationId: 1, createdAt: -1 },
+    },
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.messages,
+      name: 'actorUserId_1_createdAt_-1',
+      key: { actorUserId: 1, createdAt: -1 },
+    },
+    // Une livraison par message, destinataire et canal ; file du traitement
+    // de fond (à faire, réservations expirées).
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.messageDeliveries,
+      name: 'messageId_1_userId_1_channel_1_unique',
+      key: { messageId: 1, userId: 1, channel: 1 },
+      unique: true,
+    },
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.messageDeliveries,
+      name: 'status_1_nextAttemptAt_1',
+      key: { status: 1, nextAttemptAt: 1 },
+    },
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.messageDeliveries,
+      name: 'status_1_lockedUntil_1',
+      key: { status: 1, lockedUntil: 1 },
+    },
     // Liste des organisations (tri par inscription) et inscriptions
     // récentes de la vue d'ensemble : seul index ajouté à une collection
     // métier.

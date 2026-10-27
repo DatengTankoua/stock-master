@@ -9,7 +9,7 @@ import {
 import {
   ACTION_CAPABILITY,
   actionContentHash,
-  type ActionIntent,
+  type OrganizationActionIntent,
 } from './platform-admin-action-intent';
 import type {
   AuditState,
@@ -48,7 +48,7 @@ const ACTION_HISTORY_LIMIT = 20;
 
 export interface ActionOutcome {
   operationId: string;
-  action: ActionIntent['action'];
+  action: OrganizationActionIntent['action'];
   /** `true` : opération déjà appliquée, résultat existant renvoyé. */
   replayed: boolean;
   result: Record<string, unknown>;
@@ -129,11 +129,17 @@ export class PlatformAdminActionsService {
     };
   }
 
-  /** Historique des actions de l'organisation (plus récentes d'abord). */
+  /**
+   * Historique des actions de l'organisation (plus récentes d'abord). Les
+   * messages de service ont leur propre historique paginé.
+   */
   async history(organizationId: string) {
     const rows = await this.db.operations
       .find(
-        { organizationId: new Types.ObjectId(organizationId) },
+        {
+          organizationId: new Types.ObjectId(organizationId),
+          action: { $in: Object.keys(ACTION_CAPABILITY) as never[] },
+        },
         {
           projection: {
             action: 1,
@@ -172,7 +178,7 @@ export class PlatformAdminActionsService {
 
   async execute(
     context: PlatformAdminRequestContext,
-    intent: ActionIntent,
+    intent: OrganizationActionIntent,
     stepUpToken: string,
   ): Promise<ActionOutcome> {
     const capability = ACTION_CAPABILITY[intent.action];
@@ -223,7 +229,7 @@ export class PlatformAdminActionsService {
   private async changeStatus(
     context: PlatformAdminRequestContext,
     intent: Extract<
-      ActionIntent,
+      OrganizationActionIntent,
       { action: 'organization_suspend' | 'organization_reactivate' }
     >,
     contentHash: string,
@@ -292,7 +298,10 @@ export class PlatformAdminActionsService {
 
   private async extend(
     context: PlatformAdminRequestContext,
-    intent: Extract<ActionIntent, { action: 'subscription_extend' }>,
+    intent: Extract<
+      OrganizationActionIntent,
+      { action: 'subscription_extend' }
+    >,
     contentHash: string,
     stepUp: Parameters<PlatformAdminService['consumeStepUpIn']>[0],
   ): Promise<ActionOutcome> {
@@ -355,7 +364,7 @@ export class PlatformAdminActionsService {
   private async record(
     txn: MongoSession,
     context: PlatformAdminRequestContext,
-    intent: ActionIntent,
+    intent: OrganizationActionIntent,
     contentHash: string,
     reason: string,
     result: Record<string, unknown>,
@@ -394,7 +403,7 @@ export class PlatformAdminActionsService {
 
   private replay(
     existing: PlatformAdminOperationDoc,
-    intent: ActionIntent,
+    intent: OrganizationActionIntent,
     contentHash: string,
   ): ActionOutcome {
     if (
@@ -406,7 +415,7 @@ export class PlatformAdminActionsService {
     }
     return {
       operationId: existing._id,
-      action: existing.action,
+      action: intent.action,
       replayed: true,
       result: existing.result,
     };
@@ -416,7 +425,7 @@ export class PlatformAdminActionsService {
   private async translate(
     error: unknown,
     context: PlatformAdminRequestContext,
-    intent: ActionIntent,
+    intent: OrganizationActionIntent,
     contentHash: string,
   ): Promise<{ replay: ActionOutcome } | { error: unknown }> {
     if (
@@ -473,7 +482,7 @@ export class PlatformAdminActionsService {
     return { error };
   }
 
-  private async afterCommit(intent: ActionIntent): Promise<void> {
+  private async afterCommit(intent: OrganizationActionIntent): Promise<void> {
     try {
       if (intent.action === 'organization_suspend') {
         this.sockets.disconnectOrganization(intent.organizationId);
@@ -487,7 +496,7 @@ export class PlatformAdminActionsService {
 
   private async deny(
     context: PlatformAdminRequestContext,
-    intent: ActionIntent,
+    intent: OrganizationActionIntent,
     reason: string,
   ): Promise<void> {
     await this.admin.auditOutside({

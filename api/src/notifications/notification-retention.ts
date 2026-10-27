@@ -27,6 +27,7 @@ export const NOTIFICATION_RETENTION_AFTER_READ_MS: Readonly<
   [PushCategory.EXPIRY_SOON]: 7 * DAY,
   [PushCategory.EXPIRY_EXPIRED]: 30 * DAY,
   [PushCategory.REGULARIZATION_REQUESTED]: 7 * DAY,
+  [PushCategory.PLATFORM_MESSAGE]: 30 * DAY,
 });
 
 export function expiresAfterRead(category: PushCategory, readAt: Date): Date {
