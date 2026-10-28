@@ -65,44 +65,42 @@ const legalEn: Translation<typeof legalFr> = {
     label:
       "I would like to receive Stock Master offers and promotions by email. I can unsubscribe at any time.",
     optional:
-      "Optional. Without this box, your account works the same way and you still receive the emails related to your account.",
+      "Optional. Your account works the same way whether you tick this box or not.",
     errors: {
       outdated:
-        "The text of the email offers box has changed. Reload the page, then try again.",
+        "This text has been updated. Reload the page to see the new version.",
       unavailable:
-        "Your choice about email offers cannot be saved right now. Try again in a few moments.",
+        "Your choice couldn't be saved. Please try again in a moment.",
     },
     settings: {
       title: "Offers and promotions by email",
-      text: "This choice only concerns Stock Master promotional emails. Emails related to your account (confirmation, password, invitations) and service messages do not change, whether you accept or not.",
-      grantedSince: "Consent recorded on {{date}}.",
-      notGranted: "No consent: you do not receive promotional emails.",
+      text: "Choose whether you'd like to receive our offers by email. Emails about your account keep arriving whatever you choose.",
+      grantedSince: "On since {{date}}.",
+      notGranted: "You don't receive our offers by email.",
       previousAddress:
-        "Your consent was given for another email address: it does not apply to your current address. Tick the box to accept for this address.",
-      unverified:
-        "Your address must be confirmed before you can receive these emails.",
-      granted: "Consent recorded.",
-      withdrawn: "Consent withdrawn: no promotional email will be sent to you.",
-      unavailable: "This setting is unavailable right now.",
+        "Your email address has changed. Tick the box if you'd like our offers at your new address.",
+      unverified: "Confirm your email address to receive our offers.",
+      granted: "Got it, you'll receive our offers.",
+      withdrawn: "Got it, you won't receive our offers anymore.",
+      unavailable: "This setting isn't available right now.",
       loading: "Loading…",
     },
   },
   unsubscribe: {
     metaTitle: "Unsubscribe",
     loading: "Loading…",
-    title: "Stop receiving Stock Master offers",
-    text: "Confirm to stop receiving Stock Master offers and promotions by email.",
+    title: "Unsubscribe from Stock Master offers",
+    text: "You will no longer receive our offers and promotions by email.",
     confirm: "Unsubscribe me",
-    submitting: "Unsubscribing…",
-    service:
-      "Emails related to your account (security, invitations, service messages) and your shop's subscription are not affected.",
-    doneTitle: "Done",
+    submitting: "One moment…",
+    service: "Emails about your account will keep arriving as usual.",
+    doneTitle: "All set",
     doneText:
-      "You will no longer receive Stock Master promotional emails at this address. You can change your mind in the application settings.",
-    invalidTitle: "Invalid link",
+      "You won't receive our offers at this address anymore. You can change your mind at any time from your account.",
+    invalidTitle: "This link no longer works",
     invalidText:
-      "This unsubscribe link is not valid. You can also withdraw your consent in the application (Organisation, then Notifications).",
-    network: "Connection failed. Try again.",
+      "You can manage your preferences from your account, under Organisation then Notifications.",
+    network: "The connection failed. Please try again.",
   },
   prompt: {
     title: "Your agreement is needed",

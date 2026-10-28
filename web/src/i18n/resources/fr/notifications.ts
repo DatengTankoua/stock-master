@@ -55,7 +55,7 @@ const notificationsFr = {
     },
     platformMessage: {
       label: "Message de Stock Master",
-      help: "Messages de service que l'équipe Stock Master vous adresse (assistance, maintenance).",
+      help: "Messages de l'équipe Stock Master, par exemple pour une maintenance ou une question d'assistance.",
     },
   },
   bell: {

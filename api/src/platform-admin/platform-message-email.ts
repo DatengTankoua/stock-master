@@ -33,21 +33,19 @@ const WRAPPER = {
     subject: (title: string) => `${title} – Stock Master`,
     label: 'Message de Stock Master',
     intro: (org: string) =>
-      `Vous recevez ce message de l’équipe Stock Master en tant que membre de « ${org} ».`,
+      `L’équipe Stock Master vous écrit en tant que membre de « ${org} ».`,
     reply: (support: string) =>
-      `Pour répondre, répondez simplement à cet e-mail : votre réponse parviendra à l’assistance Stock Master (${support}).`,
-    footer:
-      'Message de service lié à votre compte Stock Master. Ce n’est pas une communication commerciale.',
+      `Pour nous répondre, il suffit de répondre à cet e-mail. Votre réponse arrivera à notre assistance (${support}).`,
+    footer: 'Ce message concerne votre compte Stock Master.',
   },
   en: {
     subject: (title: string) => `${title} – Stock Master`,
     label: 'Message from Stock Master',
     intro: (org: string) =>
-      `You are receiving this message from the Stock Master team as a member of “${org}”.`,
+      `The Stock Master team is writing to you as a member of “${org}”.`,
     reply: (support: string) =>
-      `To reply, simply answer this email: your reply will reach Stock Master support (${support}).`,
-    footer:
-      'Service message about your Stock Master account. This is not a marketing communication.',
+      `To reply, just answer this email. Your reply will reach our support team (${support}).`,
+    footer: 'This message is about your Stock Master account.',
   },
 } as const;
 

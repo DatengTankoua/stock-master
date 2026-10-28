@@ -87,7 +87,8 @@ export function addressFingerprint(email: string): string {
 function unavailable() {
   return new ServiceUnavailableException({
     code: MARKETING_CONSENT_UNAVAILABLE,
-    message: 'Ce choix ne peut pas être enregistré pour le moment.',
+    message:
+      "Votre choix n'a pas pu être enregistré. Merci de réessayer dans un instant.",
   });
 }
 
@@ -133,7 +134,7 @@ export class MarketingConsentService {
     ) {
       throw new ConflictException({
         code: MARKETING_CONSENT_WORDING_OUTDATED,
-        message: 'Le texte proposé a changé : recharge la page.',
+        message: 'Ce texte a été mis à jour. Merci de recharger la page.',
         current: MARKETING_EMAIL_CURRENT_WORDING,
       });
     }
@@ -146,7 +147,7 @@ export class MarketingConsentService {
     if (!wording) {
       throw new BadRequestException({
         code: MARKETING_CONSENT_WORDING_UNKNOWN,
-        message: 'Texte inconnu.',
+        message: "Ce texte n'est plus disponible. Merci de recharger la page.",
       });
     }
     return wording;
@@ -320,7 +321,7 @@ export class MarketingConsentService {
     if (!record) {
       throw new NotFoundException({
         code: MARKETING_UNSUBSCRIBE_INVALID,
-        message: 'Lien de désabonnement invalide.',
+        message: 'Ce lien ne fonctionne plus.',
       });
     }
     const userId = record.userId.toHexString();
