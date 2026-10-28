@@ -314,6 +314,11 @@ export interface AdminOrganizationDetail {
     }>;
   };
   features: { productBatches: boolean; expiryAlerts: boolean };
+  /** Portée de l'activation : tous les commerces, commerces choisis, ou aucune. */
+  featureScopes?: {
+    productBatches: "all" | "selected" | null;
+    expiryAlerts: "all" | "selected" | null;
+  };
   recentPayments: AdminPaymentRow[];
   /** Suspension administrative : motif interne et message, séparés. */
   suspension: {

@@ -2,8 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
 import { PRODUCT_CAPACITY } from '../products/product-capacity';
-import { productBatchesEnabledFor } from '../products/batches/product-batches-config';
-import { expiryAlertsEnabledFor } from '../products/expiry/expiry-alerts-config';
+import {
+  productBatchesEnabledFor,
+  productBatchesScope,
+} from '../products/batches/product-batches-config';
+import {
+  expiryAlertsEnabledFor,
+  expiryAlertsScope,
+} from '../products/expiry/expiry-alerts-config';
+import type { OrganizationScope } from '../common/organization-scope';
 import { SUBSCRIPTION_PERIODS_COLLECTION } from '../subscriptions/schemas/subscription-period.schema';
 import { SUBSCRIPTION_PAYMENTS_COLLECTION } from '../subscriptions/payments/schemas/subscription-payment.schema';
 import { PlatformAdminRuntime } from './platform-admin-runtime';
@@ -14,6 +21,15 @@ import type {
   OrganizationSubscriptionFilter,
 } from './dto/platform-admin.dto';
 import { PlatformAdminErrorCode } from './platform-admin-errors';
+
+/** Portée d'une fonction activée (jamais la liste ni la valeur brute). */
+function featureScope(
+  enabled: boolean,
+  scope: OrganizationScope,
+): 'all' | 'selected' | null {
+  if (!enabled) return null;
+  return scope.kind === 'all' ? 'all' : 'selected';
+}
 
 /**
  * Données administratives en LECTURE SEULE. Chaque réponse est une
@@ -468,6 +484,19 @@ export class PlatformAdminDataService {
       features: {
         productBatches: productBatchesEnabledFor(organizationId),
         expiryAlerts: expiryAlertsEnabledFor(organizationId),
+      },
+      // Portée de l'activation pour CE commerce : `all` (tous les commerces),
+      // `selected` (commerces choisis), `null` (désactivée). Ni identifiant ni
+      // valeur de variable d'environnement.
+      featureScopes: {
+        productBatches: featureScope(
+          productBatchesEnabledFor(organizationId),
+          productBatchesScope(),
+        ),
+        expiryAlerts: featureScope(
+          expiryAlertsEnabledFor(organizationId),
+          expiryAlertsScope(),
+        ),
       },
       recentPayments: payments.items,
     };

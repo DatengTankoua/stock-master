@@ -277,7 +277,7 @@ Source de référence : les commentaires de
 | Lots, alertes | `PRODUCT_BATCHES_*`, `EXPIRY_ALERTS_*` | Désactivés (aucun commerce) |
 | Paiements | `PAYMENT_PROVIDER_ACTIVE`, `SASPAY_*` | `none` : 503. Fournisseurs simulés : recette isolée seulement |
 | Proxy | `TRUST_PROXY_*` | Aucun proxy approuvé (correct en local) |
-| Administration de la plateforme (`/admin`) | API : `PLATFORM_ADMIN_*` · web (serveur) : `PLATFORM_ADMIN_ENABLED`, `PLATFORM_ADMIN_PROXY_SECRET`, `PLATFORM_ADMIN_ALLOWED_ORIGIN` | Fermée (503). Accès accordé par la commande `platform-admin` : [platform-admin-mfa.md](docs/architecture/platform-admin-mfa.md) |
+| Administration de la plateforme (`/admin`) | API : `PLATFORM_ADMIN_*` · web (serveur) : `PLATFORM_ADMIN_ENABLED`, `PLATFORM_ADMIN_PROXY_SECRET`, `PLATFORM_ADMIN_ALLOWED_ORIGIN` | Fermée (503). Accès accordé par la commande `platform-admin` : [platform-admin-mfa.md](docs/architecture/platform-admin-mfa.md), commandes prêtes à copier : [railway-platform-admin.md](docs/operations/railway-platform-admin.md) |
 
 - **Moment de lecture.** L'API lit ses variables au démarrage. Côté web,
   `NEXT_PUBLIC_*` et `S3_HOSTNAME` sont figées au build (et au lancement de
@@ -323,6 +323,9 @@ authentification obligatoire
 ([platform-admin-mfa.md](docs/architecture/platform-admin-mfa.md)) ; suspension,
 réactivation et prolongation offerte par capacités dédiées
 ([platform-admin-actions.md](docs/architecture/platform-admin-actions.md)).
+Commandes opérateur prêtes à copier (accès, capacités, récupération du
+second facteur) depuis le terminal Railway :
+[railway-platform-admin.md](docs/operations/railway-platform-admin.md).
 
 Les droits effectifs sont recalculés par l'API à chaque requête
 (`effectivePermissions`) ; détails :
