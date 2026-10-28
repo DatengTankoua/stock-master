@@ -727,7 +727,7 @@ export class PlatformCampaignsService {
     return new ConflictException({
       code: PlatformAdminErrorCode.CAMPAIGN_NOT_EDITABLE,
       message:
-        'Campagne déjà lancée ou modifiée entre-temps : rechargez-la avant de continuer.',
+        'Cette campagne a changé entre-temps. Rechargez la page pour voir la dernière version.',
     });
   }
 

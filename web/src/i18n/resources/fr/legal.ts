@@ -66,44 +66,43 @@ const legalFr = {
     label:
       "Je souhaite recevoir par e-mail les offres et promotions de Stock Master. Je peux me désinscrire à tout moment.",
     optional:
-      "Facultatif. Sans cette case, ton compte fonctionne de la même façon et tu reçois toujours les e-mails liés à ton compte.",
+      "Facultatif. Ton compte fonctionne de la même façon, que tu coches cette case ou non.",
     errors: {
       outdated:
-        "Le texte de la case sur les offres par e-mail a changé. Recharge la page, puis recommence.",
+        "Ce texte a été mis à jour. Recharge la page pour voir la nouvelle version.",
       unavailable:
-        "Ton choix sur les offres par e-mail ne peut pas être enregistré pour le moment. Réessaie dans quelques instants.",
+        "Ton choix n'a pas pu être enregistré. Réessaie dans un instant.",
     },
     settings: {
       title: "Offres et promotions par e-mail",
-      text: "Ce choix ne concerne que les e-mails promotionnels de Stock Master. Les e-mails liés à ton compte (confirmation, mot de passe, invitations) et les messages de service ne changent pas, que tu acceptes ou non.",
-      grantedSince: "Accord enregistré le {{date}}.",
-      notGranted: "Aucun accord : tu ne reçois pas d'e-mails promotionnels.",
+      text: "Choisis si tu veux recevoir nos offres par e-mail. Les e-mails utiles à ton compte continuent d'arriver, quel que soit ton choix.",
+      grantedSince: "Activé depuis le {{date}}.",
+      notGranted: "Tu ne reçois pas nos offres par e-mail.",
       previousAddress:
-        "Ton accord portait sur une autre adresse e-mail : il ne s'applique pas à ton adresse actuelle. Coche la case pour l'accepter pour cette adresse.",
-      unverified:
-        "Ton adresse doit être confirmée avant de pouvoir recevoir ces e-mails.",
-      granted: "Accord enregistré.",
-      withdrawn: "Accord retiré : aucun e-mail promotionnel ne te sera envoyé.",
-      unavailable: "Ce réglage est indisponible pour le moment.",
+        "Ton adresse e-mail a changé. Coche la case si tu veux recevoir nos offres à ta nouvelle adresse.",
+      unverified: "Confirme ton adresse e-mail pour recevoir nos offres.",
+      granted: "C'est noté, tu recevras nos offres.",
+      withdrawn: "C'est noté, tu ne recevras plus nos offres.",
+      unavailable: "Ce réglage n'est pas disponible pour le moment.",
       loading: "Chargement…",
     },
   },
   unsubscribe: {
     metaTitle: "Se désabonner",
     loading: "Chargement…",
-    title: "Ne plus recevoir les offres de Stock Master",
-    text: "Confirmez pour ne plus recevoir par e-mail les offres et promotions de Stock Master.",
+    title: "Se désabonner des offres Stock Master",
+    text: "Vous ne recevrez plus nos offres et promotions par e-mail.",
     confirm: "Me désabonner",
-    submitting: "Désabonnement…",
+    submitting: "Un instant…",
     service:
-      "Les e-mails liés à votre compte (sécurité, invitations, messages de service) et l'abonnement de votre commerce ne sont pas concernés.",
-    doneTitle: "C'est fait",
+      "Les e-mails liés à votre compte continueront d'arriver normalement.",
+    doneTitle: "C'est noté",
     doneText:
-      "Vous ne recevrez plus d'e-mails promotionnels de Stock Master à cette adresse. Vous pourrez changer d'avis dans les réglages de l'application.",
-    invalidTitle: "Lien invalide",
+      "Vous ne recevrez plus nos offres à cette adresse. Vous pouvez changer d'avis à tout moment depuis votre compte.",
+    invalidTitle: "Ce lien ne fonctionne plus",
     invalidText:
-      "Ce lien de désabonnement n'est pas valable. Vous pouvez aussi retirer votre accord dans l'application (Organisation, puis Notifications).",
-    network: "Connexion impossible. Réessayez.",
+      "Vous pouvez gérer vos préférences depuis votre compte, dans Organisation puis Notifications.",
+    network: "La connexion a échoué. Merci de réessayer.",
   },
   prompt: {
     title: "Ton accord est demandé",

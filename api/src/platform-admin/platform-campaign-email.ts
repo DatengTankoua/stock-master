@@ -25,20 +25,16 @@ export interface CampaignEmailContent {
 
 const WRAPPER = {
   fr: {
-    why: 'Vous recevez cet e-mail parce que vous avez accepté de recevoir les offres et promotions de Stock Master.',
+    why: 'Vous recevez cet e-mail car vous avez choisi de recevoir les offres de Stock Master.',
     unsubscribe: 'Se désabonner',
-    unsubscribeText: (url: string) =>
-      `Pour ne plus recevoir ces e-mails, ouvrez ce lien : ${url}`,
-    service:
-      'Les e-mails liés à votre compte (sécurité, invitations, messages de service) ne sont pas concernés.',
+    unsubscribeText: (url: string) => `Pour vous désabonner : ${url}`,
+    service: 'Vous continuerez à recevoir les e-mails liés à votre compte.',
   },
   en: {
-    why: 'You are receiving this email because you agreed to receive Stock Master offers and promotions.',
+    why: 'You are receiving this email because you chose to receive Stock Master offers.',
     unsubscribe: 'Unsubscribe',
-    unsubscribeText: (url: string) =>
-      `To stop receiving these emails, open this link: ${url}`,
-    service:
-      'Emails related to your account (security, invitations, service messages) are not affected.',
+    unsubscribeText: (url: string) => `To unsubscribe: ${url}`,
+    service: 'You will keep receiving emails about your account.',
   },
 } as const;
 

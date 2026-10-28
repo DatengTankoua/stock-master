@@ -55,7 +55,7 @@ const notificationsEn: Translation<typeof notificationsFr> = {
     },
     platformMessage: {
       label: "Message from Stock Master",
-      help: "Service messages the Stock Master team sends you (support, maintenance).",
+      help: "Messages from the Stock Master team, for example about maintenance or a support question.",
     },
   },
   bell: {

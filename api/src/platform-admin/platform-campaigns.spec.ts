@@ -74,7 +74,7 @@ describe('Campagnes — e-mail et envoi', () => {
     );
     expect(email.text).toContain(input.unsubscribeUrl);
     expect(buildCampaignEmail({ ...input, locale: 'en' }).text).toContain(
-      'To stop receiving these emails',
+      'To unsubscribe:',
     );
   });
 

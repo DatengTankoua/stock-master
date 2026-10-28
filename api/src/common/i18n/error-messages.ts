@@ -185,21 +185,22 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
     en: 'These terms do not exist in this language.',
   },
   // Accord aux e-mails promotionnels (réglages et inscription).
-  'Ce choix ne peut pas être enregistré pour le moment.': {
-    en: 'This choice cannot be saved right now.',
-  },
-  'Le texte proposé a changé : recharge la page.': {
-    en: 'The text shown has changed: reload the page.',
-  },
-  'Campagne déjà lancée ou modifiée entre-temps : rechargez-la avant de continuer.':
+  "Votre choix n'a pas pu être enregistré. Merci de réessayer dans un instant.":
     {
-      en: 'Campaign already launched or changed in the meantime: reload it before continuing.',
+      en: "Your choice couldn't be saved. Please try again in a moment.",
     },
-  'Lien de désabonnement invalide.': {
-    en: 'Invalid unsubscribe link.',
+  'Ce texte a été mis à jour. Merci de recharger la page.': {
+    en: 'This text has been updated. Please reload the page.',
   },
-  'Texte inconnu.': {
-    en: 'Unknown text.',
+  'Cette campagne a changé entre-temps. Rechargez la page pour voir la dernière version.':
+    {
+      en: 'This campaign has changed in the meantime. Reload the page to see the latest version.',
+    },
+  'Ce lien ne fonctionne plus.': {
+    en: 'This link no longer works.',
+  },
+  "Ce texte n'est plus disponible. Merci de recharger la page.": {
+    en: 'This text is no longer available. Please reload the page.',
   },
   'Les conditions ont été mises à jour : recharge la page pour lire la version en vigueur.':
     {
