@@ -1,6 +1,8 @@
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsEmail,
   IsIn,
@@ -16,6 +18,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { PLATFORM_ADMIN_AUDIT_ACTIONS } from '../platform-admin-store';
+import { MESSAGE_ARCHIVE_BATCH_MAX } from '../platform-message-policy';
 import { SubscriptionPaymentStatus } from '../../subscriptions/payments/schemas/subscription-payment.schema';
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -242,4 +245,71 @@ export class AdminMessageRetryDto extends AdminActionDto {
   deliveryIds: string[];
 }
 
-export class AdminMessagesQuery extends AdminPageQuery {}
+export const MESSAGE_ARCHIVE_FILTERS = ['active', 'archived', 'all'] as const;
+export type MessageArchiveFilter = (typeof MESSAGE_ARCHIVE_FILTERS)[number];
+
+export class AdminMessagesQuery extends AdminPageQuery {
+  /** Par défaut : messages non archivés. */
+  @IsOptional()
+  @IsIn(MESSAGE_ARCHIVE_FILTERS)
+  archived?: MessageArchiveFilter;
+}
+
+/**
+ * Archivage ou restauration d'une sélection (même commerce). Doublons et
+ * lots trop grands refusés en entier (400), jamais tronqués.
+ */
+export class AdminMessageArchiveDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MESSAGE_ARCHIVE_BATCH_MAX)
+  @ArrayUnique()
+  @Matches(/^[0-9a-f]{24}$/, { each: true })
+  messageIds: string[];
+}
+
+// ─── Campagnes promotionnelles ─────────────────────────────────────────────
+
+/**
+ * Brouillon : bornes larges ici (forme) ; bornes exactes, texte simple et
+ * ciblage canonique vérifiés par le service (refus, jamais de troncature).
+ */
+export class AdminCampaignDraftDto {
+  @IsString()
+  @MaxLength(1_000)
+  subject: string;
+
+  @IsString()
+  @MaxLength(20_000)
+  body: string;
+
+  @IsObject()
+  targeting: Record<string, unknown>;
+}
+
+export class AdminCampaignUpdateDto extends AdminCampaignDraftDto {
+  @IsInt()
+  @Min(1)
+  revision: number;
+}
+
+export class AdminCampaignLaunchDto extends AdminCampaignUpdateDto {
+  @Matches(OPERATION_ID)
+  operationId: string;
+
+  @Matches(TOKEN)
+  stepUpToken: string;
+}
+
+export class AdminCampaignsQuery extends AdminPageQuery {
+  /** Par défaut : campagnes non archivées. */
+  @IsOptional()
+  @IsIn(MESSAGE_ARCHIVE_FILTERS)
+  archived?: MessageArchiveFilter;
+}
+
+export class AdminCampaignPreviewQuery {
+  @IsOptional()
+  @IsIn(['fr', 'en'])
+  locale?: 'fr' | 'en';
+}

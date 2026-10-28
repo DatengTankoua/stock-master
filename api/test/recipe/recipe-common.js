@@ -63,6 +63,10 @@ function platformAdminApiEnv() {
         PLATFORM_ADMIN_MFA_KEYS: `recipe1:${FAKE.platformAdminMfaKey}`,
         PLATFORM_ADMIN_MFA_ACTIVE_KEY: 'recipe1',
         PLATFORM_ADMIN_PROXY_SECRET: FAKE.platformAdminProxySecret,
+        // Campagnes : envois SIMULÉS (mail.jsonl), secret FICTIF.
+        MARKETING_EMAILS_ENABLED: 'true',
+        MARKETING_UNSUBSCRIBE_SECRET:
+          'recipe-fictitious-marketing-unsubscribe-secret-0001',
       }
     : {};
 }

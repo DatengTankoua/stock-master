@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { ApiAccessView } from "@/lib/api";
 import { SubscriptionManager } from "./subscription-manager";
 import { LocalPendingSales } from "./local-pending-sales";
+import { MarketingConsentSection } from "@/components/legal/marketing-consent-section";
 
 // 1-14C.2 — Écran unique de blocage commercial (session applicative
 // bloquée, session limitée, ou blocage connu hors ligne). Un seul message
@@ -120,6 +121,9 @@ export function CommercialBlockScreen({
       )}
 
       <LocalPendingSales identity={identity} token={pendingToken} />
+
+      {/* Réglage personnel toujours accessible (session limitée comprise). */}
+      {!offline && <MarketingConsentSection token={restrictedToken} />}
 
       <div>
         <Button

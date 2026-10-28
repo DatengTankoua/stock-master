@@ -198,11 +198,8 @@ const OCTOBER_7_2026 = { fr: "7 octobre 2026", en: "7 October 2026" };
 // 1-16G : la traduction anglaise d'une version porte le MÊME numéro (même
 // texte, autre langue) ; elle est archivée comme `<version>.en.txt`. Une
 // version déjà archivée n'est jamais traduite après coup (ex. CGA 0.3).
-const DRAFT_0_3 = {
-  status: "projet",
-  version: "0.3",
-  updatedAt: OCTOBER_7_2026,
-} as const;
+// (Conditions d'utilisation 0.3 du 7 octobre 2026 ; remplacée par la 0.4
+// plus bas.)
 
 // 1-16C.2 (finalisation) — Conditions d'abonnement 0.4 : le paiement en
 // ligne n'est pas activé (`UnavailablePaymentProvider`). La version 0.3,
@@ -264,6 +261,24 @@ const DRAFT_STORAGE_R2 = {
   updatedAt: OCTOBER_21_2026,
 } as const;
 
+// E-mails promotionnels : accord facultatif et individuel, distinct de
+// l'acceptation des conditions. Conditions d'utilisation 0.4 (section
+// « E-mails de Stock Master ») et confidentialité 0.7 (données de preuve,
+// finalité, section dédiée, conservation), archivées FR/EN. Les versions
+// antérieures et leurs acceptations restent inchangées. DATE PROVISOIRE :
+// `updatedAt` est rendu dans le texte archivé et doit être la date EFFECTIVE
+// de publication (identique à `--published-at` de l'archivage). Si la
+// publication a lieu un autre jour, changer la date ici et réarchiver AVANT
+// la mise en ligne (ces versions n'étant pas encore publiées).
+// Campagnes e-mail : ces deux versions, jamais publiées (confirmé par le
+// propriétaire), sont complétées AVANT publication (désabonnement depuis
+// les e-mails, suivi des envois) et réarchivées sous le même numéro.
+const OCTOBER_28_2026 = { fr: "28 octobre 2026", en: "28 October 2026" };
+const DRAFT_MARKETING_CONSENT = {
+  status: "projet",
+  updatedAt: OCTOBER_28_2026,
+} as const;
+
 /** Documents juridiques et contractuels, dans l'ordre d'affichage. */
 export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
   {
@@ -275,7 +290,8 @@ export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
   {
     id: "conditions-utilisation",
     href: "/conditions-utilisation",
-    ...DRAFT_0_3,
+    ...DRAFT_MARKETING_CONSENT,
+    version: "0.4",
   },
   {
     id: "conditions-abonnement",
@@ -285,8 +301,8 @@ export const LEGAL_DOCUMENTS: readonly PublicDocument[] = Object.freeze([
   {
     id: "confidentialite",
     href: "/confidentialite",
-    ...DRAFT_STORAGE_R2,
-    version: "0.6",
+    ...DRAFT_MARKETING_CONSENT,
+    version: "0.7",
   },
   {
     id: "cookies",

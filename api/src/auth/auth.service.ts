@@ -25,6 +25,8 @@ import { TurnstileService } from '../anti-bot/turnstile.service';
 import { TURNSTILE_LOGIN_ACTION } from '../anti-bot/turnstile-config';
 import { UsersService } from '../users/users.service';
 import { LegalAcceptanceService } from '../legal/legal-acceptance.service';
+import { MarketingConsentService } from '../marketing-consent/marketing-consent.service';
+import type { ResolvedMarketingWording } from '../marketing-consent/marketing-consent-wording';
 import { LegalAcceptanceContext } from '../legal/legal-documents';
 import { isAppLocale } from '../common/i18n/locale';
 import { RegisterDto } from './dto/register.dto';
@@ -157,6 +159,7 @@ export class AuthService implements OnApplicationShutdown {
     private emailVerificationService: EmailVerificationService,
     private subscriptionsService: SubscriptionsService,
     private legalAcceptance: LegalAcceptanceService,
+    private marketingConsent: MarketingConsentService,
     private rateLimiter: PersistentRateLimiter,
     private turnstile: TurnstileService,
   ) {}
@@ -186,12 +189,18 @@ export class AuthService implements OnApplicationShutdown {
       LegalAcceptanceContext.OWNER_REGISTRATION,
       dto.legalAcceptance,
     );
+    // Accord FACULTATIF aux e-mails promotionnels, distinct des conditions :
+    // contrôlé avant toute écriture, enregistré seulement si la case est
+    // cochée (absent ou décoché = aucun accord).
+    const marketing = dto.marketingEmailConsent?.granted
+      ? this.marketingConsent.resolveChoice(dto.marketingEmailConsent)
+      : null;
     if (await this.usersService.findByEmail(normalizeAccountEmail(dto.email))) {
       return { created: false };
     }
     let created: Awaited<ReturnType<AuthService['registerOwner']>>;
     try {
-      created = await this.registerOwner(dto, legal);
+      created = await this.registerOwner(dto, legal, marketing);
     } catch (err) {
       if (isDuplicateEmailError(err)) return { created: false };
       throw err;
@@ -243,6 +252,7 @@ export class AuthService implements OnApplicationShutdown {
   private async registerOwner(
     dto: RegisterDto,
     legal: ReturnType<LegalAcceptanceService['resolveSubmission']>,
+    marketing: ResolvedMarketingWording | null = null,
   ): Promise<Omit<OwnerOnboardingResult, 'emailVerification'>> {
     const hashed = await bcrypt.hash(dto.password, PASSWORD_HASH_ROUNDS);
     const session = await this.connection.startSession();
@@ -272,6 +282,12 @@ export class AuthService implements OnApplicationShutdown {
           userId: user._id.toString(),
           organizationId: organization._id.toString(),
           submission: legal,
+        });
+        await this.marketingConsent.recordRegistration(session, {
+          userId: user._id.toString(),
+          email: user.email,
+          choice: dto.marketingEmailConsent,
+          wording: marketing,
         });
         created = {
           user,

@@ -20,7 +20,9 @@
  *                     --operator=<opérateur> [--apply]
  *
  * Capacités (`platform-admin-capabilities.ts`) : `platform.read`,
- * `platform.organizations.suspend`, `platform.subscriptions.extend`. Une
+ * `platform.organizations.suspend`, `platform.subscriptions.extend`,
+ * `platform.communications.notify`, `platform.communications.email`,
+ * `platform.communications.archive`. Une
  * autorisation accordée (ou réaccordée) commence en lecture seule ; les
  * autres capacités s'ajoutent une par une, sur une autorisation ACTIVE.
  *

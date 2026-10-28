@@ -9,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { LegalAcceptanceDto } from '../../legal/dto/legal-acceptance.dto';
+import { MarketingEmailConsentDto } from '../../marketing-consent/dto/marketing-consent.dto';
 import {
   ORGANIZATION_NAME_MAX_LENGTH,
   ORGANIZATION_NAME_MESSAGE,
@@ -53,6 +54,13 @@ export class RegisterDto {
   @ValidateNested()
   @Type(() => LegalAcceptanceDto)
   legalAcceptance?: LegalAcceptanceDto;
+
+  // Case FACULTATIVE « offres et promotions par e-mail », distincte de
+  // l'acceptation des conditions. Absente ou `granted: false` : aucun accord.
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MarketingEmailConsentDto)
+  marketingEmailConsent?: MarketingEmailConsentDto;
 
   // 1-18C : jeton Cloudflare Turnstile (ou simulé en test). Facultatif AU
   // DTO pour un refus au code stable `TURNSTILE_REQUIRED` par le service.

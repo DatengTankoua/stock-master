@@ -4,7 +4,8 @@ import { OPERATOR, SITE } from "@/lib/legal/site-identity";
 import type { DocumentContent } from "@/i18n/documents/types";
 
 // 1-16G — Traduction anglaise fidèle des conditions d'utilisation 0.3
-// (aucune clause, promesse ni coordonnée ajoutée). Même statut « projet »,
+// (aucune clause, promesse ni coordonnée ajoutée). Version 0.4 : traduction
+// de la section « E-mails de Stock Master » ajoutée au texte français. Même statut « projet »,
 // même `noindex`. La traduction ne vaut pas validation juridique.
 // Les points « À COMPLÉTER » du texte français restent ouverts.
 const content: DocumentContent = {
@@ -269,6 +270,34 @@ const content: DocumentContent = {
             These terms do not reduce any right that the law gives you, in
             particular as a consumer or as a person whose data is processed. A
             clause contrary to these rights would have no effect.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "communications",
+      title: "Emails from Stock Master",
+      content: (
+        <>
+          <p>
+            {SITE.name} sends you the emails the service needs: confirmation of
+            your address, password reset, invitations, and service messages
+            about your account or your shop. These emails are not promotional.
+          </p>
+          <p>
+            Emails presenting {SITE.name} offers and promotions are only sent to
+            you if you have agreed to them, with a separate and optional box, at
+            sign-up or in the application. This consent is personal to you: no
+            one, not even the owner of your shop, can give it on your behalf.
+            Accepting these terms is not consent to these emails.
+          </p>
+          <p>
+            You can withdraw this consent at any time in the application
+            (Organisation, then Notifications), or with the unsubscribe link in
+            each promotional email, without signing in. Refusing or withdrawing
+            it changes neither your access to the service nor the service
+            emails. The <Link href="/en/confidentialite">Privacy Policy</Link>{" "}
+            explains what is kept about your choice.
           </p>
         </>
       ),

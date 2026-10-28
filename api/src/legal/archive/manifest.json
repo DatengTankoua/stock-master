@@ -3,7 +3,7 @@
   "documents": {
     "conditions-utilisation": {
       "route": "/conditions-utilisation",
-      "current": "0.3",
+      "current": "0.4",
       "versions": {
         "0.3": {
           "publishedAt": "2026-10-07",
@@ -15,6 +15,19 @@
             "en": {
               "file": "conditions-utilisation/0.3.en.txt",
               "sha256": "52ec39f1ab81d46bdcb03a62b27c0f3c635c2abc1a8dbdc89dfac81cfdbbbfb7"
+            }
+          }
+        },
+        "0.4": {
+          "publishedAt": "2026-10-28",
+          "locales": {
+            "fr": {
+              "file": "conditions-utilisation/0.4.fr.txt",
+              "sha256": "eecd47d594725b3914ac8f7bb149ce70de310c260149cd1d0732ab27a0c65778"
+            },
+            "en": {
+              "file": "conditions-utilisation/0.4.en.txt",
+              "sha256": "893173261f8775d875a676fe6b0be0cabf62287d68cc97e543ae851fc5d4314e"
             }
           }
         }
@@ -63,7 +76,7 @@
     },
     "confidentialite": {
       "route": "/confidentialite",
-      "current": "0.6",
+      "current": "0.7",
       "versions": {
         "0.3": {
           "publishedAt": "2026-10-07",
@@ -110,6 +123,19 @@
             "en": {
               "file": "confidentialite/0.6.en.txt",
               "sha256": "e38e9af6d3981d3a62bb893435bc365f5877cd147c0a49ce059c5e64633e49cc"
+            }
+          }
+        },
+        "0.7": {
+          "publishedAt": "2026-10-28",
+          "locales": {
+            "fr": {
+              "file": "confidentialite/0.7.fr.txt",
+              "sha256": "3e7cb3b0d3204d647453e1fe5081c31f9fc034681cc10ceacb0abf998e79544a"
+            },
+            "en": {
+              "file": "confidentialite/0.7.en.txt",
+              "sha256": "054456e9edced9ec5b2a7ca3006dbf7d6bf31ce3ac11c30cde79c29174831aa1"
             }
           }
         }

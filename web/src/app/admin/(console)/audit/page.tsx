@@ -41,6 +41,13 @@ const ACTIONS = [
   "subscription_extend",
   "organization_message",
   "organization_message_retry",
+  "organization_message_archive",
+  "organization_message_restore",
+  "campaign_create",
+  "campaign_update",
+  "campaign_launch",
+  "campaign_archive",
+  "campaign_restore",
 ] as const;
 type Action = (typeof ACTIONS)[number];
 const OUTCOMES = ["success", "failure", "denied"] as const;

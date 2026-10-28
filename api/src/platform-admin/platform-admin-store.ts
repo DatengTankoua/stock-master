@@ -24,6 +24,9 @@ export const PLATFORM_ADMIN_COLLECTIONS = Object.freeze({
   messages: 'platform_messages',
   messageDeliveries: 'platform_message_deliveries',
   messageCounters: 'platform_message_counters',
+  // Campagnes promotionnelles (distinctes des messages de service).
+  campaigns: 'platform_campaigns',
+  campaignDeliveries: 'platform_campaign_deliveries',
 });
 
 export type GrantStatus = 'active' | 'revoked';
@@ -124,7 +127,8 @@ export type PlatformAdminActionKind =
   | 'organization_reactivate'
   | 'subscription_extend'
   | 'organization_message'
-  | 'organization_message_retry';
+  | 'organization_message_retry'
+  | 'campaign_launch';
 
 export type MessageChannel = 'in_app' | 'email';
 export const MESSAGE_CHANNELS: readonly MessageChannel[] = Object.freeze([
@@ -147,6 +151,13 @@ export interface PlatformMessageDoc {
   channels: MessageChannel[];
   recipientUserIds: Types.ObjectId[];
   createdAt: Date;
+  /**
+   * Archivage administratif (masquage de l'historique principal). Absent ou
+   * `null` = actif (messages antérieurs compris). Ne touche jamais aux
+   * livraisons, notifications ni e-mails déjà envoyés.
+   */
+  archivedAt?: Date | null;
+  archivedBy?: Types.ObjectId | null;
 }
 
 /**
@@ -213,6 +224,76 @@ export interface PlatformMessageCounterDoc {
   lastAt: Date;
 }
 
+/** Ciblage d'une campagne : tous les commerces ou une sélection explicite. */
+export type CampaignTargeting =
+  { mode: 'all' } | { mode: 'selected'; organizationIds: Types.ObjectId[] };
+
+/**
+ * Campagne promotionnelle par e-mail. `draft` : sujet, texte et ciblage
+ * modifiables (`revision` incrémentée à chaque modification). `launched` :
+ * contenu et ciblage FIGÉS ; audience préparée par pages (`audience`),
+ * jamais élargie après le lancement (`launchedAt` sert de borne).
+ */
+export interface PlatformCampaignDoc {
+  _id: Types.ObjectId;
+  status: 'draft' | 'launched';
+  subject: string;
+  body: string;
+  targeting: CampaignTargeting;
+  revision: number;
+  createdBy: Types.ObjectId;
+  createdAt: Date;
+  updatedBy: Types.ObjectId;
+  updatedAt: Date;
+  launchedAt: Date | null;
+  launchedBy: Types.ObjectId | null;
+  /** Identifiant d'opération du lancement (unique : aucun double lancement). */
+  launchOperationId: string | null;
+  audience: {
+    /** `preparing` : constitution en cours ; `ready` : audience GELÉE. */
+    status: 'none' | 'preparing' | 'ready';
+    /** Curseur de constitution (dernier `_id` d'accord examiné). */
+    cursor: string | null;
+    total: number;
+    /** Fin du bail de constitution : au-delà, close sans nouvelle évaluation. */
+    leaseUntil?: Date | null;
+    /** Gel de l'audience (aucun ajout ensuite). */
+    frozenAt?: Date | null;
+    /** Constitution interrompue puis close : audience partielle. */
+    incomplete?: boolean;
+  };
+  archivedAt: Date | null;
+  archivedBy: Types.ObjectId | null;
+}
+
+/** Livraison d'UNE campagne à UN utilisateur (unique : aucun doublon). */
+export interface PlatformCampaignDeliveryDoc {
+  _id: Types.ObjectId;
+  campaignId: Types.ObjectId;
+  userId: Types.ObjectId;
+  status: Exclude<MessageDeliveryStatus, 'created'>;
+  attempts: number;
+  nextAttemptAt: Date;
+  lockedUntil: Date | null;
+  firstAttemptAt: Date | null;
+  uncertainAt: Date | null;
+  /**
+   * Figé au premier envoi : adresse, son empreinte, langue et empreinte du
+   * secret de désabonnement. Une reprise n'est envoyée qu'à cette adresse,
+   * avec le même contenu et le même lien.
+   */
+  snapshot: {
+    to: string;
+    addressSha256: string;
+    locale: 'fr' | 'en';
+    unsubscribeKeyId: string;
+  } | null;
+  reason: string | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /**
  * Opération administrative idempotente : `_id` = identifiant d'opération
  * fourni par l'interface. Écrite dans la MÊME transaction que l'action, la
@@ -261,6 +342,13 @@ export const PLATFORM_ADMIN_AUDIT_ACTIONS = [
   'subscription_extend',
   'organization_message',
   'organization_message_retry',
+  'organization_message_archive',
+  'organization_message_restore',
+  'campaign_create',
+  'campaign_update',
+  'campaign_launch',
+  'campaign_archive',
+  'campaign_restore',
 ] as const;
 export type PlatformAdminAuditAction =
   (typeof PLATFORM_ADMIN_AUDIT_ACTIONS)[number];
@@ -274,7 +362,8 @@ export interface PlatformAdminAuditDoc {
   actorLabel: string | null;
   action: PlatformAdminAuditAction;
   outcome: AuditOutcome;
-  targetType: 'user' | 'organization' | 'session' | 'factor' | null;
+  targetType:
+    'user' | 'organization' | 'session' | 'factor' | 'campaign' | null;
   targetId: string | null;
   /** Code court (motif de refus) ou motif opérateur, jamais une donnée secrète. */
   detail: string | null;
@@ -325,6 +414,12 @@ export function platformAdminCollections(connection: Connection) {
     ),
     messageCounters: db.collection<PlatformMessageCounterDoc>(
       PLATFORM_ADMIN_COLLECTIONS.messageCounters,
+    ),
+    campaigns: db.collection<PlatformCampaignDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.campaigns,
+    ),
+    campaignDeliveries: db.collection<PlatformCampaignDeliveryDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.campaignDeliveries,
     ),
   };
 }

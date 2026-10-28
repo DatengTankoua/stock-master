@@ -111,7 +111,8 @@ export function OrganizationActions({
         ) : (
           <p className="text-sm text-muted-foreground">
             {capabilities.has("platform.communications.notify") ||
-            capabilities.has("platform.communications.email")
+            capabilities.has("platform.communications.email") ||
+            capabilities.has("platform.communications.archive")
               ? t("organization.noStateActionCapability")
               : t("organization.noActionCapability")}
           </p>

@@ -8,6 +8,17 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PushModule } from '../push/push.module';
 import { EmailVerificationModule } from '../email-verification/email-verification.module';
+import { MarketingConsentModule } from '../marketing-consent/marketing-consent.module';
+import { PlatformCampaignsService } from './platform-campaigns.service';
+import { PlatformCampaignsController } from './platform-campaigns.controller';
+import {
+  CAMPAIGN_SLEEP,
+  PlatformCampaignDeliveryService,
+  type CampaignSleep,
+} from './platform-campaign-delivery.service';
+
+const realSleep: CampaignSleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 import { PlatformAdminCommunicationsService } from './platform-admin-communications.service';
 import { PlatformMessageDeliveryService } from './platform-message-delivery.service';
 import { PlatformAdminActionsService } from './platform-admin-actions.service';
@@ -39,8 +50,10 @@ import {
     NotificationsModule,
     PushModule,
     EmailVerificationModule,
+    // Campagnes : éligibilité et désabonnement (accord marketing).
+    MarketingConsentModule,
   ],
-  controllers: [PlatformAdminController],
+  controllers: [PlatformAdminController, PlatformCampaignsController],
   providers: [
     platformAdminConfigProvider,
     platformAdminClockProvider,
@@ -51,7 +64,10 @@ import {
     PlatformAdminGuard,
     PlatformAdminCommunicationsService,
     PlatformMessageDeliveryService,
+    PlatformCampaignsService,
+    PlatformCampaignDeliveryService,
+    { provide: CAMPAIGN_SLEEP, useValue: realSleep },
   ],
-  exports: [PlatformMessageDeliveryService],
+  exports: [PlatformMessageDeliveryService, PlatformCampaignDeliveryService],
 })
 export class PlatformAdminModule {}

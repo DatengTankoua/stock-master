@@ -57,6 +57,9 @@ export const PREDEPLOY_MIGRATIONS: readonly string[] = Object.freeze([
   // Administration de la plateforme : index seuls (espace fermé sans eux).
   // N'accorde JAMAIS d'accès : l'attribution reste une commande opérateur.
   'create-platform-admin-indexes.js',
+  // Accord aux e-mails promotionnels : collections et index des preuves.
+  // N'inscrit AUCUN utilisateur (aucune donnée lue ni écrite).
+  'create-marketing-consent-indexes.js',
   // Lots A à C : garde du suivi par lots (= migrate:product-batches --
   // --install --apply). N'active rien : drapeaux et portées séparés.
   'install-product-batches.js',

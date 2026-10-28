@@ -50,6 +50,7 @@ import {
   actionContentHash,
   auditCapability,
   intentCapabilities,
+  intentTarget,
   type ActionIntent,
 } from './platform-admin-action-intent';
 import { generateTotpSecret, totpProvisioning, verifyTotpCode } from './totp';
@@ -614,7 +615,7 @@ export class PlatformAdminService {
             consumedAt: null,
             attempts: 0,
             boundAction: intent?.action ?? null,
-            boundTargetId: intent?.organizationId ?? null,
+            boundTargetId: intent ? intentTarget(intent).id : null,
             boundContentHash: intent ? actionContentHash(intent) : null,
           },
           { session: txn },
@@ -627,8 +628,8 @@ export class PlatformAdminService {
           detail: intent ? `${proof.kind} | ${intent.action}` : proof.kind,
           ...(intent
             ? {
-                targetType: 'organization' as const,
-                targetId: intent.organizationId,
+                targetType: intentTarget(intent).type,
+                targetId: intentTarget(intent).id,
                 operationId: intent.operationId,
                 capability: auditCapability(intent),
               }
@@ -1147,7 +1148,7 @@ export class PlatformAdminService {
           userId: user._id,
           purpose: 'step_up',
           boundAction: intent.action,
-          boundTargetId: intent.organizationId,
+          boundTargetId: intentTarget(intent).id,
           boundContentHash: actionContentHash(intent),
           consumedAt: null,
           expiresAt: { $gt: this.now() },

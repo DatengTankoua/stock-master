@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,12 +29,15 @@ import {
 import { OrganizationMessageDialog } from "@/components/admin/organization-message-dialog";
 import {
   AdminApiError,
+  MESSAGE_ARCHIVE_BATCH_MAX,
   adminRequest,
   type AdminMessage,
+  type AdminMessageArchiveOutcome,
   type AdminMessageDelivery,
   type AdminMessageOutcome,
+  type AdminMessagePage,
   type AdminOrganizationDetail,
-  type AdminPage,
+  type MessageArchiveFilter,
   type MessageChannel,
   type MessageDeliveryStatus,
 } from "@/lib/admin/admin-api";
@@ -109,11 +113,48 @@ export function OrganizationMessages({
   const capabilities = new Set(status.capabilities ?? []);
   const canNotify = capabilities.has("platform.communications.notify");
   const canEmail = capabilities.has("platform.communications.email");
+  // Archivage : capacité dédiée (l'API la revérifie ; `platform.read` ne
+  // permet que la consultation).
+  const canArchive = capabilities.has("platform.communications.archive");
+  const [filter, setFilter] = useState<MessageArchiveFilter>("active");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const { data, error, loading, retry } = useAdminData<AdminPage<AdminMessage>>(
-    `organizations/${organization.id}/messages?page=${page}`,
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [confirm, setConfirm] = useState<{
+    messages: AdminMessage[];
+    archived: boolean;
+  } | null>(null);
+  const { data, error, loading, retry } = useAdminData<AdminMessagePage>(
+    `organizations/${organization.id}/messages?page=${page}&archived=${filter}`,
   );
+
+  // Sélection limitée à la page affichée : vidée à chaque changement.
+  const items = data?.items;
+  useEffect(() => {
+    setSelected(new Set());
+  }, [items]);
+  // Page devenue vide après un archivage (dernière page) : page précédente.
+  useEffect(() => {
+    if (data && data.items.length === 0 && page > 1) setPage(page - 1);
+  }, [data, page]);
+
+  const chooseFilter = (next: MessageArchiveFilter) => {
+    setFilter(next);
+    setPage(1);
+  };
+  const toggle = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < MESSAGE_ARCHIVE_BATCH_MAX) next.add(id);
+      return next;
+    });
+  const chosen = (data?.items ?? []).filter((m) => selected.has(m.id));
+  const toArchive = chosen.filter((m) => !m.archivedAt);
+  const toRestore = chosen.filter((m) => m.archivedAt);
+  const allOnPage =
+    !!data && data.items.length > 0 && chosen.length === data.items.length;
+  const counts = data?.counts;
 
   return (
     <AdminSection title={t("messages.section")}>
@@ -130,10 +171,96 @@ export function OrganizationMessages({
         <p className="text-xs text-muted-foreground">
           {t("messages.acceptedNotice")}
         </p>
+        <div
+          role="group"
+          aria-label={t("messages.archive.filterLabel")}
+          className="flex flex-wrap gap-2"
+        >
+          {(["active", "archived", "all"] as const).map((value) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={filter === value ? "default" : "outline"}
+              aria-pressed={filter === value}
+              onClick={() => chooseFilter(value)}
+            >
+              {t(`messages.archive.filters.${value}`, {
+                count: counts
+                  ? value === "all"
+                    ? counts.active + counts.archived
+                    : counts[value]
+                  : 0,
+              })}
+            </Button>
+          ))}
+        </div>
+        {canArchive && (
+          <p className="text-xs text-muted-foreground">
+            {t("messages.archive.notice")}
+          </p>
+        )}
         {loading && <AdminLoading />}
         {error !== undefined && <AdminError error={error} onRetry={retry} />}
         {data && data.items.length === 0 && (
-          <AdminEmpty>{t("messages.empty")}</AdminEmpty>
+          <AdminEmpty>
+            {filter === "archived"
+              ? t("messages.archive.emptyArchived")
+              : t("messages.empty")}
+          </AdminEmpty>
+        )}
+        {data && data.items.length > 0 && canArchive && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2 text-sm">
+            <label className="flex min-h-9 items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allOnPage}
+                onChange={() =>
+                  setSelected(
+                    allOnPage
+                      ? new Set()
+                      : new Set(
+                          data.items
+                            .slice(0, MESSAGE_ARCHIVE_BATCH_MAX)
+                            .map((m) => m.id),
+                        ),
+                  )
+                }
+                className="size-5 shrink-0 accent-primary"
+              />
+              <span>{t("messages.archive.selectPage")}</span>
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {t("messages.archive.selected", { count: chosen.length })}
+            </span>
+            <span className="flex flex-wrap gap-2 sm:ml-auto">
+              {toArchive.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setConfirm({ messages: toArchive, archived: true })
+                  }
+                >
+                  {t("messages.archive.archiveSelected", {
+                    count: toArchive.length,
+                  })}
+                </Button>
+              )}
+              {toRestore.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setConfirm({ messages: toRestore, archived: false })
+                  }
+                >
+                  {t("messages.archive.restoreSelected", {
+                    count: toRestore.length,
+                  })}
+                </Button>
+              )}
+            </span>
+          </div>
         )}
         {data && data.items.length > 0 && (
           <ul className="flex flex-col gap-3">
@@ -143,6 +270,16 @@ export function OrganizationMessages({
                 organization={organization}
                 message={message}
                 canRetry={{ in_app: canNotify, email: canEmail }}
+                archiving={
+                  canArchive
+                    ? {
+                        selected: selected.has(message.id),
+                        onToggle: () => toggle(message.id),
+                        onArchive: (archived) =>
+                          setConfirm({ messages: [message], archived }),
+                      }
+                    : null
+                }
                 onChanged={retry}
               />
             ))}
@@ -157,6 +294,17 @@ export function OrganizationMessages({
           />
         )}
       </div>
+      {confirm && (
+        <MessageArchiveDialog
+          organization={organization}
+          messages={confirm.messages}
+          archived={confirm.archived}
+          onClose={(changed) => {
+            setConfirm(null);
+            if (changed) retry();
+          }}
+        />
+      )}
       {open && (
         <OrganizationMessageDialog
           organization={organization}
@@ -178,11 +326,18 @@ function MessageEntry({
   organization,
   message,
   canRetry,
+  archiving,
   onChanged,
 }: {
   organization: AdminOrganizationDetail;
   message: AdminMessage;
   canRetry: Record<MessageChannel, boolean>;
+  /** `null` : session sans la capacité d'archivage. */
+  archiving: {
+    selected: boolean;
+    onToggle: () => void;
+    onArchive: (archived: boolean) => void;
+  } | null;
   onChanged: () => void;
 }) {
   const { t } = useT("admin");
@@ -200,11 +355,35 @@ function MessageEntry({
   return (
     <li className="rounded-lg border border-border p-3 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h3 className="min-w-0 font-medium break-words">{message.title}</h3>
+        <div className="flex min-w-0 items-start gap-2">
+          {archiving && (
+            <input
+              type="checkbox"
+              checked={archiving.selected}
+              onChange={archiving.onToggle}
+              aria-label={t("messages.archive.selectOne", {
+                title: message.title,
+              })}
+              className="mt-0.5 size-5 shrink-0 accent-primary"
+            />
+          )}
+          <h3 className="min-w-0 font-medium break-words">{message.title}</h3>
+          {message.archivedAt && (
+            <Badge variant="outline">{t("messages.archive.badge")}</Badge>
+          )}
+        </div>
         <span className="text-xs text-muted-foreground">
           {format.dateTime(message.at)}
         </span>
       </div>
+      {message.archivedAt && (
+        <p className="text-xs text-muted-foreground">
+          {t("messages.archive.archivedBy", {
+            date: format.dateTime(message.archivedAt),
+            actor: message.archivedBy ?? t("none"),
+          })}
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         {message.actor ?? t("none")} ·{" "}
         {message.channels
@@ -273,6 +452,17 @@ function MessageEntry({
             </Button>
           );
         })}
+        {archiving && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => archiving.onArchive(!message.archivedAt)}
+          >
+            {message.archivedAt
+              ? t("messages.archive.restoreOne")
+              : t("messages.archive.archiveOne")}
+          </Button>
+        )}
       </div>
       {message.deliveries.some((d) => d.retryWindowExpired) && (
         <p className="mt-2 text-xs text-muted-foreground">
@@ -483,6 +673,100 @@ function MessageRetryDialog({
               </Button>
             </>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Archivage ou restauration après une confirmation simple (action
+ * réversible, sans preuve renforcée). Aucune livraison n'est touchée.
+ */
+function MessageArchiveDialog({
+  organization,
+  messages,
+  archived,
+  onClose,
+}: {
+  organization: AdminOrganizationDetail;
+  messages: AdminMessage[];
+  archived: boolean;
+  onClose: (changed: boolean) => void;
+}) {
+  const { t } = useT("admin");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const outcome = await adminRequest<AdminMessageArchiveOutcome>(
+        "POST",
+        `organizations/${organization.id}/${archived ? "message-archive" : "message-restore"}`,
+        { messageIds: messages.map((m) => m.id) },
+      );
+      toast.success(
+        outcome.changed === 0
+          ? t("messages.archive.unchanged")
+          : archived
+            ? t("messages.archive.archiveDone", { count: outcome.changed })
+            : t("messages.archive.restoreDone", { count: outcome.changed }),
+      );
+      onClose(true);
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && !busy && onClose(false)}>
+      <DialogContent layout="form">
+        <DialogHeader>
+          <DialogTitle>
+            {archived
+              ? t("messages.archive.archiveTitle", { count: messages.length })
+              : t("messages.archive.restoreTitle", { count: messages.length })}
+          </DialogTitle>
+          <DialogDescription>
+            {archived
+              ? t("messages.archive.archiveText")
+              : t("messages.archive.restoreText")}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <ul className="list-disc pl-5 text-sm">
+            {messages.map((m) => (
+              <li key={m.id} className="break-words">
+                {m.title}
+              </li>
+            ))}
+          </ul>
+          {archived && (
+            <p className="text-xs text-muted-foreground">
+              {t("messages.archive.notice")}
+            </p>
+          )}
+          {error !== null && <AdminError error={error} />}
+        </DialogBody>
+        <DialogFooter className="sm:flex-row sm:justify-end">
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => onClose(false)}
+          >
+            {t("actions.close")}
+          </Button>
+          <Button disabled={busy} onClick={() => void submit()}>
+            {busy
+              ? t("messages.archive.saving")
+              : archived
+                ? t("messages.archive.archiveConfirm")
+                : t("messages.archive.restoreConfirm")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

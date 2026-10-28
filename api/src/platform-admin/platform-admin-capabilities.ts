@@ -23,6 +23,18 @@ export const PLATFORM_CAPABILITIES = [
   'platform.communications.notify',
   /** Envoyer (ou relancer) un message de service par e-mail. */
   'platform.communications.email',
+  /**
+   * Archiver ou restaurer des messages de service dans l'historique d'un
+   * commerce (masquage réversible : aucun envoi annulé, rien d'effacé).
+   */
+  'platform.communications.archive',
+  /**
+   * Campagnes promotionnelles : créer, modifier, archiver un brouillon ou
+   * une campagne (aucun envoi).
+   */
+  'platform.campaigns.manage',
+  /** Lancer une campagne promotionnelle (preuve renforcée liée). */
+  'platform.campaigns.send',
 ] as const;
 
 export type PlatformCapability = (typeof PLATFORM_CAPABILITIES)[number];

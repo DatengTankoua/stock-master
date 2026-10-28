@@ -18,6 +18,12 @@ export interface OutgoingEmail {
    * valeur client). Absente : comportement inchangé des emails existants.
    */
   replyTo?: string;
+  /**
+   * En-têtes supplémentaires fixés par le serveur (campagnes :
+   * `List-Unsubscribe`, `List-Unsubscribe-Post`). Absents : comportement
+   * inchangé des e-mails existants.
+   */
+  headers?: Record<string, string>;
 }
 
 export interface EmailSender {
