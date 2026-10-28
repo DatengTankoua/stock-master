@@ -1,4 +1,5 @@
 import { LegalModule } from '../legal/legal.module';
+import { MarketingConsentModule } from '../marketing-consent/marketing-consent.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -41,6 +42,7 @@ import { AntiBotModule } from '../anti-bot/anti-bot.module';
     SubscriptionsModule,
     // 1-16C.2 : preuve d'acceptation dans la transaction d'inscription.
     LegalModule,
+    MarketingConsentModule,
     // 1-18C : plafonds persistants par compte ; anti-robot de l'inscription.
     RateLimitModule,
     AntiBotModule,

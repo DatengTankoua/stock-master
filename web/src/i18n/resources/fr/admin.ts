@@ -308,6 +308,8 @@ const adminFr = {
       audit_view: "Audit consulté",
       organization_message: "Message de service envoyé",
       organization_message_retry: "Message de service relancé",
+      organization_message_archive: "Messages de service archivés",
+      organization_message_restore: "Messages de service restaurés",
     },
   },
   messages: {
@@ -404,6 +406,37 @@ const adminFr = {
     retryDone: "Relance enregistrée.",
     windowExpiredNotice:
       "Un résultat incertain de plus de 23 h ne peut plus être relancé sans risque de doublon.",
+    archive: {
+      filterLabel: "Afficher",
+      filters: {
+        active: "Actifs ({{count}})",
+        archived: "Archivés ({{count}})",
+        all: "Tous ({{count}})",
+      },
+      emptyArchived: "Aucun message archivé.",
+      notice:
+        "Archiver masque le message de la liste principale, pour tous les administrateurs. Cela n'annule pas son envoi : les livraisons en attente continuent, et les notifications et e-mails déjà reçus restent chez les destinataires. Les messages archivés restent consultables et peuvent être restaurés.",
+      selectPage: "Sélectionner les messages de cette page",
+      selectOne: "Sélectionner « {{title}} »",
+      selected: "{{count}} sélectionné(s)",
+      archiveOne: "Archiver",
+      restoreOne: "Restaurer",
+      archiveSelected: "Archiver ({{count}})",
+      restoreSelected: "Restaurer ({{count}})",
+      badge: "Archivé",
+      archivedBy: "Archivé le {{date}} par {{actor}}",
+      archiveTitle: "Archiver {{count}} message(s) ?",
+      restoreTitle: "Restaurer {{count}} message(s) ?",
+      archiveText:
+        "Ces messages quitteront la liste principale. Leur envoi n'est pas annulé.",
+      restoreText: "Ces messages reviendront dans la liste principale.",
+      archiveConfirm: "Archiver",
+      restoreConfirm: "Restaurer",
+      saving: "Enregistrement…",
+      archiveDone: "{{count}} message(s) archivé(s).",
+      restoreDone: "{{count}} message(s) restauré(s).",
+      unchanged: "Déjà dans cet état : rien n'a changé.",
+    },
   },
   actions: {
     suspend: "Suspendre le commerce",

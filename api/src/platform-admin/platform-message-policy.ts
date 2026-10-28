@@ -54,6 +54,9 @@ export const MESSAGE_UNCERTAIN_RETRY_WINDOW_MS =
 /** Pages de l'historique des messages d'une organisation. */
 export const MESSAGE_HISTORY_PAGE_SIZE = 10;
 
+/** Messages archivés ou restaurés en une seule demande (sélection). */
+export const MESSAGE_ARCHIVE_BATCH_MAX = 50;
+
 /** Clé d'idempotence du prestataire : une par message et destinataire. */
 export function messageEmailIdempotencyKey(
   messageId: string,

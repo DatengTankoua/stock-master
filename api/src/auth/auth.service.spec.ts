@@ -17,6 +17,7 @@ import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AccessScope } from '../subscriptions/subscription-access';
 import { EmailVerificationService } from '../email-verification/email-verification.service';
 import { LegalAcceptanceService } from '../legal/legal-acceptance.service';
+import { MarketingConsentService } from '../marketing-consent/marketing-consent.service';
 import { PersistentRateLimiter } from '../common/rate-limit/persistent-rate-limiter.service';
 import {
   AUTH_RATE_LIMIT_CODE,
@@ -183,6 +184,13 @@ describe('AuthService', () => {
         { provide: EmailVerificationService, useValue: emailVerification },
         { provide: SubscriptionsService, useValue: subscriptions },
         { provide: LegalAcceptanceService, useValue: legalAcceptanceStub() },
+        {
+          provide: MarketingConsentService,
+          useValue: {
+            resolveChoice: jest.fn(),
+            recordRegistration: jest.fn(() => Promise.resolve(undefined)),
+          },
+        },
         { provide: PersistentRateLimiter, useValue: rateLimiter },
         { provide: TurnstileService, useValue: turnstile },
       ],

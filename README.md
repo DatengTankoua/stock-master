@@ -537,6 +537,8 @@ Elle lance dans l'ordre, et s'arrête au premier échec :
 | `create-invitation-account-token-index.js` | 1-18B | Index partiel `accountTokenHash_1` de `organizationinvitations` (lien de création de compte d'un invité). Migration d'index uniquement, aucune donnée. Index de performance, non bloquant au démarrage ; aussi déclaré dans le schéma (mêmes nom et options), donc compatible avec `autoIndex`. Lecture seule : `--check` |
 | `create-sale-history-indexes.js` | 1-20E | Historique paginé des ventes. Performance, non bloquant |
 | `create-product-page-indexes.js` | 1-20F | Liste paginée des produits. Performance, non bloquant |
+| `create-platform-admin-indexes.js` | Administration de la plateforme | Index de l'espace d'administration, dont `organizationId_1_archivedAt_1_createdAt_-1` (historique des messages filtré). Vérifiés avant d'ouvrir l'espace (503 sans eux). N'accorde aucun accès ni aucune capacité |
+| `create-marketing-consent-indexes.js` | E-mails promotionnels | Collections `marketing_consents`, `marketing_consent_events`, `marketing_consent_wordings`, index `{ userId, at }`. Aucune donnée lue ni écrite : **n'inscrit aucun utilisateur**. Non bloquante au démarrage. Lecture seule : `--check` |
 | `install-product-batches.js` | Lots A à C | Garde du suivi par lots (validateur, index des lots, des pertes et des régularisations). Équivaut à `migrate:product-batches -- --install --apply`. **N'active rien** |
 | `install-expiry-alerts.js` | Lot C | Index des alertes de péremption et première date de contrôle des cibles datées. Équivaut à `migrate:expiry-alerts -- --apply`. **N'active rien** |
 
@@ -591,6 +593,7 @@ node /app/api/dist/migrations/create-support-request-indexes.js --check
 # Attendu : « support_requests : index createdAt_1_ttl présent, createdAt,
 #            expireAfterSeconds=2592000 (lecture seule). »
 node /app/api/dist/migrations/create-legal-acceptance-indexes.js --check
+node /app/api/dist/migrations/create-marketing-consent-indexes.js --check
 ```
 
 Équivalent `mongosh`, en lecture seule :

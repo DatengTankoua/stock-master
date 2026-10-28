@@ -213,6 +213,10 @@ test("paramètres relayés", () => {
   const query = filterAdminQuery(new URLSearchParams("page=2&q=boutique&token=secret&page=9&status=active"));
   assert.equal(query, "?page=2&q=boutique&status=active");
   assert.equal(filterAdminQuery(new URLSearchParams("")), "");
+  assert.equal(
+    filterAdminQuery(new URLSearchParams("page=1&archived=archived")),
+    "?page=1&archived=archived",
+  );
 });
 
 test("service worker : l'administration n'est jamais interceptée ni mise en cache", () => {
@@ -287,9 +291,13 @@ test("messages de service : routes relayées et codes publics", () => {
   assert.equal(resolveAdminRoute("GET", ["organizations", org, "messages"]), `organizations/${org}/messages`);
   assert.equal(resolveAdminRoute("POST", ["organizations", org, "messages"]), `organizations/${org}/messages`);
   assert.equal(resolveAdminRoute("POST", ["organizations", org, "message-retry"]), `organizations/${org}/message-retry`);
+  assert.equal(resolveAdminRoute("POST", ["organizations", org, "message-archive"]), `organizations/${org}/message-archive`);
+  assert.equal(resolveAdminRoute("POST", ["organizations", org, "message-restore"]), `organizations/${org}/message-restore`);
   for (const [method, segments] of [
     ["POST", ["organizations", org, "message-recipients"]],
     ["GET", ["organizations", org, "message-retry"]],
+    ["GET", ["organizations", org, "message-archive"]],
+    ["POST", ["organizations", "all", "message-archive"]],
     ["POST", ["organizations", "all", "messages"]],
     ["POST", ["messages"]],
   ]) {

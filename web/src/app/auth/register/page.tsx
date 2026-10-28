@@ -33,6 +33,10 @@ import {
   buildLegalAcceptance,
   legalAcceptanceErrorKey,
 } from "@/lib/legal/acceptance";
+import {
+  buildMarketingConsent,
+  marketingConsentErrorKey,
+} from "@/lib/marketing-consent";
 import Link from "next/link";
 
 export default function RegisterPage() {
@@ -46,6 +50,8 @@ export default function RegisterPage() {
   const [organizationName, setOrganizationName] = useState("");
   // 1-16C.2 : case NON cochée par défaut ; jamais pré-remplie.
   const [termsAccepted, setTermsAccepted] = useState(false);
+  // Facultatif, JAMAIS coché d'avance, sans effet sur l'inscription.
+  const [marketingAccepted, setMarketingAccepted] = useState(false);
   const [termsError, setTermsError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useMessage("auth");
@@ -154,6 +160,7 @@ export default function RegisterPage() {
         organizationName,
         // 1-16G : langue des documents affichés (celle de l'interface).
         legalAcceptance: buildLegalAcceptance("owner_registration", locale),
+        marketingEmailConsent: buildMarketingConsent(marketingAccepted, locale),
         turnstileToken,
       });
       setPassword("");
@@ -162,6 +169,7 @@ export default function RegisterPage() {
     } catch (err: unknown) {
       const code = getApiErrorCode(err);
       const legalKey = legalAcceptanceErrorKey(code);
+      const marketingKey = marketingConsentErrorKey(code);
       // Jeton consommé ou refusé : toujours une nouvelle vérification.
       setTurnstileToken(null);
       setTurnstileReset((n) => n + 1);
@@ -174,7 +182,9 @@ export default function RegisterPage() {
               ? (tr) => tr("register.antiBot.unavailable")
               : legalKey
                 ? () => tl(legalKey)
-                : getApiErrorMessage(err),
+                : marketingKey
+                  ? () => tl(marketingKey)
+                  : getApiErrorMessage(err),
       );
     } finally {
       submitting.current = false;
@@ -287,6 +297,34 @@ export default function RegisterPage() {
               {tl("acceptance.errors.required")}
             </p>
           )}
+
+          {/* Accord FACULTATIF aux e-mails promotionnels : case distincte,
+          non cochée, jamais exigée ; modifiable ensuite dans les réglages. */}
+          <div className="space-y-1">
+            <div className="flex items-start gap-3">
+              <input
+                id="register-marketing"
+                type="checkbox"
+                checked={marketingAccepted}
+                onChange={(e) => setMarketingAccepted(e.target.checked)}
+                disabled={loading}
+                aria-describedby="register-marketing-help"
+                className="mt-0.5 size-5 shrink-0 accent-primary"
+              />
+              <label
+                htmlFor="register-marketing"
+                className="text-sm leading-relaxed"
+              >
+                {tl("marketing.label")}
+              </label>
+            </div>
+            <p
+              id="register-marketing-help"
+              className="pl-8 text-xs text-muted-foreground"
+            >
+              {tl("marketing.optional")}
+            </p>
+          </div>
 
           <TurnstileWidget
             action="register"

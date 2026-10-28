@@ -8,6 +8,7 @@ import type {
 } from "./organization-permissions";
 import { permissionCatalogFor } from "./organization-permissions";
 import type { LegalAcceptancePayload } from "./legal/acceptance";
+import type { MarketingConsentPayload } from "./marketing-consent";
 import { clientT, currentLocale } from "@/i18n/client-t";
 import { isProductSearch, matchesProductSearch } from "./product-search";
 
@@ -538,6 +539,8 @@ export async function authRegister(payload: {
   organizationName: string;
   /** 1-16C.2 : documents affichés et acceptés (le serveur fait foi). */
   legalAcceptance: LegalAcceptancePayload;
+  /** Case facultative des e-mails promotionnels, distincte des conditions. */
+  marketingEmailConsent: MarketingConsentPayload;
   /** 1-18C : jeton Turnstile (usage unique, vérifié par l'API). */
   turnstileToken: string;
 }): Promise<void> {

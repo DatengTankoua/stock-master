@@ -35,6 +35,7 @@ import {
   AdminCodeDto,
   AdminExtendDto,
   AdminExtensionPreviewQuery,
+  AdminMessageArchiveDto,
   AdminMessageDto,
   AdminMessageRetryDto,
   AdminMessagesQuery,
@@ -322,7 +323,35 @@ export class PlatformAdminController {
   @PlatformAdminCapability('platform.read')
   @Get('organizations/:id/messages')
   messages(@Param('id') id: string, @Query() query: AdminMessagesQuery) {
-    return this.communications.history(id, query.page ?? 1);
+    return this.communications.history(
+      id,
+      query.page ?? 1,
+      query.archived ?? 'active',
+    );
+  }
+
+  // Archivage réversible : capacité dédiée vérifiée (et refus audité) par
+  // le service ; confirmation simple côté interface, sans preuve renforcée.
+  @HttpCode(200)
+  @PlatformAdminAccess('mfa')
+  @Post('organizations/:id/message-archive')
+  archiveMessages(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Body() dto: AdminMessageArchiveDto,
+  ) {
+    return this.communications.setArchived(context, id, dto.messageIds, true);
+  }
+
+  @HttpCode(200)
+  @PlatformAdminAccess('mfa')
+  @Post('organizations/:id/message-restore')
+  restoreMessages(
+    @AdminContext() context: PlatformAdminRequestContext,
+    @Param('id') id: string,
+    @Body() dto: AdminMessageArchiveDto,
+  ) {
+    return this.communications.setArchived(context, id, dto.messageIds, false);
   }
 
   @HttpCode(200)

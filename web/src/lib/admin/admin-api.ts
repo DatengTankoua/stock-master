@@ -349,7 +349,8 @@ export type PlatformCapability =
   | "platform.organizations.suspend"
   | "platform.subscriptions.extend"
   | "platform.communications.notify"
-  | "platform.communications.email";
+  | "platform.communications.email"
+  | "platform.communications.archive";
 
 export type AdminActionKind =
   "organization_suspend" | "organization_reactivate" | "subscription_extend";
@@ -455,12 +456,32 @@ export interface AdminMessage {
   title: string;
   body: string;
   channels: MessageChannel[];
+  /** Archivage administratif (masquage de la liste principale). */
+  archivedAt: string | null;
+  archivedBy: string | null;
   recipients: Array<{
     userId: string;
     name: string | null;
     email: string | null;
   }>;
   deliveries: AdminMessageDelivery[];
+}
+
+export type MessageArchiveFilter = "active" | "archived" | "all";
+
+/** Page d'historique : `total` porte sur le filtre, `counts` sur les deux. */
+export interface AdminMessagePage extends AdminPage<AdminMessage> {
+  filter: MessageArchiveFilter;
+  counts: { active: number; archived: number };
+}
+
+/** Miroir de l'API : messages archivés ou restaurés en une demande. */
+export const MESSAGE_ARCHIVE_BATCH_MAX = 50;
+
+export interface AdminMessageArchiveOutcome {
+  archived: boolean;
+  requested: number;
+  changed: number;
 }
 
 export interface AdminMessageOutcome {

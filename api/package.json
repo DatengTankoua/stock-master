@@ -22,6 +22,7 @@
     "migrate:push-notification-indexes": "node dist/migrations/create-push-notification-indexes.js",
     "migrate:support-request-indexes": "node dist/migrations/create-support-request-indexes.js",
     "migrate:legal-acceptance-indexes": "node dist/migrations/create-legal-acceptance-indexes.js",
+    "migrate:marketing-consent-indexes": "node dist/migrations/create-marketing-consent-indexes.js",
     "migrate:invitation-account-token-index": "node dist/migrations/create-invitation-account-token-index.js",
     "migrate:purge-terminated-invitations": "node dist/migrations/purge-terminated-invitations.js",
     "migrate:sales-notifications-permission": "node dist/migrations/sales-notifications-permission.js",

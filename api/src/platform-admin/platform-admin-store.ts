@@ -147,6 +147,13 @@ export interface PlatformMessageDoc {
   channels: MessageChannel[];
   recipientUserIds: Types.ObjectId[];
   createdAt: Date;
+  /**
+   * Archivage administratif (masquage de l'historique principal). Absent ou
+   * `null` = actif (messages antérieurs compris). Ne touche jamais aux
+   * livraisons, notifications ni e-mails déjà envoyés.
+   */
+  archivedAt?: Date | null;
+  archivedBy?: Types.ObjectId | null;
 }
 
 /**
@@ -261,6 +268,8 @@ export const PLATFORM_ADMIN_AUDIT_ACTIONS = [
   'subscription_extend',
   'organization_message',
   'organization_message_retry',
+  'organization_message_archive',
+  'organization_message_restore',
 ] as const;
 export type PlatformAdminAuditAction =
   (typeof PLATFORM_ADMIN_AUDIT_ACTIONS)[number];

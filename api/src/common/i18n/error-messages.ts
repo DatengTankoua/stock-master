@@ -184,6 +184,16 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
   "Ces conditions n'existent pas dans cette langue.": {
     en: 'These terms do not exist in this language.',
   },
+  // Accord aux e-mails promotionnels (réglages et inscription).
+  'Ce choix ne peut pas être enregistré pour le moment.': {
+    en: 'This choice cannot be saved right now.',
+  },
+  'Le texte proposé a changé : recharge la page.': {
+    en: 'The text shown has changed: reload the page.',
+  },
+  'Texte inconnu.': {
+    en: 'Unknown text.',
+  },
   'Les conditions ont été mises à jour : recharge la page pour lire la version en vigueur.':
     {
       en: 'The terms have been updated: reload the page to read the version in force.',

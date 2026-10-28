@@ -23,6 +23,11 @@ export const PLATFORM_CAPABILITIES = [
   'platform.communications.notify',
   /** Envoyer (ou relancer) un message de service par e-mail. */
   'platform.communications.email',
+  /**
+   * Archiver ou restaurer des messages de service dans l'historique d'un
+   * commerce (masquage réversible : aucun envoi annulé, rien d'effacé).
+   */
+  'platform.communications.archive',
 ] as const;
 
 export type PlatformCapability = (typeof PLATFORM_CAPABILITIES)[number];

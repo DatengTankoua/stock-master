@@ -106,6 +106,12 @@ export const PLATFORM_ADMIN_INDEXES: readonly PlatformAdminIndexSpec[] =
       name: 'organizationId_1_createdAt_-1',
       key: { organizationId: 1, createdAt: -1 },
     },
+    // Historique filtré (actifs / archivés), plus récents d'abord.
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.messages,
+      name: 'organizationId_1_archivedAt_1_createdAt_-1',
+      key: { organizationId: 1, archivedAt: 1, createdAt: -1 },
+    },
     {
       collection: PLATFORM_ADMIN_COLLECTIONS.messages,
       name: 'actorUserId_1_createdAt_-1',

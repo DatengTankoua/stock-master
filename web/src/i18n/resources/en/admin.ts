@@ -305,6 +305,8 @@ const adminEn: Translation<typeof adminFr> = {
       audit_view: "Audit viewed",
       organization_message: "Service message sent",
       organization_message_retry: "Service message retried",
+      organization_message_archive: "Service messages archived",
+      organization_message_restore: "Service messages restored",
     },
   },
   messages: {
@@ -400,6 +402,37 @@ const adminEn: Translation<typeof adminFr> = {
     retryDone: "Retry recorded.",
     windowExpiredNotice:
       "An uncertain outcome older than 23 h can no longer be retried without risking a duplicate.",
+    archive: {
+      filterLabel: "Show",
+      filters: {
+        active: "Active ({{count}})",
+        archived: "Archived ({{count}})",
+        all: "All ({{count}})",
+      },
+      emptyArchived: "No archived messages.",
+      notice:
+        "Archiving hides the message from the main list, for every administrator. It does not cancel sending: pending deliveries continue, and notifications and emails already received stay with the recipients. Archived messages remain viewable and can be restored.",
+      selectPage: "Select the messages on this page",
+      selectOne: "Select “{{title}}”",
+      selected: "{{count}} selected",
+      archiveOne: "Archive",
+      restoreOne: "Restore",
+      archiveSelected: "Archive ({{count}})",
+      restoreSelected: "Restore ({{count}})",
+      badge: "Archived",
+      archivedBy: "Archived on {{date}} by {{actor}}",
+      archiveTitle: "Archive {{count}} message(s)?",
+      restoreTitle: "Restore {{count}} message(s)?",
+      archiveText:
+        "These messages will leave the main list. Their sending is not cancelled.",
+      restoreText: "These messages will return to the main list.",
+      archiveConfirm: "Archive",
+      restoreConfirm: "Restore",
+      saving: "Saving…",
+      archiveDone: "{{count}} message(s) archived.",
+      restoreDone: "{{count}} message(s) restored.",
+      unchanged: "Already in that state: nothing changed.",
+    },
   },
   actions: {
     suspend: "Suspend the shop",

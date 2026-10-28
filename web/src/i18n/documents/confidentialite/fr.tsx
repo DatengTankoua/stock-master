@@ -21,6 +21,9 @@ import type { DocumentContent } from "@/i18n/documents/types";
 // 0.3, archivée et inchangée). Version 0.5 (1-21D) : SasPay, prestataire de
 // paiement des abonnements (données transmises, transfert hors du
 // Cameroun) ; 0.3 et 0.4 restent archivées et inchangées.
+// Version 0.7 : accord facultatif aux e-mails promotionnels (données de
+// preuve, finalité, section dédiée, conservation) ; les versions
+// précédentes restent archivées et inchangées.
 const content: DocumentContent = {
   metaTitle: "Politique de confidentialité",
   metaDescription:
@@ -110,10 +113,30 @@ const content: DocumentContent = {
             </li>
           </ul>
           <p>
-            Lire cette politique ne vaut pas accord : elle vous informe. Aucune
-            autorisation facultative (par exemple pour des messages commerciaux)
-            n&apos;est demandée à l&apos;inscription, et l&apos;activation des
-            notifications sur un appareil reste un choix séparé.
+            Lire cette politique ne vaut pas accord : elle vous informe. La
+            seule autorisation facultative proposée à l&apos;inscription
+            concerne les e-mails promotionnels (voir plus bas) : elle est
+            distincte de l&apos;acceptation des conditions, et l&apos;activation
+            des notifications sur un appareil reste un choix séparé.
+          </p>
+          <h3>Choix concernant les e-mails promotionnels</h3>
+          <ul>
+            <li>
+              votre choix (accord ou retrait), sa date et son heure fixées par
+              le serveur, et son origine (inscription ou réglages) ;
+            </li>
+            <li>
+              la version et la langue du texte de la case qui vous a été
+              présenté, et ce texte lui-même ;
+            </li>
+            <li>
+              une empreinte numérique de l&apos;adresse e-mail concernée, pour
+              qu&apos;un accord ne s&apos;applique pas à une autre adresse.
+            </li>
+          </ul>
+          <p>
+            Ni votre adresse IP ni les informations de votre navigateur ne sont
+            enregistrées avec ce choix.
           </p>
           <h3>Commerce et membres</h3>
           <ul>
@@ -290,6 +313,24 @@ const content: DocumentContent = {
                 </td>
               </tr>
               <tr>
+                <td>
+                  Vous envoyer par e-mail les offres et promotions de{" "}
+                  {SITE.name}
+                </td>
+                <td>
+                  Votre consentement spécifique : case facultative, jamais
+                  cochée d&apos;avance, distincte de l&apos;acceptation des
+                  conditions. Il se retire à tout moment.
+                </td>
+              </tr>
+              <tr>
+                <td>Conserver la preuve de vos choix concernant ces e-mails</td>
+                <td>
+                  Pouvoir démontrer votre accord ou votre retrait.
+                  {/* À VALIDER par un juriste. */}
+                </td>
+              </tr>
+              <tr>
                 <td>Vous prévenir sur votre appareil (notifications push)</td>
                 <td>
                   Votre consentement spécifique : activation par vous et
@@ -299,11 +340,45 @@ const content: DocumentContent = {
             </tbody>
           </table>
           <p>
-            {SITE.name} n&apos;envoie pas de prospection commerciale, ne vend
-            pas vos données et n&apos;affiche pas de publicité. Les analyses
-            (chiffre d&apos;affaires, classements de produits et de vendeurs)
-            sont des calculs faits à partir des ventes, pour le commerce qui les
+            {SITE.name} n&apos;envoie d&apos;e-mails promotionnels qu&apos;aux
+            personnes qui les ont acceptés, ne vend pas vos données et
+            n&apos;affiche pas de publicité. Les analyses (chiffre
+            d&apos;affaires, classements de produits et de vendeurs) sont des
+            calculs faits à partir des ventes, pour le commerce qui les
             consulte.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "emails-promotionnels",
+      title: "E-mails promotionnels et e-mails de service",
+      content: (
+        <>
+          <p>
+            Les e-mails promotionnels présentent les offres et promotions de{" "}
+            {SITE.name}. Ils ne vous sont envoyés que si vous avez coché la case
+            prévue, à l&apos;inscription ou dans l&apos;application
+            (Organisation, puis Notifications). Cet accord est facultatif et
+            individuel : il vous appartient, et ni le propriétaire de votre
+            commerce ni l&apos;équipe de {SITE.name} ne peut le donner à votre
+            place. Accepter les conditions d&apos;utilisation ne vaut pas
+            accord.
+          </p>
+          <p>
+            Vous pouvez retirer votre accord à tout moment au même endroit ; le
+            retrait prend effet immédiatement. Le refus ou le retrait ne change
+            ni votre accès au service ni les e-mails de service : confirmation
+            d&apos;adresse, réinitialisation du mot de passe, invitations et
+            messages de service concernant votre compte ou votre commerce.
+          </p>
+          <p>
+            L&apos;accord vaut pour l&apos;adresse e-mail de votre compte au
+            moment où vous le donnez, et seulement une fois cette adresse
+            confirmée. Si l&apos;adresse de votre compte change, un nouvel
+            accord est nécessaire. L&apos;activation des notifications sur un
+            appareil et vos choix de notifications dans l&apos;application ne
+            valent pas accord pour ces e-mails.
           </p>
         </>
       ),
@@ -492,6 +567,18 @@ const content: DocumentContent = {
                   {/* À COMPLÉTER (1-16C.2) : durée après la fin du compte ou
                       du commerce (10 ans envisagés pour un contrat d'au moins
                       20 000 FCFA, décret 2011/1521/PM art. 8 ; à valider). */}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Preuve de vos choix concernant les e-mails promotionnels et
+                  texte de la case présentée
+                </td>
+                <td>
+                  Conservés tant que le compte existe. Rien n&apos;est supprimé
+                  automatiquement aujourd&apos;hui.
+                  {/* À COMPLÉTER : durée après un retrait et après la fin du
+                      compte. */}
                 </td>
               </tr>
               <tr>

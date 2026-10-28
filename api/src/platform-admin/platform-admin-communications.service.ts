@@ -34,12 +34,14 @@ import {
 } from './platform-admin-errors';
 import {
   MESSAGE_ACTOR_LIMIT,
+  MESSAGE_ARCHIVE_BATCH_MAX,
   MESSAGE_HISTORY_PAGE_SIZE,
   MESSAGE_MANUAL_RETRY_MAX,
   MESSAGE_ORGANIZATION_LIMIT,
   MESSAGE_UNCERTAIN_RETRY_WINDOW_MS,
 } from './platform-message-policy';
 import { PlatformMessageDeliveryService } from './platform-message-delivery.service';
+import type { MessageArchiveFilter } from './dto/platform-admin.dto';
 import { MembershipStatus } from '../organizations/permissions';
 
 type MongoSession = Awaited<ReturnType<Connection['startSession']>>;
@@ -655,6 +657,115 @@ export class PlatformAdminCommunicationsService {
     });
   }
 
+  // ─── Archivage ──────────────────────────────────────────────────────────
+
+  /**
+   * Archive (ou restaure) une sélection de messages de CE commerce. Masquage
+   * administratif seulement : seuls `archivedAt`/`archivedBy` du message
+   * changent. Livraisons (statuts, tentatives, clés, incertitudes),
+   * notifications des destinataires, e-mails envoyés et audits restent
+   * intacts ; un message en attente continue d'être livré.
+   *
+   * Tout ou rien : un identifiant d'un autre commerce ou inconnu refuse la
+   * demande entière (404), sans aucune modification. Idempotent : un
+   * message déjà dans l'état demandé n'est pas réécrit ; l'audit (auteur,
+   * date, identifiants, jamais le contenu) n'est ajouté que si un message
+   * change d'état.
+   */
+  async setArchived(
+    context: PlatformAdminRequestContext,
+    organizationId: string,
+    messageIds: readonly string[],
+    archived: boolean,
+  ): Promise<{ archived: boolean; requested: number; changed: number }> {
+    const action = archived
+      ? 'organization_message_archive'
+      : 'organization_message_restore';
+    const deny = (detail: string) =>
+      this.admin.auditOutside({
+        actorType: 'admin',
+        actorUserId: context.user?._id ?? null,
+        action,
+        outcome: 'denied',
+        capability: 'platform.communications.archive',
+        targetType: 'organization',
+        targetId: organizationId,
+        detail,
+        sessionId: context.session?._id ?? null,
+        clientKeyHash: context.clientKeyHash,
+      });
+    try {
+      this.admin.requireCapability(context, 'platform.communications.archive');
+    } catch (error) {
+      await deny('capability');
+      throw error;
+    }
+    // Défense en profondeur (le DTO refuse déjà ces cas).
+    if (
+      messageIds.length === 0 ||
+      messageIds.length > MESSAGE_ARCHIVE_BATCH_MAX ||
+      new Set(messageIds).size !== messageIds.length ||
+      messageIds.some((id) => !/^[0-9a-f]{24}$/.test(id))
+    ) {
+      throw this.notFound();
+    }
+    await this.requireOrganization(organizationId);
+    const organization = new Types.ObjectId(organizationId);
+    const ids = messageIds.map((id) => new Types.ObjectId(id));
+    let changed: number;
+    try {
+      changed = await this.inTransaction(async (txn) => {
+        const found = await this.db.messages.countDocuments(
+          { _id: { $in: ids }, organizationId: organization },
+          { session: txn },
+        );
+        if (found !== ids.length) throw new MessageRejected('not_found');
+        const now = this.runtime.clock();
+        const actorUserId = context.user!._id;
+        const updated = await this.db.messages.updateMany(
+          {
+            _id: { $in: ids },
+            organizationId: organization,
+            archivedAt: archived ? null : { $ne: null },
+          },
+          {
+            $set: archived
+              ? { archivedAt: now, archivedBy: actorUserId }
+              : { archivedAt: null, archivedBy: null },
+          },
+          { session: txn },
+        );
+        if (updated.modifiedCount > 0) {
+          await this.admin.auditInTransaction(txn, {
+            actorType: 'admin',
+            actorUserId,
+            action,
+            outcome: 'success',
+            capability: 'platform.communications.archive',
+            targetType: 'organization',
+            targetId: organizationId,
+            detail: `messages:${updated.modifiedCount}/${ids.length}`,
+            before: null,
+            after: {
+              messageIds: [...messageIds].sort().join(','),
+              changed: updated.modifiedCount,
+            },
+            sessionId: context.session?._id ?? null,
+            clientKeyHash: context.clientKeyHash,
+          });
+        }
+        return updated.modifiedCount;
+      });
+    } catch (error) {
+      if (error instanceof MessageRejected) {
+        await deny(error.reason);
+        throw this.notFound();
+      }
+      throw error;
+    }
+    return { archived, requested: ids.length, changed };
+  }
+
   // ─── Historique ─────────────────────────────────────────────────────────
 
   /**
@@ -662,15 +773,35 @@ export class PlatformAdminCommunicationsService {
    * auteur, date, contenu, destinataires et canaux, résultat par
    * destinataire et canal. « accepted » = accepté par le prestataire, jamais
    * une réception ou une lecture confirmée.
+   *
+   * Filtre d'archivage (défaut : actifs) ; `total` et la pagination portent
+   * sur le filtre, `counts` donne les deux effectifs.
    */
-  async history(organizationId: string, page = 1) {
+  async history(
+    organizationId: string,
+    page = 1,
+    filter: MessageArchiveFilter = 'active',
+  ) {
     await this.requireOrganization(organizationId);
     const oid = new Types.ObjectId(organizationId);
     const now = this.runtime.clock();
-    const [total, rows] = await Promise.all([
-      this.db.messages.countDocuments({ organizationId: oid }),
+    const query =
+      filter === 'active'
+        ? { organizationId: oid, archivedAt: null }
+        : filter === 'archived'
+          ? { organizationId: oid, archivedAt: { $ne: null } }
+          : { organizationId: oid };
+    const [active, archived, rows] = await Promise.all([
+      this.db.messages.countDocuments({
+        organizationId: oid,
+        archivedAt: null,
+      }),
+      this.db.messages.countDocuments({
+        organizationId: oid,
+        archivedAt: { $ne: null },
+      }),
       this.db.messages
-        .find({ organizationId: oid })
+        .find(query)
         .sort({ createdAt: -1, _id: -1 })
         .skip((page - 1) * MESSAGE_HISTORY_PAGE_SIZE)
         .limit(MESSAGE_HISTORY_PAGE_SIZE)
@@ -687,6 +818,7 @@ export class PlatformAdminCommunicationsService {
     const userIds = new Set<string>();
     for (const r of rows) {
       userIds.add(r.actorUserId.toHexString());
+      if (r.archivedBy) userIds.add(r.archivedBy.toHexString());
       for (const id of r.recipientUserIds) userIds.add(id.toHexString());
     }
     const users = userIds.size
@@ -703,10 +835,18 @@ export class PlatformAdminCommunicationsService {
         { name: String(u.name), email: String(u.email) },
       ]),
     );
+    const total =
+      filter === 'active'
+        ? active
+        : filter === 'archived'
+          ? archived
+          : active + archived;
     return {
       page,
       pageSize: MESSAGE_HISTORY_PAGE_SIZE,
       total,
+      filter,
+      counts: { active, archived },
       items: rows.map((r) => ({
         id: r._id.toHexString(),
         operationId: r.operationId,
@@ -715,6 +855,10 @@ export class PlatformAdminCommunicationsService {
         title: r.title,
         body: r.body,
         channels: r.channels,
+        archivedAt: r.archivedAt ?? null,
+        archivedBy: r.archivedBy
+          ? (person.get(r.archivedBy.toHexString())?.email ?? null)
+          : null,
         recipients: r.recipientUserIds.map((id) => ({
           userId: id.toHexString(),
           name: person.get(id.toHexString())?.name ?? null,

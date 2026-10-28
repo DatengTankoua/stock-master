@@ -106,6 +106,7 @@ import {
   type SelectableOrganization,
 } from "@/lib/api";
 import { OrganizationSuspendedNotice } from "@/components/organization/organization-suspended-notice";
+import { MarketingConsentSection } from "@/components/legal/marketing-consent-section";
 
 // 1-16G : libellés dans `common` (`shell.nav.*`).
 type ShellNavKey =
@@ -1158,6 +1159,13 @@ export default function AppShellLayout({
                     <p role="alert" className="text-sm text-muted-foreground">
                       {t("shell.accessRefused")}
                     </p>
+                  )}
+                  {/* Commerce suspendu : le choix des e-mails promotionnels
+                  reste accessible (route d'identité, sans organisation). */}
+                  {suspension && online && (
+                    <div className="w-full text-left">
+                      <MarketingConsentSection />
+                    </div>
                   )}
                   <button
                     type="button"

@@ -10,7 +10,7 @@ import type { DocumentContent } from "@/i18n/documents/types";
 import { PROVIDER_ROLES_EN } from "@/i18n/documents/providers";
 
 // 1-16G — Traduction anglaise fidèle de la politique de confidentialité
-// 0.5 (1-21D : SasPay ; la 0.3, archivée en français, n'est pas traduite) (aucune clause, promesse ni coordonnée ajoutée ; les implantations
+// (0.7 : accord facultatif aux e-mails promotionnels ; 0.5, 1-21D : SasPay ; la 0.3, archivée en français, n'est pas traduite) (aucune clause, promesse ni coordonnée ajoutée ; les implantations
 // restent écrites telles que déclarées). Statut « projet », `noindex`. Les
 // points « À COMPLÉTER / À VALIDER » du texte français restent ouverts. La
 // traduction ne vaut pas validation juridique.
@@ -88,10 +88,29 @@ const content: DocumentContent = {
             </li>
           </ul>
           <p>
-            Reading this policy is not an agreement: it informs you. No optional
-            permission (for example for marketing messages) is requested at
-            sign-up, and turning on notifications on a device remains a separate
-            choice.
+            Reading this policy is not an agreement: it informs you. The only
+            optional permission offered at sign-up concerns promotional emails
+            (see below): it is separate from accepting the terms, and turning on
+            notifications on a device remains a separate choice.
+          </p>
+          <h3>Choices about promotional emails</h3>
+          <ul>
+            <li>
+              your choice (consent or withdrawal), its date and time set by the
+              server, and its origin (sign-up or settings);
+            </li>
+            <li>
+              the version and language of the box text presented to you, and
+              that text itself;
+            </li>
+            <li>
+              a digital fingerprint of the email address concerned, so that a
+              consent does not apply to another address.
+            </li>
+          </ul>
+          <p>
+            Neither your IP address nor information about your browser is
+            recorded with this choice.
           </p>
           <h3>Shop and members</h3>
           <ul>
@@ -239,6 +258,18 @@ const content: DocumentContent = {
                 <td>Your consent: you choose to write to customer support</td>
               </tr>
               <tr>
+                <td>Send you {SITE.name} offers and promotions by email</td>
+                <td>
+                  Your specific consent: an optional box, never ticked in
+                  advance, separate from accepting the terms. It can be
+                  withdrawn at any time.
+                </td>
+              </tr>
+              <tr>
+                <td>Keep proof of your choices about these emails</td>
+                <td>Being able to show your consent or your withdrawal.</td>
+              </tr>
+              <tr>
                 <td>Alert you on your device (push notifications)</td>
                 <td>
                   Your specific consent: turned on by you and authorised by the
@@ -248,10 +279,40 @@ const content: DocumentContent = {
             </tbody>
           </table>
           <p>
-            {SITE.name} does not send marketing, does not sell your data and
-            does not show advertising. The analytics (revenue, product and
-            seller rankings) are calculations made from the sales, for the shop
-            that views them.
+            {SITE.name} only sends promotional emails to people who have agreed
+            to them, does not sell your data and does not show advertising. The
+            analytics (revenue, product and seller rankings) are calculations
+            made from the sales, for the shop that views them.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "emails-promotionnels",
+      title: "Promotional emails and service emails",
+      content: (
+        <>
+          <p>
+            Promotional emails present {SITE.name} offers and promotions. They
+            are only sent to you if you ticked the box provided, at sign-up or
+            in the application (Organisation, then Notifications). This consent
+            is optional and individual: it belongs to you, and neither the owner
+            of your shop nor the {SITE.name} team can give it on your behalf.
+            Accepting the terms of use is not consent.
+          </p>
+          <p>
+            You can withdraw your consent at any time in the same place; the
+            withdrawal takes effect immediately. Refusing or withdrawing changes
+            neither your access to the service nor the service emails:
+            confirmation of your address, password reset, invitations and
+            service messages about your account or your shop.
+          </p>
+          <p>
+            Consent applies to the email address of your account at the time you
+            give it, and only once that address is confirmed. If the address of
+            your account changes, a new consent is needed. Turning on
+            notifications on a device and your notification choices in the
+            application are not consent to these emails.
           </p>
         </>
       ),
@@ -409,6 +470,16 @@ const content: DocumentContent = {
               </tr>
               <tr>
                 <td>Proof of acceptance of the terms and accepted texts</td>
+                <td>
+                  Kept as long as the account exists. Nothing is deleted
+                  automatically today.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Proof of your choices about promotional emails and the box
+                  text presented
+                </td>
                 <td>
                   Kept as long as the account exists. Nothing is deleted
                   automatically today.

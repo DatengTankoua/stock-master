@@ -10,6 +10,9 @@ import type { DocumentContent } from "@/i18n/documents/types";
 
 // 1-16G : texte français déplacé tel quel depuis la page (le texte
 // affiché, archivé et accepté ne change pas).
+// Version 0.4 : section « E-mails de Stock Master » (e-mails de service et
+// accord facultatif aux e-mails promotionnels) ; seul ajout, la 0.3 reste
+// archivée et inchangée.
 const content: DocumentContent = {
   metaTitle: "Conditions d'utilisation",
   metaDescription:
@@ -301,6 +304,35 @@ const content: DocumentContent = {
           </p>
           {/* À COMPLÉTER avec un juriste : droit applicable et règlement
               des litiges (aucun tribunal ni arbitrage imposé). */}
+        </>
+      ),
+    },
+    {
+      id: "communications",
+      title: "E-mails de Stock Master",
+      content: (
+        <>
+          <p>
+            {SITE.name} vous envoie les e-mails nécessaires au service :
+            confirmation de votre adresse, réinitialisation du mot de passe,
+            invitations, et messages de service concernant votre compte ou votre
+            commerce. Ces e-mails ne sont pas publicitaires.
+          </p>
+          <p>
+            Les e-mails présentant les offres et promotions de {SITE.name} ne
+            vous sont envoyés que si vous l&apos;avez accepté, par une case
+            distincte et facultative, à l&apos;inscription ou dans
+            l&apos;application. Cet accord vous est personnel : personne, pas
+            même le propriétaire de votre commerce, ne peut le donner à votre
+            place. Accepter ces conditions ne vaut pas accord pour ces e-mails.
+          </p>
+          <p>
+            Vous pouvez retirer cet accord à tout moment dans l&apos;application
+            (Organisation, puis Notifications). Refuser ou retirer cet accord ne
+            change ni votre accès au service ni les e-mails de service. La{" "}
+            <Link href="/confidentialite">politique de confidentialité</Link>{" "}
+            précise ce qui est conservé de votre choix.
+          </p>
         </>
       ),
     },

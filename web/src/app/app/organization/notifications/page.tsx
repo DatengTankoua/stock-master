@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getApiErrorMessage } from "@/lib/api";
 import { CATEGORY_KEYS } from "@/lib/notifications";
 import { CenterPreferencesSection } from "@/components/notifications/center-preferences";
+import { MarketingConsentSection } from "@/components/legal/marketing-consent-section";
 import {
   PushConfig,
   PushDeviceState,
@@ -236,6 +237,9 @@ export default function NotificationsPage() {
     <div className="space-y-10">
       <CenterPreferencesSection />
       <PushSettings />
+      {/* Réglage personnel distinct : ni le push ni les préférences
+          ci-dessus ne valent accord aux e-mails promotionnels. */}
+      <MarketingConsentSection />
     </div>
   );
 }

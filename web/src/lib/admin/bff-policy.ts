@@ -63,14 +63,16 @@ const ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp }> = [
     method: "POST",
     pattern: /^organizations\/[0-9a-f]{24}\/(suspend|reactivate|extend)$/,
   },
-  // Messages de service : préparation, historique, envoi, relance.
+  // Messages de service : préparation, historique, envoi, relance,
+  // archivage et restauration.
   {
     method: "GET",
     pattern: /^organizations\/[0-9a-f]{24}\/(message-recipients|messages)$/,
   },
   {
     method: "POST",
-    pattern: /^organizations\/[0-9a-f]{24}\/(messages|message-retry)$/,
+    pattern:
+      /^organizations\/[0-9a-f]{24}\/(messages|message-retry|message-archive|message-restore)$/,
   },
   { method: "GET", pattern: /^payments$/ },
   { method: "GET", pattern: /^audit$/ },
@@ -99,6 +101,7 @@ const QUERY_KEYS = new Set([
   "action",
   "outcome",
   "days",
+  "archived",
 ]);
 
 export function filterAdminQuery(search: URLSearchParams): string {

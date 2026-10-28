@@ -62,6 +62,32 @@ const legalFr = {
         "L'enregistrement de ton acceptation est momentanément indisponible. Réessaie dans quelques instants.",
     },
   },
+  marketing: {
+    label:
+      "Je souhaite recevoir par e-mail les offres et promotions de Stock Master. Je peux me désinscrire à tout moment.",
+    optional:
+      "Facultatif. Sans cette case, ton compte fonctionne de la même façon et tu reçois toujours les e-mails liés à ton compte.",
+    errors: {
+      outdated:
+        "Le texte de la case sur les offres par e-mail a changé. Recharge la page, puis recommence.",
+      unavailable:
+        "Ton choix sur les offres par e-mail ne peut pas être enregistré pour le moment. Réessaie dans quelques instants.",
+    },
+    settings: {
+      title: "Offres et promotions par e-mail",
+      text: "Ce choix ne concerne que les e-mails promotionnels de Stock Master. Les e-mails liés à ton compte (confirmation, mot de passe, invitations) et les messages de service ne changent pas, que tu acceptes ou non.",
+      grantedSince: "Accord enregistré le {{date}}.",
+      notGranted: "Aucun accord : tu ne reçois pas d'e-mails promotionnels.",
+      previousAddress:
+        "Ton accord portait sur une autre adresse e-mail : il ne s'applique pas à ton adresse actuelle. Coche la case pour l'accepter pour cette adresse.",
+      unverified:
+        "Ton adresse doit être confirmée avant de pouvoir recevoir ces e-mails.",
+      granted: "Accord enregistré.",
+      withdrawn: "Accord retiré : aucun e-mail promotionnel ne te sera envoyé.",
+      unavailable: "Ce réglage est indisponible pour le moment.",
+      loading: "Chargement…",
+    },
+  },
   prompt: {
     title: "Ton accord est demandé",
     description:

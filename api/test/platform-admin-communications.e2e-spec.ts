@@ -1137,4 +1137,293 @@ describe('Administration de la plateforme — messages de service (e2e)', () => 
       ]);
     });
   });
+
+  describe('Archivage des messages', () => {
+    const ARCHIVE = 'platform.communications.archive';
+
+    /** Messages insérés directement (hors limites d’envoi), récents d’abord. */
+    async function seedMessages(s: Shop, actor: Admin, count: number) {
+      const base = clock().getTime();
+      const ids = Array.from({ length: count }, () => new Types.ObjectId());
+      await db()
+        .collection('platform_messages')
+        .insertMany(
+          ids.map((_id, i) => ({
+            _id,
+            operationId: randomUUID(),
+            organizationId: new Types.ObjectId(s.organizationId),
+            actorUserId: new Types.ObjectId(actor.userId),
+            title: `Message ${i}`,
+            body: `Contenu confidentiel ${i}`,
+            channels: ['in_app'],
+            recipientUserIds: [new Types.ObjectId(s.ownerId)],
+            createdAt: new Date(base - i * 60_000),
+          })),
+        );
+      return ids.map((id) => id.toHexString());
+    }
+
+    const archive = (a: Admin, organizationId: string, messageIds: unknown) =>
+      admin(
+        'post',
+        `/organizations/${organizationId}/message-archive`,
+        a.token,
+      ).send({ messageIds });
+    const restore = (a: Admin, organizationId: string, messageIds: unknown) =>
+      admin(
+        'post',
+        `/organizations/${organizationId}/message-restore`,
+        a.token,
+      ).send({ messageIds });
+    const history = (a: Admin, organizationId: string, query = '') =>
+      admin(
+        'get',
+        `/organizations/${organizationId}/messages${query}`,
+        a.token,
+      );
+    const messagesOf = (ids: string[]) =>
+      db()
+        .collection('platform_messages')
+        .find({ _id: { $in: ids.map((id) => new Types.ObjectId(id)) } })
+        .sort({ _id: 1 })
+        .toArray();
+    const archiveAudit = (a: Admin) =>
+      db()
+        .collection('platform_admin_audit')
+        .find({
+          actorUserId: new Types.ObjectId(a.userId),
+          action: {
+            $in: [
+              'organization_message_archive',
+              'organization_message_restore',
+            ],
+          },
+        })
+        .sort({ at: 1, _id: 1 })
+        .toArray();
+
+    it('capacité dédiée exigée : lecture seule et capacités d’envoi refusées, sans modification', async () => {
+      const s = await shop('arch-caps');
+      const reader = await enrolledAdmin();
+      const sender = await enrolledAdmin([NOTIFY, EMAIL]);
+      const [id] = await seedMessages(s, sender, 1);
+      for (const a of [reader, sender]) {
+        // Consultation possible…
+        expect((await history(a, s.organizationId)).status).toBe(200);
+        // …archivage et restauration refusés.
+        for (const call of [archive, restore]) {
+          const res = await call(a, s.organizationId, [id]);
+          expect(res.status).toBe(403);
+          expect(res.body.code).toBe('PLATFORM_ADMIN_CAPABILITY_REQUIRED');
+        }
+        const denied = await archiveAudit(a);
+        expect(denied.map((d) => [d.outcome, d.detail])).toEqual([
+          ['denied', 'capability'],
+          ['denied', 'capability'],
+        ]);
+      }
+      const [stored] = await messagesOf([id]);
+      expect(stored.archivedAt).toBeUndefined();
+    });
+
+    it('archivage et restauration individuels, idempotents et audités sans contenu', async () => {
+      const s = await shop('arch-one');
+      const a = await enrolledAdmin([ARCHIVE]);
+      const [id] = await seedMessages(s, a, 1);
+
+      const first = await archive(a, s.organizationId, [id]);
+      expect(first.status).toBe(200);
+      expect(first.body).toEqual({ archived: true, requested: 1, changed: 1 });
+      const [archived] = await messagesOf([id]);
+      expect(archived.archivedAt).toBeInstanceOf(Date);
+      expect(String(archived.archivedBy)).toBe(a.userId);
+      const archivedAt = archived.archivedAt as Date;
+
+      // Rejeu : rien ne change (date conservée), aucun audit de plus.
+      const again = await archive(a, s.organizationId, [id]);
+      expect(again.status).toBe(200);
+      expect(again.body.changed).toBe(0);
+      const [still] = await messagesOf([id]);
+      expect((still.archivedAt as Date).getTime()).toBe(archivedAt.getTime());
+
+      const back = await restore(a, s.organizationId, [id]);
+      expect(back.body).toEqual({ archived: false, requested: 1, changed: 1 });
+      expect((await restore(a, s.organizationId, [id])).body.changed).toBe(0);
+      const [restored] = await messagesOf([id]);
+      expect(restored.archivedAt).toBeNull();
+      expect(restored.archivedBy).toBeNull();
+      // Contenu jamais modifié.
+      expect(restored.title).toBe('Message 0');
+      expect(restored.body).toBe('Contenu confidentiel 0');
+
+      const audit = await archiveAudit(a);
+      expect(audit.map((e) => [e.action, e.outcome])).toEqual([
+        ['organization_message_archive', 'success'],
+        ['organization_message_restore', 'success'],
+      ]);
+      for (const entry of audit) {
+        expect(entry.capability).toBe(ARCHIVE);
+        expect(entry.targetId).toBe(s.organizationId);
+        expect(entry.after).toEqual({ messageIds: id, changed: 1 });
+        expect(entry.at).toBeInstanceOf(Date);
+        expect(JSON.stringify(entry)).not.toMatch(
+          /Contenu confidentiel|Message 0/,
+        );
+      }
+    });
+
+    it('archivage groupé ; sélection interorganisations ou inconnue refusée sans modification partielle', async () => {
+      const s = await shop('arch-bulk');
+      const other = await shop('arch-other');
+      const a = await enrolledAdmin([ARCHIVE]);
+      const mine = await seedMessages(s, a, 3);
+      const [foreign] = await seedMessages(other, a, 1);
+
+      const mixed = await archive(a, s.organizationId, [...mine, foreign]);
+      expect(mixed.status).toBe(404);
+      const unknown = await archive(a, s.organizationId, [
+        mine[0],
+        new Types.ObjectId().toHexString(),
+      ]);
+      expect(unknown.status).toBe(404);
+      // Même commerce désigné par l’URL d’un autre : refus.
+      expect((await archive(a, other.organizationId, mine)).status).toBe(404);
+      for (const m of await messagesOf([...mine, foreign])) {
+        expect(m.archivedAt).toBeUndefined();
+      }
+      expect((await archiveAudit(a)).map((e) => [e.outcome, e.detail])).toEqual(
+        [
+          ['denied', 'not_found'],
+          ['denied', 'not_found'],
+          ['denied', 'not_found'],
+        ],
+      );
+
+      // Forme refusée (400) : vide, doublon, identifiant invalide, lot trop grand.
+      for (const ids of [
+        [],
+        [mine[0], mine[0]],
+        ['pas-un-id'],
+        Array.from({ length: 51 }, () => new Types.ObjectId().toHexString()),
+        'x',
+      ]) {
+        expect((await archive(a, s.organizationId, ids)).status).toBe(400);
+      }
+
+      const ok = await archive(a, s.organizationId, mine);
+      expect(ok.body).toEqual({ archived: true, requested: 3, changed: 3 });
+      // Une partie déjà restaurée : seuls les autres changent.
+      expect((await restore(a, s.organizationId, [mine[0]])).body.changed).toBe(
+        1,
+      );
+      expect((await restore(a, s.organizationId, mine)).body).toEqual({
+        archived: false,
+        requested: 3,
+        changed: 2,
+      });
+    });
+
+    it('filtres, compteurs et pagination ; actifs par défaut', async () => {
+      const s = await shop('arch-filter');
+      const a = await enrolledAdmin([ARCHIVE]);
+      const ids = await seedMessages(s, a, 13);
+      expect((await archive(a, s.organizationId, ids.slice(0, 2))).status).toBe(
+        200,
+      );
+
+      const active = await history(a, s.organizationId);
+      expect(active.body.filter).toBe('active');
+      expect(active.body.counts).toEqual({ active: 11, archived: 2 });
+      expect(active.body.total).toBe(11);
+      expect(active.body.items).toHaveLength(10);
+      expect(active.body.items.map((m: { id: string }) => m.id)).toEqual(
+        ids.slice(2, 12),
+      );
+      const activeNext = await history(a, s.organizationId, '?page=2');
+      expect(activeNext.body.items.map((m: { id: string }) => m.id)).toEqual([
+        ids[12],
+      ]);
+
+      const archived = await history(a, s.organizationId, '?archived=archived');
+      expect(archived.body.total).toBe(2);
+      expect(archived.body.items.map((m: { id: string }) => m.id)).toEqual(
+        ids.slice(0, 2),
+      );
+      expect(archived.body.items[0].archivedBy).toBe(a.email);
+      expect(typeof archived.body.items[0].archivedAt).toBe('string');
+
+      const all = await history(a, s.organizationId, '?archived=all&page=2');
+      expect(all.body.total).toBe(13);
+      expect(all.body.items).toHaveLength(3);
+      expect(all.body.counts).toEqual({ active: 11, archived: 2 });
+
+      expect(
+        (await history(a, s.organizationId, '?archived=deleted')).status,
+      ).toBe(400);
+      // Lecture seule : filtres consultables.
+      const reader = await enrolledAdmin();
+      expect(
+        (await history(reader, s.organizationId, '?archived=archived')).body
+          .total,
+      ).toBe(2);
+    });
+
+    it('message en attente archivé : livraison poursuivie, livraisons et notifications intactes', async () => {
+      const s = await shop('arch-pending');
+      const sender = await enrolledAdmin([NOTIFY, EMAIL, ARCHIVE]);
+      const res = await send(
+        sender,
+        messageIntent(s.organizationId, [s.ownerId], ['in_app', 'email']),
+      );
+      expect(res.status).toBe(200);
+      const messageId = res.body.result.messageId as string;
+      const before = await deliveriesOf(messageId);
+      expect(before.map((d) => d.status)).toEqual(['pending', 'pending']);
+
+      expect(
+        (await archive(sender, s.organizationId, [messageId])).status,
+      ).toBe(200);
+      // Aucune livraison modifiée par l’archivage.
+      expect(await deliveriesOf(messageId)).toEqual(before);
+
+      await drain();
+      const after = await deliveriesOf(messageId);
+      expect(after.map((d) => [d.channel, d.status]).sort()).toEqual([
+        ['email', 'accepted'],
+        ['in_app', 'created'],
+      ]);
+      const notificationIds = after
+        .filter((d) => d.notificationId)
+        .map((d) => d.notificationId);
+      expect(notificationIds).toHaveLength(1);
+      expect(messageMails(s.ownerEmail)).toHaveLength(1);
+      // Message de service livré sans aucun accord marketing.
+      expect(
+        await db()
+          .collection('marketing_consents')
+          .countDocuments({ userId: new Types.ObjectId(s.ownerId) }),
+      ).toBe(0);
+
+      // Restauration puis nouvel archivage : livraisons, notification et
+      // e-mail inchangés, aucun nouvel envoi.
+      await restore(sender, s.organizationId, [messageId]);
+      await archive(sender, s.organizationId, [messageId]);
+      await drain();
+      expect(await deliveriesOf(messageId)).toEqual(after);
+      expect(
+        await db()
+          .collection('notifications')
+          .countDocuments({ _id: { $in: notificationIds } }),
+      ).toBe(1);
+      expect(messageMails(s.ownerEmail)).toHaveLength(1);
+      // L’audit de l’envoi reste en place.
+      expect(
+        await db().collection('platform_admin_audit').countDocuments({
+          action: 'organization_message',
+          outcome: 'success',
+          targetId: s.organizationId,
+        }),
+      ).toBe(1);
+    });
+  });
 });

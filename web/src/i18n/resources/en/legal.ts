@@ -61,6 +61,32 @@ const legalEn: Translation<typeof legalFr> = {
         "Your acceptance cannot be recorded at the moment. Try again in a few moments.",
     },
   },
+  marketing: {
+    label:
+      "I would like to receive Stock Master offers and promotions by email. I can unsubscribe at any time.",
+    optional:
+      "Optional. Without this box, your account works the same way and you still receive the emails related to your account.",
+    errors: {
+      outdated:
+        "The text of the email offers box has changed. Reload the page, then try again.",
+      unavailable:
+        "Your choice about email offers cannot be saved right now. Try again in a few moments.",
+    },
+    settings: {
+      title: "Offers and promotions by email",
+      text: "This choice only concerns Stock Master promotional emails. Emails related to your account (confirmation, password, invitations) and service messages do not change, whether you accept or not.",
+      grantedSince: "Consent recorded on {{date}}.",
+      notGranted: "No consent: you do not receive promotional emails.",
+      previousAddress:
+        "Your consent was given for another email address: it does not apply to your current address. Tick the box to accept for this address.",
+      unverified:
+        "Your address must be confirmed before you can receive these emails.",
+      granted: "Consent recorded.",
+      withdrawn: "Consent withdrawn: no promotional email will be sent to you.",
+      unavailable: "This setting is unavailable right now.",
+      loading: "Loading…",
+    },
+  },
   prompt: {
     title: "Your agreement is needed",
     description:
