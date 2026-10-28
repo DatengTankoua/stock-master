@@ -20,10 +20,14 @@ Acceptation des conditions
 - langue, versions et empreintes numériques des textes acceptés et de cette politique telle qu'elle vous a été présentée.
 Lire cette politique ne vaut pas accord : elle vous informe. La seule autorisation facultative proposée à l'inscription concerne les e-mails promotionnels (voir plus bas) : elle est distincte de l'acceptation des conditions, et l'activation des notifications sur un appareil reste un choix séparé.
 Choix concernant les e-mails promotionnels
-- votre choix (accord ou retrait), sa date et son heure fixées par le serveur, et son origine (inscription ou réglages) ;
+- votre choix (accord ou retrait), sa date et son heure fixées par le serveur, et son origine (inscription, réglages ou lien de désabonnement d'un e-mail) ;
 - la version et la langue du texte de la case qui vous a été présenté, et ce texte lui-même ;
 - une empreinte numérique de l'adresse e-mail concernée, pour qu'un accord ne s'applique pas à une autre adresse.
 Ni votre adresse IP ni les informations de votre navigateur ne sont enregistrées avec ce choix.
+E-mails promotionnels envoyés
+- pour chaque e-mail : la campagne, l'adresse utilisée, sa langue, les dates des tentatives d'envoi et leur résultat (pris en charge par le prestataire, ignoré, échec ou incertain) ;
+- une empreinte numérique du lien de désabonnement de cet e-mail, qui permet de vérifier le lien sans le conserver.
+Aucune ouverture ni aucun clic n'est suivi.
 Commerce et membres
 - nom du commerce, logo, couleur, devise, état ;
 - pour chaque membre : rôle, droits, état de l'accès, auteur de l'invitation, date d'arrivée ;
@@ -63,7 +67,7 @@ Vous prévenir sur votre appareil (notifications push) | Votre consentement spé
 Stock Master n'envoie d'e-mails promotionnels qu'aux personnes qui les ont acceptés, ne vend pas vos données et n'affiche pas de publicité. Les analyses (chiffre d'affaires, classements de produits et de vendeurs) sont des calculs faits à partir des ventes, pour le commerce qui les consulte.
 4. E-mails promotionnels et e-mails de service
 Les e-mails promotionnels présentent les offres et promotions de Stock Master. Ils ne vous sont envoyés que si vous avez coché la case prévue, à l'inscription ou dans l'application (Organisation, puis Notifications). Cet accord est facultatif et individuel : il vous appartient, et ni le propriétaire de votre commerce ni l'équipe de Stock Master ne peut le donner à votre place. Accepter les conditions d'utilisation ne vaut pas accord.
-Vous pouvez retirer votre accord à tout moment au même endroit ; le retrait prend effet immédiatement. Le refus ou le retrait ne change ni votre accès au service ni les e-mails de service : confirmation d'adresse, réinitialisation du mot de passe, invitations et messages de service concernant votre compte ou votre commerce.
+Vous pouvez retirer votre accord à tout moment au même endroit, ou par le lien de désabonnement présent dans chaque e-mail promotionnel, sans vous connecter, même si vous ne pouvez plus accéder à votre compte. Le retrait prend effet immédiatement : aucun nouvel envoi n'est tenté, mais un e-mail déjà transmis au prestataire ne peut pas être rappelé. Le refus ou le retrait ne change ni votre accès au service ni les e-mails de service : confirmation d'adresse, réinitialisation du mot de passe, invitations et messages de service concernant votre compte ou votre commerce.
 L'accord vaut pour l'adresse e-mail de votre compte au moment où vous le donnez, et seulement une fois cette adresse confirmée. Si l'adresse de votre compte change, un nouvel accord est nécessaire. L'activation des notifications sur un appareil et vos choix de notifications dans l'application ne valent pas accord pour ces e-mails.
 5. Qui peut voir les données
 - Les membres de votre commerce, selon les droits que le commerce leur a donnés. Un vendeur sans droit supplémentaire ne voit que ses propres ventes.
@@ -97,6 +101,7 @@ Notifications sur un appareil | Jusqu'à leur désactivation. Un appareil devenu
 Compte | Tant que le compte existe.
 Preuve d'acceptation des conditions et textes acceptés | Conservés tant que le compte existe. Rien n'est supprimé automatiquement aujourd'hui.
 Preuve de vos choix concernant les e-mails promotionnels et texte de la case présentée | Conservés tant que le compte existe. Rien n'est supprimé automatiquement aujourd'hui.
+Suivi des e-mails promotionnels envoyés et empreintes des liens de désabonnement | Conservés tant que le compte existe. Rien n'est supprimé automatiquement aujourd'hui.
 Données du commerce, ventes et historique des actions | Tant que le commerce utilise le service. Rien n'est supprimé automatiquement aujourd'hui.
 Opérations d'abonnement d'au moins 20 000 FCFA | 10 ans, durée prévue par le décret n° 2011/1521/PM (art. 8).
 La loi n° 2024/017 prévoit que les durées maximales soient fixées par un référentiel de l'Autorité (art. 13 et 28). Elles seront ajustées lorsque ce référentiel sera publié.

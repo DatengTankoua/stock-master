@@ -23,11 +23,11 @@
           "locales": {
             "fr": {
               "file": "conditions-utilisation/0.4.fr.txt",
-              "sha256": "a36afe42894ba3555baf3cf37aa502f0048a94108a82c158b6a0f4cba5d008f5"
+              "sha256": "eecd47d594725b3914ac8f7bb149ce70de310c260149cd1d0732ab27a0c65778"
             },
             "en": {
               "file": "conditions-utilisation/0.4.en.txt",
-              "sha256": "e94f40d39d3033ae60e6f47da78d770b8b4d7adf16e4d29e82f824db8c6ebc89"
+              "sha256": "893173261f8775d875a676fe6b0be0cabf62287d68cc97e543ae851fc5d4314e"
             }
           }
         }
@@ -131,11 +131,11 @@
           "locales": {
             "fr": {
               "file": "confidentialite/0.7.fr.txt",
-              "sha256": "92ea143831c7ba1f24086e1053c612283e5a3d3b052ecb495b37be4e06e9ce2e"
+              "sha256": "3e7cb3b0d3204d647453e1fe5081c31f9fc034681cc10ceacb0abf998e79544a"
             },
             "en": {
               "file": "confidentialite/0.7.en.txt",
-              "sha256": "521357e5ca56ee8aff1b6cd09365239a483f7d413bd0ca2cf250292f7d7e8bc3"
+              "sha256": "054456e9edced9ec5b2a7ca3006dbf7d6bf31ce3ac11c30cde79c29174831aa1"
             }
           }
         }

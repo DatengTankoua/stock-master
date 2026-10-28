@@ -293,10 +293,11 @@ const content: DocumentContent = {
           </p>
           <p>
             You can withdraw this consent at any time in the application
-            (Organisation, then Notifications). Refusing or withdrawing it
-            changes neither your access to the service nor the service emails.
-            The <Link href="/en/confidentialite">Privacy Policy</Link> explains
-            what is kept about your choice.
+            (Organisation, then Notifications), or with the unsubscribe link in
+            each promotional email, without signing in. Refusing or withdrawing
+            it changes neither your access to the service nor the service
+            emails. The <Link href="/en/confidentialite">Privacy Policy</Link>{" "}
+            explains what is kept about your choice.
           </p>
         </>
       ),

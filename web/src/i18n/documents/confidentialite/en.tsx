@@ -97,7 +97,8 @@ const content: DocumentContent = {
           <ul>
             <li>
               your choice (consent or withdrawal), its date and time set by the
-              server, and its origin (sign-up or settings);
+              server, and its origin (sign-up, settings or the unsubscribe link
+              of an email);
             </li>
             <li>
               the version and language of the box text presented to you, and
@@ -112,6 +113,19 @@ const content: DocumentContent = {
             Neither your IP address nor information about your browser is
             recorded with this choice.
           </p>
+          <h3>Promotional emails sent</h3>
+          <ul>
+            <li>
+              for each email: the campaign, the address used, its language, the
+              dates of the sending attempts and their outcome (accepted by the
+              provider, skipped, failed or uncertain);
+            </li>
+            <li>
+              a digital fingerprint of the unsubscribe link of that email, which
+              makes it possible to check the link without keeping it.
+            </li>
+          </ul>
+          <p>No opens or clicks are tracked.</p>
           <h3>Shop and members</h3>
           <ul>
             <li>shop name, logo, colour, currency, status;</li>
@@ -301,11 +315,14 @@ const content: DocumentContent = {
             Accepting the terms of use is not consent.
           </p>
           <p>
-            You can withdraw your consent at any time in the same place; the
-            withdrawal takes effect immediately. Refusing or withdrawing changes
-            neither your access to the service nor the service emails:
-            confirmation of your address, password reset, invitations and
-            service messages about your account or your shop.
+            You can withdraw your consent at any time in the same place, or with
+            the unsubscribe link in each promotional email, without signing in,
+            even if you can no longer access your account. The withdrawal takes
+            effect immediately: no new sending is attempted, but an email
+            already handed to the provider cannot be recalled. Refusing or
+            withdrawing changes neither your access to the service nor the
+            service emails: confirmation of your address, password reset,
+            invitations and service messages about your account or your shop.
           </p>
           <p>
             Consent applies to the email address of your account at the time you
@@ -479,6 +496,16 @@ const content: DocumentContent = {
                 <td>
                   Proof of your choices about promotional emails and the box
                   text presented
+                </td>
+                <td>
+                  Kept as long as the account exists. Nothing is deleted
+                  automatically today.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Record of promotional emails sent and fingerprints of the
+                  unsubscribe links
                 </td>
                 <td>
                   Kept as long as the account exists. Nothing is deleted

@@ -123,7 +123,8 @@ const content: DocumentContent = {
           <ul>
             <li>
               votre choix (accord ou retrait), sa date et son heure fixées par
-              le serveur, et son origine (inscription ou réglages) ;
+              le serveur, et son origine (inscription, réglages ou lien de
+              désabonnement d&apos;un e-mail) ;
             </li>
             <li>
               la version et la langue du texte de la case qui vous a été
@@ -138,6 +139,19 @@ const content: DocumentContent = {
             Ni votre adresse IP ni les informations de votre navigateur ne sont
             enregistrées avec ce choix.
           </p>
+          <h3>E-mails promotionnels envoyés</h3>
+          <ul>
+            <li>
+              pour chaque e-mail : la campagne, l&apos;adresse utilisée, sa
+              langue, les dates des tentatives d&apos;envoi et leur résultat
+              (pris en charge par le prestataire, ignoré, échec ou incertain) ;
+            </li>
+            <li>
+              une empreinte numérique du lien de désabonnement de cet e-mail,
+              qui permet de vérifier le lien sans le conserver.
+            </li>
+          </ul>
+          <p>Aucune ouverture ni aucun clic n&apos;est suivi.</p>
           <h3>Commerce et membres</h3>
           <ul>
             <li>nom du commerce, logo, couleur, devise, état ;</li>
@@ -366,11 +380,16 @@ const content: DocumentContent = {
             accord.
           </p>
           <p>
-            Vous pouvez retirer votre accord à tout moment au même endroit ; le
-            retrait prend effet immédiatement. Le refus ou le retrait ne change
-            ni votre accès au service ni les e-mails de service : confirmation
-            d&apos;adresse, réinitialisation du mot de passe, invitations et
-            messages de service concernant votre compte ou votre commerce.
+            Vous pouvez retirer votre accord à tout moment au même endroit, ou
+            par le lien de désabonnement présent dans chaque e-mail
+            promotionnel, sans vous connecter, même si vous ne pouvez plus
+            accéder à votre compte. Le retrait prend effet immédiatement : aucun
+            nouvel envoi n&apos;est tenté, mais un e-mail déjà transmis au
+            prestataire ne peut pas être rappelé. Le refus ou le retrait ne
+            change ni votre accès au service ni les e-mails de service :
+            confirmation d&apos;adresse, réinitialisation du mot de passe,
+            invitations et messages de service concernant votre compte ou votre
+            commerce.
           </p>
           <p>
             L&apos;accord vaut pour l&apos;adresse e-mail de votre compte au
@@ -579,6 +598,18 @@ const content: DocumentContent = {
                   automatiquement aujourd&apos;hui.
                   {/* À COMPLÉTER : durée après un retrait et après la fin du
                       compte. */}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Suivi des e-mails promotionnels envoyés et empreintes des
+                  liens de désabonnement
+                </td>
+                <td>
+                  Conservés tant que le compte existe. Rien n&apos;est supprimé
+                  automatiquement aujourd&apos;hui.
+                  {/* À COMPLÉTER : durée de conservation du suivi des envois et
+                      des liens de désabonnement. */}
                 </td>
               </tr>
               <tr>

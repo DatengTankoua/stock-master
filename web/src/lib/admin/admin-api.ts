@@ -350,7 +350,9 @@ export type PlatformCapability =
   | "platform.subscriptions.extend"
   | "platform.communications.notify"
   | "platform.communications.email"
-  | "platform.communications.archive";
+  | "platform.communications.archive"
+  | "platform.campaigns.manage"
+  | "platform.campaigns.send";
 
 export type AdminActionKind =
   "organization_suspend" | "organization_reactivate" | "subscription_extend";
@@ -489,4 +491,83 @@ export interface AdminMessageOutcome {
   action: "organization_message" | "organization_message_retry";
   replayed: boolean;
   result: Record<string, unknown>;
+}
+
+// ─── Campagnes promotionnelles ───────────────────────────────────────────────
+
+/** Bornes miroir de l'API (refus au-delà, jamais de troncature). */
+export const CAMPAIGN_SUBJECT_MAX = 150;
+export const CAMPAIGN_BODY_MAX = 10_000;
+export const CAMPAIGN_MAX_ORGANIZATIONS = 200;
+
+export type CampaignTargeting =
+  { mode: "all" } | { mode: "selected"; organizationIds: string[] };
+
+/** États exacts d'une livraison (« accepté » ≠ reçu). */
+export type CampaignDeliveryStatus =
+  "pending" | "sending" | "accepted" | "skipped" | "failed" | "uncertain";
+
+export type CampaignResultCounts = Record<CampaignDeliveryStatus, number>;
+
+export interface AdminCampaignAudience {
+  /** `ready` : audience gelée (aucun ajout après la constitution). */
+  status: "none" | "preparing" | "ready";
+  total: number;
+  frozenAt?: string | null;
+  /** Constitution interrompue puis close : audience partielle. */
+  incomplete?: boolean;
+}
+
+export interface AdminCampaignRow {
+  id: string;
+  subject: string;
+  status: "draft" | "launched";
+  targeting: CampaignTargeting;
+  createdAt: string;
+  launchedAt: string | null;
+  archivedAt: string | null;
+  audience: AdminCampaignAudience;
+  results: CampaignResultCounts;
+}
+
+export interface AdminCampaignPage extends AdminPage<AdminCampaignRow> {
+  filter: MessageArchiveFilter;
+  counts: { active: number; archived: number };
+}
+
+export interface AdminCampaign {
+  id: string;
+  status: "draft" | "launched";
+  subject: string;
+  body: string;
+  revision: number;
+  targeting: CampaignTargeting;
+  organizations: Array<{ id: string; name: string; status: string }>;
+  createdAt: string;
+  createdBy: string | null;
+  updatedAt: string;
+  launchedAt: string | null;
+  launchedBy: string | null;
+  archivedAt: string | null;
+  archivedBy: string | null;
+  audience: AdminCampaignAudience;
+  results: CampaignResultCounts;
+  /** Interrupteur serveur et configuration d'envoi (lecture seule). */
+  sending: { enabled: boolean; configured: boolean };
+}
+
+export interface AdminCampaignPreview {
+  subject: string;
+  text: string;
+  html: string;
+}
+
+export interface AdminCampaignDelivery {
+  id: string;
+  status: CampaignDeliveryStatus;
+  reason: string | null;
+  attempts: number;
+  uncertain: boolean;
+  updatedAt: string;
+  completedAt: string | null;
 }

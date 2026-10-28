@@ -24,6 +24,11 @@ import {
   sha256Hex,
 } from './marketing-consent-wording';
 import {
+  UNSUBSCRIBE_TOKEN_PATTERN,
+  unsubscribeTokenHash,
+} from './marketing-unsubscribe';
+import {
+  MARKETING_UNSUBSCRIBE_TOKENS_COLLECTION,
   MarketingConsent,
   MarketingConsentAction,
   type MarketingConsentDocument,
@@ -44,6 +49,7 @@ export const MARKETING_CONSENT_WORDING_OUTDATED =
 export const MARKETING_CONSENT_WORDING_UNKNOWN =
   'MARKETING_CONSENT_WORDING_UNKNOWN';
 export const MARKETING_CONSENT_UNAVAILABLE = 'MARKETING_CONSENT_UNAVAILABLE';
+export const MARKETING_UNSUBSCRIBE_INVALID = 'MARKETING_UNSUBSCRIBE_INVALID';
 
 /** Raisons d'inéligibilité à une future campagne par e-mail. */
 export type MarketingIneligibility =
@@ -162,7 +168,7 @@ export class MarketingConsentService {
     if (!input.choice?.granted || !input.wording) return;
     await this.apply(session, {
       userId: input.userId,
-      email: input.email,
+      address: addressFingerprint(input.email),
       granted: true,
       wording: input.wording,
       source: MarketingConsentSource.REGISTRATION,
@@ -212,7 +218,7 @@ export class MarketingConsentService {
           .exec();
         await this.apply(session, {
           userId,
-          email: user.email,
+          address: addressFingerprint(user.email),
           granted: input.granted,
           wording,
           source: MarketingConsentSource.SETTINGS,
@@ -250,19 +256,129 @@ export class MarketingConsentService {
     return { eligible: reasons.length === 0, reasons };
   }
 
+  // ─── Désabonnement depuis un e-mail (sans connexion) ──────────────────
+
+  /**
+   * Enregistre le HACHÉ d'un jeton de désabonnement AVANT l'envoi de
+   * l'e-mail qui le porte (`$setOnInsert` : une reprise ne réécrit rien).
+   * Jamais le jeton lui-même.
+   */
+  async registerUnsubscribeToken(input: {
+    tokenHash: string;
+    userId: Types.ObjectId;
+    addressSha256: string;
+    locale: 'fr' | 'en';
+    campaignId: Types.ObjectId;
+    deliveryId: Types.ObjectId;
+    now: Date;
+  }): Promise<void> {
+    await this.connection
+      .collection(MARKETING_UNSUBSCRIBE_TOKENS_COLLECTION)
+      .updateOne(
+        { _id: input.tokenHash as never },
+        {
+          $setOnInsert: {
+            userId: input.userId,
+            channel: MARKETING_CHANNEL,
+            purpose: MARKETING_PURPOSE,
+            addressSha256: input.addressSha256,
+            locale: input.locale,
+            campaignId: input.campaignId,
+            deliveryId: input.deliveryId,
+            createdAt: input.now,
+            usedAt: null,
+          },
+        },
+        { upsert: true },
+      );
+  }
+
+  /**
+   * Retrait par un lien de désabonnement : aucune session, aucun mot de
+   * passe. Le jeton n'agit que sur l'accord donné pour l'adresse qu'il
+   * concerne : un ancien lien (autre adresse) ne retire jamais l'accord
+   * donné pour la nouvelle. Idempotent (déjà retiré : aucune nouvelle
+   * preuve) ; même transaction et même preuve que les réglages, source
+   * `unsubscribe_link`. Ne touche ni aux e-mails de service, ni à
+   * l'abonnement payant. Réponse identique dans tous les cas valides,
+   * sans aucune donnée personnelle.
+   */
+  async withdrawByUnsubscribeToken(
+    token: string,
+  ): Promise<{ status: 'unsubscribed' }> {
+    const record = UNSUBSCRIBE_TOKEN_PATTERN.test(token)
+      ? await this.connection
+          .collection<{
+            _id: string;
+            userId: Types.ObjectId;
+            addressSha256: string;
+            locale: string;
+            usedAt: Date | null;
+          }>(MARKETING_UNSUBSCRIBE_TOKENS_COLLECTION)
+          .findOne({ _id: unsubscribeTokenHash(token) })
+      : null;
+    if (!record) {
+      throw new NotFoundException({
+        code: MARKETING_UNSUBSCRIBE_INVALID,
+        message: 'Lien de désabonnement invalide.',
+      });
+    }
+    const userId = record.userId.toHexString();
+    const session = await this.connection.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const previous = await this.consentModel
+          .findById(marketingConsentKey(userId))
+          .session(session)
+          .lean()
+          .exec();
+        // Accord absent, déjà retiré, ou donné pour une autre adresse : rien.
+        if (
+          !previous?.granted ||
+          previous.addressSha256 !== record.addressSha256
+        ) {
+          return;
+        }
+        const wording =
+          resolveMarketingWording(
+            previous.wordingVersion,
+            record.locale === 'en' ? 'en' : 'fr',
+          ) ?? resolveMarketingWording(MARKETING_EMAIL_CURRENT_WORDING, 'fr');
+        if (!wording) throw unavailable();
+        await this.apply(session, {
+          userId,
+          address: record.addressSha256,
+          granted: false,
+          wording,
+          source: MarketingConsentSource.UNSUBSCRIBE_LINK,
+          previous,
+        });
+      });
+    } finally {
+      await session.endSession();
+    }
+    await this.connection
+      .collection(MARKETING_UNSUBSCRIBE_TOKENS_COLLECTION)
+      .updateOne(
+        { _id: record._id as never, usedAt: null },
+        { $set: { usedAt: this.clock() } },
+      );
+    return { status: 'unsubscribed' };
+  }
+
   private async apply(
     session: MongooseSession,
     input: {
       userId: string;
-      email: string;
+      /** Empreinte de l'adresse concernée par ce choix. */
+      address: string;
       granted: boolean;
       wording: ResolvedMarketingWording;
       source: MarketingConsentSource;
       previous: MarketingConsent | null;
     },
   ): Promise<void> {
-    const address = addressFingerprint(input.email);
-    const { previous } = input;
+    const { address, previous } = input;
     const unchanged = input.granted
       ? !!previous?.granted &&
         previous.addressSha256 === address &&

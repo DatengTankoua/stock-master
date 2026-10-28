@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MarketingConsentController } from './marketing-consent.controller';
+import { MarketingUnsubscribeController } from './marketing-unsubscribe.controller';
 import {
   MARKETING_CLOCK,
   MarketingConsentService,
@@ -33,7 +34,7 @@ const systemClock: MarketingClock = () => new Date();
       },
     ]),
   ],
-  controllers: [MarketingConsentController],
+  controllers: [MarketingConsentController, MarketingUnsubscribeController],
   providers: [
     MarketingConsentService,
     { provide: MARKETING_CLOCK, useValue: systemClock },

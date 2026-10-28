@@ -88,6 +88,23 @@ const legalFr = {
       loading: "Chargement…",
     },
   },
+  unsubscribe: {
+    metaTitle: "Se désabonner",
+    loading: "Chargement…",
+    title: "Ne plus recevoir les offres de Stock Master",
+    text: "Confirmez pour ne plus recevoir par e-mail les offres et promotions de Stock Master.",
+    confirm: "Me désabonner",
+    submitting: "Désabonnement…",
+    service:
+      "Les e-mails liés à votre compte (sécurité, invitations, messages de service) et l'abonnement de votre commerce ne sont pas concernés.",
+    doneTitle: "C'est fait",
+    doneText:
+      "Vous ne recevrez plus d'e-mails promotionnels de Stock Master à cette adresse. Vous pourrez changer d'avis dans les réglages de l'application.",
+    invalidTitle: "Lien invalide",
+    invalidText:
+      "Ce lien de désabonnement n'est pas valable. Vous pouvez aussi retirer votre accord dans l'application (Organisation, puis Notifications).",
+    network: "Connexion impossible. Réessayez.",
+  },
   prompt: {
     title: "Ton accord est demandé",
     description:

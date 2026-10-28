@@ -7,6 +7,12 @@ export const MARKETING_CONSENTS_COLLECTION = 'marketing_consents';
 export const MARKETING_CONSENT_EVENTS_COLLECTION = 'marketing_consent_events';
 export const MARKETING_CONSENT_WORDINGS_COLLECTION =
   'marketing_consent_wordings';
+/**
+ * Haché (`_id`) des jetons de désabonnement envoyés, avec l'utilisateur,
+ * l'empreinte de l'adresse et la finalité. Jamais le jeton en clair.
+ */
+export const MARKETING_UNSUBSCRIBE_TOKENS_COLLECTION =
+  'marketing_unsubscribe_tokens';
 
 export enum MarketingConsentAction {
   GRANTED = 'granted',
@@ -18,6 +24,8 @@ export enum MarketingConsentSource {
   REGISTRATION = 'registration',
   /** Réglages personnels du compte connecté. */
   SETTINGS = 'settings',
+  /** Lien de désabonnement d'un e-mail promotionnel (sans connexion). */
+  UNSUBSCRIBE_LINK = 'unsubscribe_link',
 }
 
 /**

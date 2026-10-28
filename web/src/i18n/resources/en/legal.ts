@@ -87,6 +87,23 @@ const legalEn: Translation<typeof legalFr> = {
       loading: "Loading…",
     },
   },
+  unsubscribe: {
+    metaTitle: "Unsubscribe",
+    loading: "Loading…",
+    title: "Stop receiving Stock Master offers",
+    text: "Confirm to stop receiving Stock Master offers and promotions by email.",
+    confirm: "Unsubscribe me",
+    submitting: "Unsubscribing…",
+    service:
+      "Emails related to your account (security, invitations, service messages) and your shop's subscription are not affected.",
+    doneTitle: "Done",
+    doneText:
+      "You will no longer receive Stock Master promotional emails at this address. You can change your mind in the application settings.",
+    invalidTitle: "Invalid link",
+    invalidText:
+      "This unsubscribe link is not valid. You can also withdraw your consent in the application (Organisation, then Notifications).",
+    network: "Connection failed. Try again.",
+  },
   prompt: {
     title: "Your agreement is needed",
     description:

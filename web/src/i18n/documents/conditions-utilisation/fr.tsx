@@ -328,8 +328,10 @@ const content: DocumentContent = {
           </p>
           <p>
             Vous pouvez retirer cet accord à tout moment dans l&apos;application
-            (Organisation, puis Notifications). Refuser ou retirer cet accord ne
-            change ni votre accès au service ni les e-mails de service. La{" "}
+            (Organisation, puis Notifications), ou par le lien de désabonnement
+            présent dans chaque e-mail promotionnel, sans vous connecter.
+            Refuser ou retirer cet accord ne change ni votre accès au service ni
+            les e-mails de service. La{" "}
             <Link href="/confidentialite">politique de confidentialité</Link>{" "}
             précise ce qui est conservé de votre choix.
           </p>

@@ -15,7 +15,36 @@ import {
  * nouvelle vérification.
  */
 export type ActionIntent =
-  OrganizationActionIntent | MessageIntent | MessageRetryIntent;
+  | OrganizationActionIntent
+  | MessageIntent
+  | MessageRetryIntent
+  | CampaignLaunchIntent;
+
+/**
+ * Lancement d'une campagne promotionnelle : campagne, révision, sujet,
+ * texte et ciblage EXACTS (commerces triés, sans doublon). Comparés au
+ * brouillon au lancement : toute modification après confirmation est
+ * refusée et impose une nouvelle vérification.
+ */
+export interface CampaignLaunchIntent {
+  action: 'campaign_launch';
+  campaignId: string;
+  operationId: string;
+  revision: number;
+  subject: string;
+  body: string;
+  targeting: { mode: 'all' } | { mode: 'selected'; organizationIds: string[] };
+}
+
+/** Cible d'une preuve liée (organisation, ou campagne). */
+export function intentTarget(intent: ActionIntent): {
+  type: 'organization' | 'campaign';
+  id: string;
+} {
+  return intent.action === 'campaign_launch'
+    ? { type: 'campaign', id: intent.campaignId }
+    : { type: 'organization', id: intent.organizationId };
+}
 
 /**
  * Message de service : destinataires (identifiants d'utilisateur triés,
@@ -89,6 +118,8 @@ export function intentCapabilities(intent: ActionIntent): PlatformCapability[] {
       return intent.channels.map((c) => CHANNEL_CAPABILITY[c]);
     case 'organization_message_retry':
       return [CHANNEL_CAPABILITY[intent.channel]];
+    case 'campaign_launch':
+      return ['platform.campaigns.send'];
     default:
       return [ACTION_CAPABILITY[intent.action]];
   }
@@ -113,6 +144,11 @@ export const MESSAGE_TITLE_MAX_LENGTH = 150;
 export const MESSAGE_BODY_MAX_LENGTH = 5_000;
 /** Destinataires d'un message ; au-delà : refus, jamais de troncature. */
 export const MESSAGE_MAX_RECIPIENTS = 50;
+/** Bornes d'une campagne (miroir web : admin-api.ts). */
+export const CAMPAIGN_SUBJECT_MAX_LENGTH = 150;
+export const CAMPAIGN_BODY_MAX_LENGTH = 10_000;
+/** Commerces d'un ciblage explicite ; au-delà : refus. */
+export const CAMPAIGN_MAX_ORGANIZATIONS = 200;
 
 export const REASON_MIN_LENGTH = 10;
 export const REASON_MAX_LENGTH = 500;
@@ -148,9 +184,9 @@ const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F]/;
  * retirés ; titre sur une ligne. Aucun HTML n'est interprété : l'affichage
  * échappe tout (web, e-mail).
  */
-function messageText(
+export function messageText(
   value: unknown,
-  field: 'title' | 'body',
+  field: 'title' | 'body' | 'subject',
   max: number,
 ): string {
   if (typeof value !== 'string') throw invalid(field);
@@ -159,11 +195,33 @@ function messageText(
     normalized.length === 0 ||
     normalized.length > max ||
     CONTROL.test(normalized) ||
-    (field === 'title' && /[\n\t]/.test(normalized))
+    (field !== 'body' && /[\n\t]/.test(normalized))
   ) {
     throw invalid(field);
   }
   return normalized;
+}
+
+/** Ciblage canonique : tous, ou commerces triés et dédupliqués. */
+export function campaignTargeting(
+  value: unknown,
+): CampaignLaunchIntent['targeting'] {
+  if (typeof value !== 'object' || value === null) throw invalid('targeting');
+  const raw = value as Record<string, unknown>;
+  if (raw.mode === 'all' && Object.keys(raw).length === 1) {
+    return { mode: 'all' };
+  }
+  if (raw.mode !== 'selected' || Object.keys(raw).length !== 2) {
+    throw invalid('targeting');
+  }
+  return {
+    mode: 'selected',
+    organizationIds: objectIdList(
+      raw.organizationIds,
+      'organizationIds',
+      CAMPAIGN_MAX_ORGANIZATIONS,
+    ),
+  };
 }
 
 /** Identifiants triés et dédupliqués (1 à `max`) ; au-delà : refus. */
@@ -204,6 +262,35 @@ function channelList(value: unknown): MessageChannel[] {
 export function normalizeIntent(raw: Record<string, unknown>): ActionIntent {
   const organizationId = raw.organizationId;
   const operationId = raw.operationId;
+  if (raw.action === 'campaign_launch') {
+    const campaignId = raw.campaignId;
+    if (typeof campaignId !== 'string' || !OBJECT_ID_PATTERN.test(campaignId)) {
+      throw invalid('campaignId');
+    }
+    if (
+      typeof operationId !== 'string' ||
+      !OPERATION_ID_PATTERN.test(operationId)
+    ) {
+      throw invalid('operationId');
+    }
+    const revision = raw.revision;
+    if (
+      typeof revision !== 'number' ||
+      !Number.isInteger(revision) ||
+      revision < 1
+    ) {
+      throw invalid('revision');
+    }
+    return {
+      action: 'campaign_launch',
+      campaignId,
+      operationId,
+      revision,
+      subject: messageText(raw.subject, 'subject', CAMPAIGN_SUBJECT_MAX_LENGTH),
+      body: messageText(raw.body, 'body', CAMPAIGN_BODY_MAX_LENGTH),
+      targeting: campaignTargeting(raw.targeting),
+    };
+  }
   if (
     typeof organizationId !== 'string' ||
     !OBJECT_ID_PATTERN.test(organizationId)

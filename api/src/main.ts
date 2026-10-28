@@ -18,6 +18,7 @@ import { API_APPLICATION_OPTIONS } from './common/application-options';
 import { resolveWebPushConfig } from './push/push-config';
 import { startNotifications } from './push/push-bootstrap';
 import { PlatformMessageDeliveryService } from './platform-admin/platform-message-delivery.service';
+import { PlatformCampaignDeliveryService } from './platform-admin/platform-campaign-delivery.service';
 import { configureProcessTimeZone } from './analytics/month-range';
 import { startStorageRecovery } from './storage-quota/storage-recovery';
 import { startPaymentReconciliationSweep } from './subscriptions/payments/payment-reconciliation-sweep';
@@ -161,6 +162,9 @@ async function bootstrap() {
   // Messages de service de l'administration : livraisons (centre, push,
   // e-mail) traitées en fond, processus HTTP uniquement.
   app.get(PlatformMessageDeliveryService).start();
+  // Campagnes : audience toujours préparée ; envois seulement si
+  // MARKETING_EMAILS_ENABLED=true (relu à chaque passe).
+  app.get(PlatformCampaignDeliveryService).start();
   // 1-17B : reprise des envois et suppressions de fichiers interrompus
   // (processus HTTP uniquement).
   startStorageRecovery(app);

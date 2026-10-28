@@ -172,6 +172,11 @@ function activateSimulatedPush(app) {
     'platform-admin/platform-message-delivery.service',
   );
   app.get(PlatformMessageDeliveryService).start(1000);
+  // Campagnes promotionnelles (e-mails dans mail.jsonl, jamais Resend).
+  const { PlatformCampaignDeliveryService } = C.dist(
+    'platform-admin/platform-campaign-delivery.service',
+  );
+  app.get(PlatformCampaignDeliveryService).start(1000);
 }
 
 function assertImplicitWritesDisabled() {
@@ -198,7 +203,7 @@ function fileEmailSender() {
       fs.appendFileSync(
         C.MAIL_FILE,
         // 1-16C.1 : Reply-To et clé d'idempotence consignés (assistance).
-        `${JSON.stringify({ to: email.to, subject: email.subject, text: email.text, replyTo: email.replyTo ?? null, idempotencyKey: email.idempotencyKey })}\n`,
+        `${JSON.stringify({ to: email.to, subject: email.subject, text: email.text, replyTo: email.replyTo ?? null, idempotencyKey: email.idempotencyKey, headers: email.headers ?? null })}\n`,
       );
     },
   };

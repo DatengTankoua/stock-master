@@ -18,6 +18,8 @@ export interface PlatformAdminIndexSpec {
   key: Record<string, 1 | -1>;
   unique?: boolean;
   expireAfterSeconds?: number;
+  /** Index partiel (unicité limitée aux documents concernés). */
+  partialFilterExpression?: Record<string, unknown>;
 }
 
 export const SESSION_TTL_GRACE_SECONDS = 86_400;
@@ -135,6 +137,38 @@ export const PLATFORM_ADMIN_INDEXES: readonly PlatformAdminIndexSpec[] =
       name: 'status_1_lockedUntil_1',
       key: { status: 1, lockedUntil: 1 },
     },
+    // Campagnes : un lancement par identifiant d'opération (index partiel :
+    // les brouillons n'en ont pas), liste paginée filtrée par archivage.
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.campaigns,
+      name: 'launchOperationId_1_unique',
+      key: { launchOperationId: 1 },
+      unique: true,
+      partialFilterExpression: { launchOperationId: { $type: 'string' } },
+    },
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.campaigns,
+      name: 'archivedAt_1_createdAt_-1',
+      key: { archivedAt: 1, createdAt: -1 },
+    },
+    // Une livraison par campagne et utilisateur (déduplication), file du
+    // traitement de fond, résultats paginés.
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.campaignDeliveries,
+      name: 'campaignId_1_userId_1_unique',
+      key: { campaignId: 1, userId: 1 },
+      unique: true,
+    },
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.campaignDeliveries,
+      name: 'status_1_nextAttemptAt_1',
+      key: { status: 1, nextAttemptAt: 1 },
+    },
+    {
+      collection: PLATFORM_ADMIN_COLLECTIONS.campaignDeliveries,
+      name: 'campaignId_1_status_1',
+      key: { campaignId: 1, status: 1 },
+    },
     // Liste des organisations (tri par inscription) et inscriptions
     // récentes de la vue d'ensemble : seul index ajouté à une collection
     // métier.
@@ -178,7 +212,8 @@ export function describeIndexProblem(
     !sameKey(index.key, spec.key) ||
     Boolean(index.unique) !== Boolean(spec.unique) ||
     index.expireAfterSeconds !== spec.expireAfterSeconds ||
-    index.partialFilterExpression !== undefined
+    JSON.stringify(index.partialFilterExpression ?? null) !==
+      JSON.stringify(spec.partialFilterExpression ?? null)
   ) {
     return 'différent';
   }
@@ -249,6 +284,9 @@ export async function ensurePlatformAdminIndexes(
       ...(spec.unique ? { unique: true } : {}),
       ...(spec.expireAfterSeconds !== undefined
         ? { expireAfterSeconds: spec.expireAfterSeconds }
+        : {}),
+      ...(spec.partialFilterExpression !== undefined
+        ? { partialFilterExpression: spec.partialFilterExpression }
         : {}),
     });
     created.push(label);

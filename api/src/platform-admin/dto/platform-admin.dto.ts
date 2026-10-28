@@ -267,3 +267,49 @@ export class AdminMessageArchiveDto {
   @Matches(/^[0-9a-f]{24}$/, { each: true })
   messageIds: string[];
 }
+
+// ─── Campagnes promotionnelles ─────────────────────────────────────────────
+
+/**
+ * Brouillon : bornes larges ici (forme) ; bornes exactes, texte simple et
+ * ciblage canonique vérifiés par le service (refus, jamais de troncature).
+ */
+export class AdminCampaignDraftDto {
+  @IsString()
+  @MaxLength(1_000)
+  subject: string;
+
+  @IsString()
+  @MaxLength(20_000)
+  body: string;
+
+  @IsObject()
+  targeting: Record<string, unknown>;
+}
+
+export class AdminCampaignUpdateDto extends AdminCampaignDraftDto {
+  @IsInt()
+  @Min(1)
+  revision: number;
+}
+
+export class AdminCampaignLaunchDto extends AdminCampaignUpdateDto {
+  @Matches(OPERATION_ID)
+  operationId: string;
+
+  @Matches(TOKEN)
+  stepUpToken: string;
+}
+
+export class AdminCampaignsQuery extends AdminPageQuery {
+  /** Par défaut : campagnes non archivées. */
+  @IsOptional()
+  @IsIn(MESSAGE_ARCHIVE_FILTERS)
+  archived?: MessageArchiveFilter;
+}
+
+export class AdminCampaignPreviewQuery {
+  @IsOptional()
+  @IsIn(['fr', 'en'])
+  locale?: 'fr' | 'en';
+}

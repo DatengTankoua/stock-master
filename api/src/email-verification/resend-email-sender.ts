@@ -10,6 +10,20 @@ export const RESEND_TIMEOUT_MS = 10_000;
 
 const ADDRESS_PATTERN = /^[^\s<>@",;]+@[^\s<>@",;]+\.[^\s<>@",;]+$/;
 
+/** En-têtes autorisés : nom ASCII simple, valeur sans retour à la ligne. */
+export function areValidHeaders(
+  headers: Record<string, string> | undefined,
+): boolean {
+  if (headers === undefined) return true;
+  return Object.entries(headers).every(
+    ([name, value]) =>
+      /^[A-Za-z][A-Za-z0-9-]{0,63}$/.test(name) &&
+      typeof value === 'string' &&
+      value.length <= 2048 &&
+      !/[\r\n]/.test(value),
+  );
+}
+
 /** 1-16C.1 — Adresse simple (sans nom, sans liste, sans retour à la ligne). */
 export function isValidReplyTo(value: string | undefined): value is string {
   return (
@@ -78,6 +92,9 @@ export class ResendEmailSender implements EmailSender {
     if (email.replyTo !== undefined && !isValidReplyTo(email.replyTo)) {
       throw new EmailDeliveryError('rejected');
     }
+    if (!areValidHeaders(email.headers)) {
+      throw new EmailDeliveryError('rejected');
+    }
 
     let response: Response;
     try {
@@ -95,6 +112,7 @@ export class ResendEmailSender implements EmailSender {
           html: email.html,
           text: email.text,
           ...(email.replyTo !== undefined ? { reply_to: email.replyTo } : {}),
+          ...(email.headers !== undefined ? { headers: email.headers } : {}),
         }),
         redirect: 'error',
         signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),

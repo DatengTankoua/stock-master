@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useT } from "next-i18next/client";
 import {
   BuildingIcon,
+  MegaphoneIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   ReceiptIcon,
@@ -43,6 +44,7 @@ const NAV = [
   { href: "/admin", key: "overview", icon: LayoutDashboardIcon },
   { href: "/admin/organizations", key: "organizations", icon: BuildingIcon },
   { href: "/admin/payments", key: "payments", icon: ReceiptIcon },
+  { href: "/admin/campaigns", key: "campaigns", icon: MegaphoneIcon },
   { href: "/admin/audit", key: "audit", icon: ScrollTextIcon },
   { href: "/admin/security", key: "security", icon: ShieldCheckIcon },
 ] as const;

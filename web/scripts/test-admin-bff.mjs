@@ -285,6 +285,36 @@ test("messages : codes publics seulement ; référence opaque, sans code ni stat
   }
 });
 
+test("campagnes : routes relayées, autres refusées", () => {
+  const id = "0123456789abcdef01234567";
+  for (const [method, segments] of [
+    ["GET", ["campaigns"]],
+    ["POST", ["campaigns"]],
+    ["GET", ["campaigns", id]],
+    ["POST", ["campaigns", id]],
+    ["GET", ["campaigns", id, "preview"]],
+    ["GET", ["campaigns", id, "estimate"]],
+    ["GET", ["campaigns", id, "results"]],
+    ["POST", ["campaigns", id, "launch"]],
+    ["POST", ["campaigns", id, "archive"]],
+    ["POST", ["campaigns", id, "restore"]],
+  ]) {
+    assert.equal(resolveAdminRoute(method, segments), segments.join("/"), `${method} ${segments}`);
+  }
+  for (const [method, segments] of [
+    ["GET", ["campaigns", id, "launch"]],
+    ["POST", ["campaigns", id, "preview"]],
+    ["POST", ["campaigns", "all", "launch"]],
+    ["POST", ["campaigns", id, "recipients"]],
+  ]) {
+    assert.equal(resolveAdminRoute(method, segments), null, `${method} ${segments}`);
+  }
+  assert.equal(
+    filterAdminQuery(new URLSearchParams("locale=en&token=x")),
+    "?locale=en",
+  );
+});
+
 test("messages de service : routes relayées et codes publics", () => {
   const org = "0123456789abcdef01234567";
   assert.equal(resolveAdminRoute("GET", ["organizations", org, "message-recipients"]), `organizations/${org}/message-recipients`);

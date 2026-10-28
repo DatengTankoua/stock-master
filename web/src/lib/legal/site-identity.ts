@@ -270,6 +270,9 @@ const DRAFT_STORAGE_R2 = {
 // de publication (identique à `--published-at` de l'archivage). Si la
 // publication a lieu un autre jour, changer la date ici et réarchiver AVANT
 // la mise en ligne (ces versions n'étant pas encore publiées).
+// Campagnes e-mail : ces deux versions, jamais publiées (confirmé par le
+// propriétaire), sont complétées AVANT publication (désabonnement depuis
+// les e-mails, suivi des envois) et réarchivées sous le même numéro.
 const OCTOBER_28_2026 = { fr: "28 octobre 2026", en: "28 October 2026" };
 const DRAFT_MARKETING_CONSENT = {
   status: "projet",

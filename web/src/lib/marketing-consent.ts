@@ -82,3 +82,11 @@ export function marketingConsentErrorKey(
       return null;
   }
 }
+
+/**
+ * Désabonnement par le lien d'un e-mail promotionnel : aucune session, le
+ * jeton fait foi (corps de la requête, jamais l'URL de l'API).
+ */
+export async function confirmUnsubscribe(token: string): Promise<void> {
+  await apiClient.post("/marketing/unsubscribe", { token });
+}

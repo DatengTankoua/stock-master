@@ -191,6 +191,13 @@ export const ERROR_MESSAGE_TRANSLATIONS: Readonly<
   'Le texte proposé a changé : recharge la page.': {
     en: 'The text shown has changed: reload the page.',
   },
+  'Campagne déjà lancée ou modifiée entre-temps : rechargez-la avant de continuer.':
+    {
+      en: 'Campaign already launched or changed in the meantime: reload it before continuing.',
+    },
+  'Lien de désabonnement invalide.': {
+    en: 'Invalid unsubscribe link.',
+  },
   'Texte inconnu.': {
     en: 'Unknown text.',
   },
