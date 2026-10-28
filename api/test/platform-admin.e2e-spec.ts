@@ -1048,6 +1048,45 @@ describe('Administration de la plateforme (e2e)', () => {
         productBatches: false,
         expiryAlerts: false,
       });
+      expect(res.body.featureScopes).toEqual({
+        productBatches: null,
+        expiryAlerts: null,
+      });
+      // Portée déduite de la configuration, sans aucune valeur brute.
+      const saved = {
+        a: process.env.PRODUCT_BATCHES_ENABLED,
+        b: process.env.PRODUCT_BATCHES_ORGANIZATIONS,
+        c: process.env.EXPIRY_ALERTS_ENABLED,
+        d: process.env.EXPIRY_ALERTS_ORGANIZATIONS,
+      };
+      try {
+        process.env.PRODUCT_BATCHES_ENABLED = 'true';
+        process.env.PRODUCT_BATCHES_ORGANIZATIONS = 'all';
+        process.env.EXPIRY_ALERTS_ENABLED = 'true';
+        process.env.EXPIRY_ALERTS_ORGANIZATIONS = `${organizationId},${new Types.ObjectId().toHexString()}`;
+        const scoped = await get(`/organizations/${organizationId}`);
+        expect(scoped.body.features).toEqual({
+          productBatches: true,
+          expiryAlerts: true,
+        });
+        expect(scoped.body.featureScopes).toEqual({
+          productBatches: 'all',
+          expiryAlerts: 'selected',
+        });
+        expect(JSON.stringify(scoped.body.featureScopes)).not.toContain(
+          organizationId,
+        );
+      } finally {
+        for (const [key, value] of [
+          ['PRODUCT_BATCHES_ENABLED', saved.a],
+          ['PRODUCT_BATCHES_ORGANIZATIONS', saved.b],
+          ['EXPIRY_ALERTS_ENABLED', saved.c],
+          ['EXPIRY_ALERTS_ORGANIZATIONS', saved.d],
+        ] as const) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
       const audit = await connection
         .db!.collection('platform_admin_audit')
         .findOne({ action: 'organization_view', targetId: organizationId });

@@ -95,6 +95,10 @@ pnpm start:prod     # démarre le build de production
 pnpm lint           # ESLint avec correction automatique
 ```
 
+Administration de la plateforme (accès, capacités, récupération du second
+facteur) : commandes opérateur prêtes à copier dans
+[railway-platform-admin.md](../docs/operations/railway-platform-admin.md).
+
 ## Build production (Docker)
 
 Le contexte de build est la **racine du dépôt** : le Dockerfile copie le

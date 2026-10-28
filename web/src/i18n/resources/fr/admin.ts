@@ -206,10 +206,17 @@ const adminFr = {
     coverageEndsAt: "Fin de la dernière période",
     periods: "Périodes",
     current: "En cours",
-    features: "Fonctionnalités effectives",
+    features: "Fonctionnalités activées pour ce commerce",
+    featuresIntro:
+      "Options activées par Stock Master, pour tous les commerces ou pour quelques commerces choisis. Elles ne dépendent ni de l'abonnement, ni des droits des membres, ni de leurs choix personnels.",
     productBatches: "Suivi par lots",
+    productBatchesHint: "Lots et dates de péremption des produits.",
     expiryAlerts: "Alertes de péremption",
+    expiryAlertsHint:
+      "Rappels avant la date de péremption des produits suivis.",
     enabled: "Activé",
+    enabledAll: "Activé pour tous les commerces",
+    enabledSelected: "Activé pour ce commerce",
     disabled: "Désactivé",
     payments: "Derniers paiements",
     noPayments: "Aucun paiement.",

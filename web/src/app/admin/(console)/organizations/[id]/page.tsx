@@ -38,7 +38,7 @@ function Row({
   label,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -189,17 +189,34 @@ export default function AdminOrganizationPage() {
               </ul>
             </AdminSection>
             <AdminSection title={t("organization.features")}>
+              <p className="mb-2 text-xs text-muted-foreground">
+                {t("organization.featuresIntro")}
+              </p>
               <dl className="divide-y divide-border">
-                <Row label={t("organization.productBatches")}>
-                  {data.features.productBatches
-                    ? t("organization.enabled")
-                    : t("organization.disabled")}
-                </Row>
-                <Row label={t("organization.expiryAlerts")}>
-                  {data.features.expiryAlerts
-                    ? t("organization.enabled")
-                    : t("organization.disabled")}
-                </Row>
+                {(["productBatches", "expiryAlerts"] as const).map((key) => {
+                  const scope = data.featureScopes?.[key];
+                  return (
+                    <Row
+                      key={key}
+                      label={
+                        <>
+                          {t(`organization.${key}`)}
+                          <span className="block text-xs text-muted-foreground">
+                            {t(`organization.${key}Hint`)}
+                          </span>
+                        </>
+                      }
+                    >
+                      {!data.features[key]
+                        ? t("organization.disabled")
+                        : scope === "all"
+                          ? t("organization.enabledAll")
+                          : scope === "selected"
+                            ? t("organization.enabledSelected")
+                            : t("organization.enabled")}
+                    </Row>
+                  );
+                })}
               </dl>
             </AdminSection>
           </div>
