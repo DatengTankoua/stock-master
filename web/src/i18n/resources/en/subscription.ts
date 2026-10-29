@@ -200,6 +200,8 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
         "An earlier attempt of this renewal was paid: this payment is suspended pending resolution.",
       collectedInResolution:
         "Payment received: it needs to be checked by our team before it is applied. It is neither lost nor refused.",
+      confirmationPending:
+        "Status checked: SasPay is still confirming this payment. If you have already been charged, do not pay again.",
       offlineVerify: "Offline: checking needs the Internet.",
       statusChecked: "Status checked: {{status}}.",
       statusNow: "This payment is now: {{status}}.",
@@ -223,6 +225,27 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
       lockedIntent:
         "An earlier request got no answer. Submit again to find it: no second payment will be requested. Length: <b>{{term}}</b>.",
       validUntil: "Payment link valid until {{time}}.",
+    },
+    // SasPay transaction started, outcome not known yet.
+    confirmation: {
+      label: "Payment being confirmed",
+      detail:
+        "Your payment is being confirmed. If you have already been charged, do not pay again.",
+      providerDelay:
+        "SasPay can take some time to update a payment's status. Stock Master checks it automatically; you can also tap “Check payment”.",
+      delayedTitle: "Check with support",
+      delayedDetail:
+        "SasPay has still not confirmed this payment after more than 24 hours. Checking it now requires our support team: contact them with the reference below.",
+      referenceLabel: "Reference to share",
+      copy: "Copy reference",
+      copied: "Reference copied.",
+      copyFailed: "Could not copy: select the reference to copy it.",
+      noPromise:
+        "Our support team will check its status with SasPay. The subscription is only extended once SasPay confirms the payment.",
+      channels: "Contact support",
+      whatsapp: "WhatsApp {{number}}",
+      emailSubject: "Payment awaiting confirmation {{reference}}",
+      supportPage: "Support page",
     },
     situation: {
       expired: {

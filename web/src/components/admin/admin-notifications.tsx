@@ -141,6 +141,22 @@ function useNotificationText() {
             ),
           }),
         };
+      case "payment_confirmation_delayed":
+        return {
+          title,
+          summary: t(
+            p.transactionReference
+              ? "notifications.types.payment_confirmation_delayed.summary"
+              : "notifications.types.payment_confirmation_delayed.summaryNoTransaction",
+            {
+              name,
+              amount,
+              reference: p.reference || t("none"),
+              transaction: p.transactionReference ?? "",
+              since: p.startedAt ? format.dateTime(p.startedAt) : t("none"),
+            },
+          ),
+        };
       case "support_request":
         return {
           title,
@@ -290,6 +306,11 @@ export function AdminNotificationRow({
         {n.type === "support_request" && !compact && (
           <p className="text-xs text-muted-foreground">
             {t("notifications.supportMailbox")}
+          </p>
+        )}
+        {n.type === "payment_confirmation_delayed" && !compact && (
+          <p className="text-xs text-muted-foreground">
+            {t("notifications.delayedProcedure")}
           </p>
         )}
         {failed && (

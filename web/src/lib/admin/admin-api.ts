@@ -584,6 +584,7 @@ export type AdminNotificationType =
   | "organization_created"
   | "payment_confirmed"
   | "payment_review"
+  | "payment_confirmation_delayed"
   | "support_request"
   | "campaign_audience_partial"
   | "campaign_completed";
@@ -612,6 +613,10 @@ export interface AdminNotification {
     months?: number;
     incidentCode?: string | null;
     reference?: string;
+    /** Retard SasPay : transaction SasPay rattachée, sinon `null`. */
+    transactionReference?: string | null;
+    /** Retard SasPay : départ du délai (création du paiement, ISO). */
+    startedAt?: string;
     supportCategory?: string;
     audienceTotal?: number;
     results?: {

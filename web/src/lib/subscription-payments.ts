@@ -47,6 +47,12 @@ export interface ApiSubscriptionPayment {
   /** 1-21E : encaissement confirmé (statut financier), distinct de `status`. */
   collected?: boolean;
   /**
+   * Transaction SasPay engagée, issue pas encore connue ; `delayed` : plus
+   * de 24 h (heure du serveur), assistance proposée. Absent d'une API
+   * antérieure ; `null` pour un paiement confirmé ou refusé.
+   */
+  confirmationPending?: { since: string; delayed: boolean } | null;
+  /**
    * 1-21E — CLIENT seulement : échéance locale du lien (horloge de CET
    * onglet, réception + validité restante), jamais envoyée au serveur.
    */

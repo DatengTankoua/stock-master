@@ -679,6 +679,8 @@ const adminEn: Translation<typeof adminFr> = {
     unknownOrganization: "Business",
     supportMailbox:
       "The request is handled in the support mailbox: its content is not kept in Stock Master.",
+    delayedProcedure:
+      "For information only: the payment's state is not changed. First check its status (payments page, then the reconciliation CLI “inspect” and “reconcile”). If it is still unconfirmed, open a ticket with SasPay support using the transaction reference (or, failing that, the Stock Master reference).",
     open: {
       organization: "Open record",
       payment: "View payments",
@@ -697,6 +699,13 @@ const adminEn: Translation<typeof adminFr> = {
         title: "Payment to review",
         summary:
           "{{name}}: {{amount}}. Reason: {{reason}}. No automatic outcome: operator action required.",
+      },
+      payment_confirmation_delayed: {
+        title: "Payment awaiting confirmation for more than 24 hours",
+        summary:
+          "{{name}}: {{amount}}, requested on {{since}}. SasPay transaction: {{transaction}}. Stock Master reference: {{reference}}.",
+        summaryNoTransaction:
+          "{{name}}: {{amount}}, requested on {{since}}. No SasPay transaction attached. Stock Master reference: {{reference}}.",
       },
       support_request: {
         title: "Support request",

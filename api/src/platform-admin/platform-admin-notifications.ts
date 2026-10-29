@@ -18,6 +18,7 @@ export const NOTIFICATION_TYPES = [
   'organization_created',
   'payment_confirmed',
   'payment_review',
+  'payment_confirmation_delayed',
   'support_request',
   'campaign_audience_partial',
   'campaign_completed',
@@ -38,6 +39,7 @@ export const TYPE_CATEGORY: Readonly<
   organization_created: 'organizations',
   payment_confirmed: 'payments',
   payment_review: 'payments',
+  payment_confirmation_delayed: 'payments',
   support_request: 'support',
   campaign_audience_partial: 'campaigns',
   campaign_completed: 'campaigns',
@@ -85,6 +87,13 @@ export interface NotificationParams {
   months?: number;
   incidentCode?: string | null;
   reference?: string;
+  /**
+   * Retard SasPay : transaction SasPay rattachée (référence non secrète,
+   * déjà sur le reçu du client), à citer dans un ticket ; `null` si aucune.
+   */
+  transactionReference?: string | null;
+  /** Retard SasPay : départ du délai (`createdAt` du paiement, ISO). */
+  startedAt?: string;
   supportCategory?: string;
   audienceTotal?: number;
   results?: CampaignFinalCounts;
@@ -143,6 +152,9 @@ export const notificationKeys = Object.freeze({
   /** Un incident donné n'est signalé qu'une fois pour un paiement. */
   paymentReview: (paymentId: string, incident: string | null) =>
     `payment_review:${paymentId}:${incident ?? 'none'}`,
+  /** Seuil de 24 h : une seule alerte par paiement, quel que soit son état. */
+  paymentConfirmationDelayed: (paymentId: string) =>
+    `payment_confirmation_delayed:${paymentId}`,
   supportRequest: (requestId: string) => `support_request:${requestId}`,
   campaignAudiencePartial: (campaignId: string) =>
     `campaign_audience_partial:${campaignId}`,
@@ -297,6 +309,9 @@ export function toNotificationView(
   if (typeof p.months === 'number') params.months = p.months;
   if (p.incidentCode !== undefined) params.incidentCode = p.incidentCode;
   if (typeof p.reference === 'string') params.reference = p.reference;
+  if (p.transactionReference !== undefined)
+    params.transactionReference = p.transactionReference;
+  if (typeof p.startedAt === 'string') params.startedAt = p.startedAt;
   if (typeof p.supportCategory === 'string')
     params.supportCategory = p.supportCategory;
   if (typeof p.audienceTotal === 'number')

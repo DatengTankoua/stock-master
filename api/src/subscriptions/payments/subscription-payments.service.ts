@@ -83,6 +83,10 @@ import {
 } from './payment-errors';
 import type { PaymentCallPermit } from './payment-call-budget';
 import {
+  confirmationDelayExceeded,
+  paymentAwaitingConfirmation,
+} from './payment-confirmation-delay';
+import {
   PAYMENT_HISTORY_DEFAULT_LIMIT,
   PAYMENT_HISTORY_MAX_LIMIT,
 } from './dto/subscription-payment.dto';
@@ -174,6 +178,13 @@ export interface SubscriptionPaymentView {
    * distinct de l'attribution (`status: succeeded` = période attribuée).
    */
   collected: boolean;
+  /**
+   * Transaction SasPay engagée dont l'issue n'est pas encore connue (voir
+   * `paymentAwaitingConfirmation`) ; `null` sinon, notamment pour un
+   * paiement confirmé ou refusé. `since` : départ du délai (`createdAt`) ;
+   * `delayed` : seuil de 24 h atteint à l'heure du serveur (assistance).
+   */
+  confirmationPending: { since: string; delayed: boolean } | null;
   createdAt: string | null;
   initiatedAt: string | null;
   confirmedAt: string | null;
@@ -2099,6 +2110,7 @@ export class SubscriptionPaymentsService {
       // 1-21E : poursuite suspendue (tentative remplacée encaissée).
       !payment.renewalConflictAt &&
       (expiry === null || remaining > 0);
+    const awaiting = paymentAwaitingConfirmation(payment, linkValid);
     return {
       paymentId: payment._id.toHexString(),
       reference: payment.merchantReference,
@@ -2112,6 +2124,12 @@ export class SubscriptionPaymentsService {
       checkoutExpiresInMs: linkValid && expiry ? remaining : null,
       situation: this.situation(payment, linkValid, expiry),
       collected: isCollected(payment),
+      confirmationPending: awaiting
+        ? {
+            since: iso(payment.createdAt)!,
+            delayed: confirmationDelayExceeded(payment, this.clock()),
+          }
+        : null,
       createdAt: iso(payment.createdAt),
       initiatedAt: iso(payment.initiatedAt),
       confirmedAt: iso(payment.confirmedAt),

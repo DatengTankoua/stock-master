@@ -28,6 +28,7 @@ d'e-mail ni de WhatsApp, et aucune nouvelle intégration externe.
 | `organization_created` | Document `organizations` créé (la transaction d'inscription l'a validé). | Nom du commerce, date | Fiche `/admin/organizations/<id>` |
 | `payment_confirmed` | `subscription_payments` en `succeeded`, avec `periodId` et `confirmedAt` (écrits dans la transaction d'attribution). | Commerce, montant, devise, durée accordée (forfait) | `/admin/payments?organizationId=<id>` |
 | `payment_review` | `subscription_payments` en `review`, sans `refundedAt`. | Commerce, montant, motif (code d'incident traduit), « intervention de l'opérateur requise » | Idem |
+| `payment_confirmation_delayed` | `subscription_payments` SasPay ouvert non résolu (`initiating`, `pending`, `uncertain`) dont la création de la tentative (`createdAt`, et non un débit constaté) date de plus de 24 h. Relu par état, sans curseur ([retards SasPay](saspay-delayed-confirmations.md)). | Commerce, montant, référence `SM…`, transaction SasPay, date de départ | `/admin/payments?organizationId=<id>` |
 | `support_request` | Document `support_requests` enregistré par le formulaire. | Commerce, référence `AS-…`, catégorie ; « traitement dans la messagerie d'assistance » | Fiche du commerce |
 | `campaign_audience_partial` | Campagne lancée, audience `ready` **et** `incomplete`. | Nombre de destinataires retenus, « à vérifier » | `/admin/campaigns/<id>` |
 | `campaign_completed` | Audience gelée depuis 5 min **et** aucune livraison `pending` ni `sending`. | Acceptés par le prestataire (« pas une preuve de réception »), ignorés, échecs, incertains | Idem |
@@ -211,6 +212,7 @@ persistant** des collections métier.
   - `organization_created:<org>` ;
   - `payment_confirmed:<paiement>` ;
   - `payment_review:<paiement>:<incident>` ;
+  - `payment_confirmation_delayed:<paiement>` ;
   - `support_request:<demande>` ;
   - `campaign_audience_partial:<campagne>` ;
   - `campaign_completed:<campagne>`.
