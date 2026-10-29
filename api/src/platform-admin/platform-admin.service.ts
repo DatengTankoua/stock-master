@@ -111,6 +111,11 @@ export interface PlatformAdminRequestContext {
   factor?: PlatformAdminFactorDoc | null;
   /** Capacités de l'autorisation ACTIVE, relues à chaque requête. */
   capabilities?: ReadonlySet<PlatformCapability>;
+  /**
+   * Attribution de l'accès ACTIF (relue à chaque requête) : début des
+   * notifications internes de cet administrateur.
+   */
+  grantedAt?: Date;
 }
 
 export interface AuthenticationInput {
@@ -231,6 +236,7 @@ export class PlatformAdminService {
     }
     const factor = await this.db.factors.findOne({ userId: session.userId });
     context.capabilities = effectiveCapabilities(grant);
+    context.grantedAt = grant.grantedAt;
 
     if (level === 'pre-mfa' && session.stage !== 'password') {
       throw adminAlreadyEnrolled();

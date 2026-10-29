@@ -24,6 +24,7 @@ import {
   type AdminStatus,
 } from "@/lib/admin/admin-api";
 import { AdminError, AdminLoading } from "@/components/admin/admin-ui";
+import { AdminNotificationBell } from "@/components/admin/admin-notifications";
 
 // Administration de la plateforme — cadre des pages connectées. Aucune
 // donnée avant une session complète (mot de passe + second facteur) : le
@@ -106,9 +107,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <aside className="border-b border-border md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:flex-col md:border-r md:border-b-0">
         <div className="flex items-center justify-between gap-2 px-4 py-3">
           <p className="text-sm font-semibold leading-tight">{t("brand")}</p>
-          <div className="flex gap-1 md:hidden">
-            <LanguageSwitcher />
-            <ThemeToggle />
+          <div className="flex items-center gap-1">
+            {/* Session complète seulement ; arrêtée à la déconnexion. */}
+            {status && <AdminNotificationBell active={!leaving} />}
+            <div className="flex gap-1 md:hidden">
+              <LanguageSwitcher />
+              <ThemeToggle />
+            </div>
           </div>
         </div>
         <nav

@@ -177,6 +177,11 @@ function activateSimulatedPush(app) {
     'platform-admin/platform-campaign-delivery.service',
   );
   app.get(PlatformCampaignDeliveryService).start(1000);
+  // Notifications internes de l'administration (collecte depuis la base).
+  const { PlatformAdminNotificationSweep } = C.dist(
+    'platform-admin/platform-admin-notification-sweep.service',
+  );
+  app.get(PlatformAdminNotificationSweep).start(5000);
 }
 
 function assertImplicitWritesDisabled() {

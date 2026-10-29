@@ -49,6 +49,8 @@ const MIGRATIONS = [
   'create-legal-acceptance-indexes.js',
   // Administration de la plateforme : index seuls (aucun accès accordé).
   'create-platform-admin-indexes.js',
+  // Notifications internes de l'administration : index seuls.
+  'create-platform-admin-notification-indexes.js',
 ];
 const NEXT_BIN = path.join(
   C.WEB_DIR,

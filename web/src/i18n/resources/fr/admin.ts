@@ -658,6 +658,95 @@ const adminFr = {
     close: "Fermer",
     operation: "Opération",
   },
+  notifications: {
+    title: "Notifications",
+    intro:
+      "Événements importants de la plateforme. L'état lu / non lu vous est propre : lire une notification ne change rien pour les autres administrateurs.",
+    recent: "Notifications récentes",
+    seeAll: "Voir toutes les notifications",
+    bell: {
+      none: "Notifications : aucune non lue",
+      unread_one: "Notifications : {{count}} non lue",
+      unread_many: "Notifications : {{count}} non lues",
+      unread_other: "Notifications : {{count}} non lues",
+      moreThan99: "Notifications : plus de 99 non lues",
+    },
+    filters: {
+      label: "Filtrer les notifications",
+      all: "Toutes",
+      unread: "Non lues",
+    },
+    empty: "Aucune notification.",
+    emptyUnread: "Aucune notification non lue.",
+    unreadMark: "non lue",
+    readMark: "lue",
+    markRead: "Marquer comme lu",
+    markAllRead: "Tout marquer comme lu",
+    markingAll: "Marquage…",
+    markFailed:
+      "Impossible de marquer cette notification comme lue. Réessayez.",
+    remaining:
+      "Beaucoup de notifications restaient non lues : relancez « Tout marquer comme lu » pour les suivantes.",
+    unavailable: "Élément indisponible",
+    unknownOrganization: "Commerce",
+    supportMailbox:
+      "Le traitement de la demande se fait dans la messagerie d'assistance : son contenu n'est pas conservé dans Stock Master.",
+    open: {
+      organization: "Ouvrir la fiche",
+      payment: "Voir les paiements",
+      campaign: "Ouvrir la campagne",
+    },
+    types: {
+      organization_created: {
+        title: "Nouvelle organisation",
+        summary: "{{name}} vient de s'inscrire.",
+      },
+      payment_confirmed: {
+        title: "Paiement d'abonnement confirmé",
+        summary: "{{name}} : {{amount}}, durée accordée : {{duration}}.",
+      },
+      payment_review: {
+        title: "Paiement à examiner",
+        summary:
+          "{{name}} : {{amount}}. Motif : {{reason}}. Aucune issue automatique : intervention de l'opérateur requise.",
+      },
+      support_request: {
+        title: "Demande d'assistance",
+        summary: "{{name}} : demande {{reference}} (catégorie : {{category}}).",
+      },
+      campaign_audience_partial: {
+        title: "Campagne : audience partielle à vérifier",
+        summary:
+          "La constitution de l'audience a été interrompue puis close : {{total}} destinataire(s) retenu(s).",
+      },
+      campaign_completed: {
+        title: "Campagne : traitement terminé",
+        summary:
+          "Acceptés par le prestataire (pas une preuve de réception) : {{accepted}} · Ignorés : {{skipped}} · Échecs : {{failed}} · Incertains : {{uncertain}}.",
+      },
+    },
+    incidents: {
+      none: "incident non précisé",
+      initiation_rejected: "création refusée par le prestataire",
+      initiation_uncertain: "création incertaine",
+      provider_unavailable: "prestataire indisponible",
+      provider_mismatch:
+        "discordance avec le prestataire (montant, devise ou référence)",
+      late_failure_after_success: "échec signalé après un succès",
+      checkout_unresolved: "page de paiement non résolue",
+      provider_inconsistent: "réponses incohérentes du prestataire",
+      checkout_closed: "page de paiement close",
+      renewal_already_granted: "encaissement d'un renouvellement déjà attribué",
+      replaced_payment_collected: "encaissement d'une tentative remplacée",
+      refunded_outside: "remboursé hors de Stock Master",
+    },
+    supportCategories: {
+      usage: "Utilisation",
+      subscription: "Abonnement",
+      technical: "Problème technique",
+      other: "Autre",
+    },
+  },
   security: {
     title: "Sécurité du compte",
     session: "Session",

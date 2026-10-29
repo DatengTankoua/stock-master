@@ -325,45 +325,94 @@ export class PlatformCampaignDeliveryService implements OnApplicationShutdown {
         });
       }
     }
-    let inserted = 0;
-    if (rows.length > 0) {
-      try {
-        inserted = (
-          await this.db.campaignDeliveries.insertMany(rows, { ordered: false })
-        ).insertedCount;
-      } catch (error) {
-        // Étape rejouée (crash) : livraisons déjà créées, aucun doublon.
-        const result = (error as { result?: { insertedCount?: number } })
-          .result;
-        if ((error as { code?: unknown }).code !== 11000 && !result) {
-          throw error;
-        }
-        inserted = result?.insertedCount ?? 0;
-      }
-    }
     const last = page.length > 0 ? page[page.length - 1]._id : null;
     const done = page.length < CAMPAIGN_AUDIENCE_PAGE;
-    await this.db.campaigns.updateOne(
-      {
-        _id: campaign._id,
-        'audience.status': 'preparing',
-        'audience.cursor': campaign.audience.cursor,
-      },
-      {
-        $set: {
-          'audience.cursor': last ?? campaign.audience.cursor,
-          // Dernière page : audience GELÉE.
-          ...(done
-            ? {
-                'audience.status': 'ready',
-                'audience.frozenAt': now,
-                'audience.incomplete': false,
-              }
-            : {}),
-        },
-        $inc: { 'audience.total': inserted },
-      },
-    );
+    await this.commitPage(campaign, rows, last, done);
+  }
+
+  /**
+   * Validation ATOMIQUE d'une page (transaction courte, jamais sur toute
+   * l'audience) :
+   *
+   * 1. écriture conditionnelle RÉELLE sur le document campagne : audience
+   *    encore `preparing`, curseur attendu (identité de l'étape : une seule
+   *    validation par position), bail non expiré. C'est le document que
+   *    modifient les deux clôtures (`closeAudience`,
+   *    `closeExpiredConstitutions`) : une clôture concurrente provoque un
+   *    conflit d'écriture, et la page relue après elle ne correspond plus ;
+   * 2. insertion des livraisons de la page, dans la même transaction.
+   *
+   * Clôture gagnante : rien n'est écrit (ni livraison, ni curseur), et rien
+   * ne rouvre l'audience (aucune écriture ne repasse à `preparing`). Page
+   * gagnante : livraisons, curseur et total validés ensemble, puis vus par
+   * la clôture suivante. Vrai si la page a été validée.
+   */
+  private async commitPage(
+    campaign: PlatformCampaignDoc,
+    rows: PlatformCampaignDeliveryDoc[],
+    last: string | null,
+    done: boolean,
+  ): Promise<boolean> {
+    const session = await this.runtime.connection.startSession();
+    let committed = false;
+    try {
+      await session.withTransaction(async () => {
+        committed = false;
+        const now = this.runtime.clock();
+        // Livraison déjà présente (étape d'une version antérieure, non
+        // transactionnelle, interrompue) : jamais dupliquée.
+        const existing =
+          rows.length > 0
+            ? await this.db.campaignDeliveries
+                .find(
+                  {
+                    campaignId: campaign._id,
+                    userId: { $in: rows.map((r) => r.userId) },
+                  },
+                  { projection: { userId: 1 }, session },
+                )
+                .toArray()
+            : [];
+        const present = new Set(existing.map((d) => d.userId.toHexString()));
+        const fresh = rows.filter((r) => !present.has(r.userId.toHexString()));
+        const claimed = await this.db.campaigns.updateOne(
+          {
+            _id: campaign._id,
+            status: 'launched',
+            'audience.status': 'preparing',
+            'audience.cursor': campaign.audience.cursor,
+            // Bail non expiré (absent : campagne antérieure au bail).
+            'audience.leaseUntil': { $not: { $lte: now } },
+          },
+          {
+            $set: {
+              'audience.cursor': last ?? campaign.audience.cursor,
+              // Toujours une modification réelle (conflit garanti).
+              'audience.lastPageAt': now,
+              // Dernière page : audience GELÉE.
+              ...(done
+                ? {
+                    'audience.status': 'ready',
+                    'audience.frozenAt': now,
+                    'audience.incomplete': false,
+                  }
+                : {}),
+            },
+            $inc: { 'audience.total': fresh.length },
+          },
+          { session },
+        );
+        // Clôture, autre étape ou bail expiré : la page est abandonnée.
+        if (claimed.matchedCount !== 1) return;
+        if (fresh.length > 0) {
+          await this.db.campaignDeliveries.insertMany(fresh, { session });
+        }
+        committed = true;
+      });
+    } finally {
+      await session.endSession();
+    }
+    return committed;
   }
 
   /**

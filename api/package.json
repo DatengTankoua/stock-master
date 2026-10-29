@@ -33,6 +33,7 @@
     "migrate:sale-history-indexes": "node dist/migrations/create-sale-history-indexes.js",
     "migrate:product-page-indexes": "node dist/migrations/create-product-page-indexes.js",
     "migrate:platform-admin-indexes": "node dist/migrations/create-platform-admin-indexes.js",
+    "migrate:platform-admin-notification-indexes": "node dist/migrations/create-platform-admin-notification-indexes.js",
     "migrate:predeploy": "node dist/migrations/predeploy-migrations.js",
     "platform-admin": "node dist/migrations/platform-admin-cli.js",
     "storage:quota": "node dist/migrations/storage-quota.js",

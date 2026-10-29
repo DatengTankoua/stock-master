@@ -118,7 +118,7 @@ node "$ADMIN_CLI" status --user-id="$ADMIN_USER_ID"
 
 | Capacité | Rôle |
 |---|---|
-| `platform.read` | **Consultation** — Consulter l'administration : vue d'ensemble, commerces, paiements, audit, historique des messages et des campagnes. Accordée automatiquement avec l'accès. |
+| `platform.read` | **Consultation** — Consulter l'administration : vue d'ensemble, commerces, paiements, audit, historique des messages et des campagnes, notifications internes (cloche, à partir de la date d'accès). Accordée automatiquement avec l'accès. |
 | `platform.organizations.suspend` | **Suspension et réactivation** — Suspendre un commerce et le réactiver. |
 | `platform.subscriptions.extend` | **Prolongation offerte** — Offrir une prolongation d'abonnement à un commerce. |
 | `platform.communications.notify` | **Messages par notification** — Envoyer (ou renvoyer) un message de service aux membres d'un commerce, par notification dans l'application. |

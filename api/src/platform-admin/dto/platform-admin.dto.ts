@@ -313,3 +313,10 @@ export class AdminCampaignPreviewQuery {
   @IsIn(['fr', 'en'])
   locale?: 'fr' | 'en';
 }
+
+export class AdminNotificationsQuery extends AdminPageQuery {
+  /** Par défaut : toutes les notifications visibles. */
+  @IsOptional()
+  @IsIn(['all', 'unread'])
+  status?: 'all' | 'unread';
+}

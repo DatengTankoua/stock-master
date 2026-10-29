@@ -51,6 +51,10 @@ import {
 } from '../src/marketing-consent/marketing-consent.service';
 import { unsubscribeTokenHash } from '../src/marketing-consent/marketing-unsubscribe';
 import { PushRuntime } from '../src/push/push-runtime';
+import { CAMPAIGN_AUDIENCE_PAGE } from '../src/platform-admin/platform-campaign-policy';
+import { ensurePlatformAdminNotificationIndexes } from '../src/platform-admin/platform-admin-notification-indexes';
+import { PlatformAdminNotificationSweep } from '../src/platform-admin/platform-admin-notification-sweep.service';
+import { CAMPAIGN_COMPLETION_GRACE_MS } from '../src/platform-admin/platform-admin-notifications';
 
 /**
  * E2E — campagnes promotionnelles par e-mail et désabonnement sans
@@ -733,6 +737,284 @@ describe('Campagnes promotionnelles par e-mail (e2e)', () => {
       });
       expect(await deliveriesOf(id)).toHaveLength(0);
       expect(callsFor(id)).toHaveLength(0);
+    });
+  });
+
+  describe('Audience : course entre constitution et clôture', () => {
+    type Commit = (...args: unknown[]) => Promise<boolean>;
+    const commitHost = () => worker as unknown as { commitPage: Commit };
+
+    /** Lancement réel, constitution différée (appelée ensuite par le test). */
+    async function launchedIdle(a: Admin, targeting?: object) {
+      const spy = jest
+        .spyOn(worker, 'constituteAudience')
+        .mockResolvedValueOnce(undefined);
+      const id = await launched(a, targeting);
+      spy.mockRestore();
+      return new Types.ObjectId(id);
+    }
+
+    /**
+     * Point de synchronisation juste avant la transaction de page : les
+     * appels d'index ≥ `holdFrom` attendent `release()`.
+     */
+    function gateCommits(holdFrom = 0) {
+      const host = commitHost();
+      const original = host.commitPage.bind(worker) as Commit;
+      let open!: () => void;
+      const gate = new Promise<void>((r) => (open = r));
+      let calls = 0;
+      const results: boolean[] = [];
+      const spy = jest
+        .spyOn(host, 'commitPage')
+        .mockImplementation(async (...args: unknown[]) => {
+          const index = calls++;
+          if (index >= holdFrom) await gate;
+          const ok = await original(...args);
+          results.push(ok);
+          return ok;
+        });
+      const handle = {
+        results,
+        reached: async (n: number) => {
+          for (let i = 0; i < 1000 && calls < n; i += 1) {
+            await new Promise((r) => setTimeout(r, 10));
+          }
+          expect(calls).toBeGreaterThanOrEqual(n);
+        },
+        release: () => open(),
+        restore: () => spy.mockRestore(),
+      };
+      gates.push(handle);
+      return handle;
+    }
+
+    const campaignDoc = (id: Types.ObjectId) =>
+      db().collection('platform_campaigns').findOne({ _id: id });
+
+    const countDeliveries = (id: Types.ObjectId) =>
+      db()
+        .collection('platform_campaign_deliveries')
+        .countDocuments({ campaignId: id });
+
+    /** Comptes éligibles fictifs, membres de `organizationId`. */
+    async function bulkEligible(organizationId: string, n: number) {
+      const at = new Date(0);
+      const users = Array.from({ length: n }, (_, i) => {
+        const _id = new Types.ObjectId();
+        return { _id, email: `bulk-${i}-${_id.toHexString()}@campaigns.test` };
+      });
+      await db()
+        .collection('users')
+        .insertMany(
+          users.map((u) => ({
+            _id: u._id,
+            name: 'Membre',
+            email: u.email,
+            password: 'x',
+            emailVerifiedAt: E2E_EMAIL_VERIFIED_AT,
+          })),
+        );
+      await db()
+        .collection('marketing_consents')
+        .insertMany(
+          users.map((u) => ({
+            _id: `email.marketing/${u._id.toHexString()}` as never,
+            userId: u._id,
+            channel: 'email',
+            purpose: 'marketing',
+            granted: true,
+            addressSha256: addressFingerprint(u.email),
+            wordingVersion: '1',
+            changedAt: at,
+          })),
+        );
+      await db()
+        .collection('organizationmemberships')
+        .insertMany(
+          users.map((u) => ({
+            organizationId: new Types.ObjectId(organizationId),
+            userId: u._id,
+            role: 'seller',
+            permissions: [],
+            status: 'active',
+            invitedById: null,
+            joinedAt: at,
+            createdAt: at,
+          })),
+        );
+      // Retrait des fixtures (les tests suivants ciblent tous les commerces).
+      return async () => {
+        const ids = users.map((u) => u._id);
+        await db()
+          .collection('marketing_consents')
+          .deleteMany({ userId: { $in: ids } });
+        await db()
+          .collection('organizationmemberships')
+          .deleteMany({ userId: { $in: ids } });
+      };
+    }
+
+    // Seulement les espions de ce bloc (l'expéditeur espionné en
+    // `beforeAll` doit le rester).
+    const gates: Array<{ restore: () => void }> = [];
+    afterEach(() => {
+      for (const g of gates.splice(0)) g.restore();
+    });
+
+    it('constitution suspendue avant l’écriture, puis clôture : aucune insertion tardive ; rejeux sans effet', async () => {
+      const a = await enrolledAdmin([MANAGE, SEND]);
+      const m = await owner('race-close');
+      const id = await launchedIdle(a, {
+        mode: 'selected',
+        organizationIds: [m.organizationId],
+      });
+      const gate = gateCommits(0);
+      const run = worker.constituteAudience(id);
+      await gate.reached(1);
+      // Bail expiré pendant que la page attend : clôture du traitement de fond.
+      clockOffsetMs += 11 * 60_000;
+      expect(await worker.closeExpiredConstitutions()).toBe(1);
+      gate.release();
+      await run;
+      expect(gate.results).toEqual([false]);
+      expect(await countDeliveries(id)).toBe(0);
+      expect((await campaignDoc(id))!.audience).toMatchObject({
+        status: 'ready',
+        incomplete: true,
+        total: 0,
+        cursor: null,
+      });
+      gate.restore();
+      // Rejeux : constitution et clôture ne rouvrent ni n'ajoutent rien.
+      await worker.constituteAudience(id);
+      expect(await worker.closeExpiredConstitutions()).toBe(0);
+      expect(await countDeliveries(id)).toBe(0);
+      expect((await campaignDoc(id))!.audience.status).toBe('ready');
+      await drain();
+      expect(callsFor(id.toHexString())).toHaveLength(0);
+    });
+
+    it('page validée avant la clôture : conservée et comptée ; page suivante abandonnée', async () => {
+      const a = await enrolledAdmin([MANAGE, SEND]);
+      const m = await owner('race-page', false);
+      // Plus d'une page d'accords : la première est validée, la seconde
+      // attend au point de synchronisation.
+      const cleanup = await bulkEligible(
+        m.organizationId,
+        CAMPAIGN_AUDIENCE_PAGE + 10,
+      );
+      const id = await launchedIdle(a, {
+        mode: 'selected',
+        organizationIds: [m.organizationId],
+      });
+      process.env.MARKETING_EMAILS_ENABLED = 'false';
+      const gate = gateCommits(1);
+      const run = worker.constituteAudience(id);
+      await gate.reached(2);
+      const afterFirst = await campaignDoc(id);
+      const kept = await countDeliveries(id);
+      expect(kept).toBeGreaterThan(0);
+      expect(afterFirst!.audience.status).toBe('preparing');
+      expect(afterFirst!.audience.total).toBe(kept);
+      clockOffsetMs += 11 * 60_000;
+      expect(await worker.closeExpiredConstitutions()).toBe(1);
+      gate.release();
+      await run;
+      expect(gate.results).toEqual([true, false]);
+      const closed = await campaignDoc(id);
+      expect(closed!.audience).toMatchObject({
+        status: 'ready',
+        incomplete: true,
+        total: kept,
+        cursor: afterFirst!.audience.cursor,
+      });
+      expect(await countDeliveries(id)).toBe(kept);
+      // Rejeu : aucun doublon, aucune réouverture.
+      await worker.constituteAudience(id);
+      expect(await worker.closeExpiredConstitutions()).toBe(0);
+      const rows = await db()
+        .collection('platform_campaign_deliveries')
+        .find({ campaignId: id })
+        .toArray();
+      expect(rows).toHaveLength(kept);
+      expect(new Set(rows.map((r) => String(r.userId))).size).toBe(kept);
+      // Prise en compte par le suivi de la campagne.
+      const reader = await enrolledAdmin();
+      const detail = await admin(
+        'get',
+        `/campaigns/${id.toHexString()}`,
+        reader.token,
+      );
+      expect(detail.body.results.pending).toBe(kept);
+      expect(detail.body.audience.total).toBe(kept);
+      await cleanup();
+    });
+
+    it('clôture et page simultanées : jamais l’une sans l’autre (total = livraisons)', async () => {
+      const a = await enrolledAdmin([MANAGE, SEND]);
+      const m = await owner('race-concurrent');
+      const close = worker as unknown as {
+        closeAudience: (
+          id: Types.ObjectId,
+          incomplete: boolean,
+        ) => Promise<void>;
+      };
+      for (let round = 0; round < 4; round += 1) {
+        const id = await launchedIdle(a, {
+          mode: 'selected',
+          organizationIds: [m.organizationId],
+        });
+        await Promise.all([
+          worker.constituteAudience(id),
+          close.closeAudience(id, true),
+        ]);
+        const doc = await campaignDoc(id);
+        expect(doc!.audience.status).toBe('ready');
+        expect(await countDeliveries(id)).toBe(doc!.audience.total);
+        // Page gagnante : audience complète (1) ; clôture gagnante : vide.
+        expect(doc!.audience.total).toBe(doc!.audience.incomplete ? 0 : 1);
+      }
+    });
+
+    it('notification de fin : une constitution encore en cours ne peut plus rien ajouter', async () => {
+      await ensurePlatformAdminNotificationIndexes(connection);
+      const sweep = app.get(PlatformAdminNotificationSweep);
+      await sweep.runOnce(); // point d'activation avant le lancement
+      const a = await enrolledAdmin([MANAGE, SEND]);
+      const m = await owner('race-notify');
+      const id = await launchedIdle(a, {
+        mode: 'selected',
+        organizationIds: [m.organizationId],
+      });
+      const gate = gateCommits(0);
+      const run = worker.constituteAudience(id);
+      await gate.reached(1);
+      clockOffsetMs += 11 * 60_000;
+      await worker.closeExpiredConstitutions();
+      clockOffsetMs += CAMPAIGN_COMPLETION_GRACE_MS + 60_000;
+      await sweep.runOnce();
+      const key = `campaign_completed:${id.toHexString()}`;
+      const notifications = () =>
+        db()
+          .collection('platform_admin_notifications')
+          .find({ eventKey: key })
+          .toArray();
+      expect(await notifications()).toHaveLength(1);
+      // Le travail suspendu reprend APRÈS la notification de fin.
+      gate.release();
+      await run;
+      expect(gate.results).toEqual([false]);
+      expect(await countDeliveries(id)).toBe(0);
+      await sweep.runOnce();
+      const [done] = await notifications();
+      expect(done.params.results).toEqual({
+        accepted: 0,
+        skipped: 0,
+        failed: 0,
+        uncertain: 0,
+      });
+      expect(await notifications()).toHaveLength(1);
     });
   });
 

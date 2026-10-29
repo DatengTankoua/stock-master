@@ -322,7 +322,10 @@ autorisation accordée hors interface par la commande `platform-admin`, double
 authentification obligatoire
 ([platform-admin-mfa.md](docs/architecture/platform-admin-mfa.md)) ; suspension,
 réactivation et prolongation offerte par capacités dédiées
-([platform-admin-actions.md](docs/architecture/platform-admin-actions.md)).
+([platform-admin-actions.md](docs/architecture/platform-admin-actions.md)) ;
+notifications internes des administrateurs (cloche, `/admin/notifications`,
+état lu propre à chacun :
+[platform-admin-notifications.md](docs/architecture/platform-admin-notifications.md)).
 Commandes opérateur prêtes à copier (accès, capacités, récupération du
 second facteur) depuis le terminal Railway :
 [railway-platform-admin.md](docs/operations/railway-platform-admin.md).
@@ -541,6 +544,7 @@ Elle lance dans l'ordre, et s'arrête au premier échec :
 | `create-sale-history-indexes.js` | 1-20E | Historique paginé des ventes. Performance, non bloquant |
 | `create-product-page-indexes.js` | 1-20F | Liste paginée des produits. Performance, non bloquant |
 | `create-platform-admin-indexes.js` | Administration de la plateforme | Index de l'espace d'administration, dont `organizationId_1_archivedAt_1_createdAt_-1` (historique des messages filtré) et ceux des campagnes (`platform_campaigns`, `platform_campaign_deliveries` : lancement unique, une livraison par utilisateur). Ne lance aucune campagne. Vérifiés avant d'ouvrir l'espace (503 sans eux). N'accorde aucun accès ni aucune capacité |
+| `create-platform-admin-notification-indexes.js` | Notifications de l'administration | Index des notifications internes des administrateurs (`platform_admin_notifications` : événement unique ; `platform_admin_notification_reads` : une lecture par administrateur) et trois index de performance des sources (`subscription_payments`, `platform_campaigns`). **Ne crée aucune notification** (pas d'historique) ni capacité. Sans eux : seules les notifications sont indisponibles (503), le reste de l'administration et les commerces ne sont pas affectés. Lecture seule : `--check`. [Rapport](docs/architecture/platform-admin-notifications.md) |
 | `create-marketing-consent-indexes.js` | E-mails promotionnels | Collections `marketing_consents`, `marketing_consent_events`, `marketing_consent_wordings`, `marketing_unsubscribe_tokens`, index `{ userId, at }`. Aucune donnée lue ni écrite : **n'inscrit aucun utilisateur**. Non bloquante au démarrage. Lecture seule : `--check` |
 | `install-product-batches.js` | Lots A à C | Garde du suivi par lots (validateur, index des lots, des pertes et des régularisations). Équivaut à `migrate:product-batches -- --install --apply`. **N'active rien** |
 | `install-expiry-alerts.js` | Lot C | Index des alertes de péremption et première date de contrôle des cibles datées. Équivaut à `migrate:expiry-alerts -- --apply`. **N'active rien** |
