@@ -12,6 +12,8 @@ import { SubscriptionPaymentsService } from './subscription-payments.service';
  * désactive). Par passe : au plus 10 paiements (≤ 30 appels SasPay, sous la
  * limite locale de 120 / min), chacun non vérifié depuis 10 min ; tentatives
  * closes surveillées 72 h. Une passe à la fois ; minuterie `unref`.
+ * Créations SasPay restées `initiating` plus de 10 min : reclassées
+ * `uncertain` (au plus 5 par passe, sans appel), puis vérifiées ainsi.
  */
 export const PAYMENT_SWEEP_DEFAULT_SECONDS = 300;
 export const PAYMENT_SWEEP_LIMIT = 10;
@@ -55,9 +57,9 @@ export function startPaymentReconciliationSweep(
         lateWindowMs: PAYMENT_SWEEP_LATE_WINDOW_MS,
       })
       .then((report) => {
-        if (report.examined > 0) {
+        if (report.examined > 0 || report.recovered > 0) {
           logger.log(
-            `Rapprochement : ${report.examined} vérifié(s), ${report.failed} à reprendre.`,
+            `Rapprochement : ${report.examined} vérifié(s), ${report.failed} à reprendre, ${report.recovered} création(s) reprise(s).`,
           );
         }
       })

@@ -116,3 +116,23 @@ export function paymentAwaitingConfirmation(
     confirmationDelayStart(payment) !== null
   );
 }
+
+/**
+ * Création SasPay NON CONFIRMÉE : paiement ouvert sans session connue,
+ * `initiating` ou `uncertain` / `initiation_uncertain`. La session a pu ne
+ * jamais exister, ou exister sans que sa réponse ait été enregistrée : rien
+ * ne permet de le savoir sans la retrouver chez SasPay.
+ */
+export function paymentCreationUnresolved(
+  payment: DelayFacts & { incidentCode?: unknown; providerReference?: unknown },
+): boolean {
+  if (payment.provider !== SASPAY_PROVIDER_NAME) return false;
+  if (payment.open !== true || payment.collectedAt) return false;
+  if (typeof payment.providerReference === 'string') return false;
+  if (confirmationDelayStart(payment) === null) return false;
+  return (
+    payment.status === 'initiating' ||
+    (payment.status === 'uncertain' &&
+      payment.incidentCode === 'initiation_uncertain')
+  );
+}

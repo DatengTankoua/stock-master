@@ -718,6 +718,8 @@ const adminFr = {
           "{{name}} : {{amount}}, demandé le {{since}}. Transaction SasPay : {{transaction}}. Référence Stock Master : {{reference}}.",
         summaryNoTransaction:
           "{{name}} : {{amount}}, demandé le {{since}}. Aucune transaction SasPay rattachée. Référence Stock Master : {{reference}}.",
+        summaryCreationUnconfirmed:
+          "{{name}} : {{amount}}, demandé le {{since}}. Création de la session SasPay non confirmée (session inconnue, peut-être inexistante). Référence Stock Master : {{reference}}.",
       },
       support_request: {
         title: "Demande d'assistance",

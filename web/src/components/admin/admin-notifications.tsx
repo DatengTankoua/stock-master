@@ -147,7 +147,9 @@ function useNotificationText() {
           summary: t(
             p.transactionReference
               ? "notifications.types.payment_confirmation_delayed.summary"
-              : "notifications.types.payment_confirmation_delayed.summaryNoTransaction",
+              : p.incidentCode === "initiation_uncertain"
+                ? "notifications.types.payment_confirmation_delayed.summaryCreationUnconfirmed"
+                : "notifications.types.payment_confirmation_delayed.summaryNoTransaction",
             {
               name,
               amount,

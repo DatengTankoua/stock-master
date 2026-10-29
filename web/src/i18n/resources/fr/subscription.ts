@@ -258,6 +258,12 @@ const subscriptionFr = {
       emailSubject: "Paiement en attente de confirmation {{reference}}",
       supportPage: "Page Assistance",
     },
+    // Création de la session SasPay non confirmée après 24 h.
+    creation: {
+      delayedTitle: "Vérification avec l'assistance",
+      delayedDetail:
+        "La création de ce paiement chez SasPay n'a pas pu être confirmée depuis plus de 24 heures : la page de paiement n'a peut-être jamais existé, ou son lien n'a pas été reçu. Sa vérification nécessite l'intervention de notre assistance : contactez-la en indiquant la référence ci-dessous. N'effectuez pas de nouveau paiement en attendant.",
+    },
     situation: {
       expired: {
         label: "Page de paiement expirée",
@@ -287,7 +293,7 @@ const subscriptionFr = {
       linkMissing: {
         label: "Lien de paiement non récupéré",
         detail:
-          "La page de paiement a peut-être été créée chez SasPay, mais son lien n'a pas été reçu. « Vérifier le paiement » la retrouve sans en créer une nouvelle.",
+          "La page de paiement a peut-être été créée chez SasPay, mais son lien n'a pas été reçu. « Vérifier le paiement » tente de la retrouver chez SasPay, sans jamais en créer une nouvelle ; aucun nouveau paiement n'est possible en attendant.",
       },
       attemptUnresolved: {
         label: "Tentative à confirmer par SasPay",

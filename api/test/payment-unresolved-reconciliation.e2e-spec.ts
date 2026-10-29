@@ -526,7 +526,7 @@ describe('Résolution des créations SasPay sans référence (e2e 1-22D.3)', () 
     fake.attempt(p.session!.id, 'SUCCESS');
     nextWindow();
     await onlyCandidate(p.id);
-    expect(await sweep()).toEqual({ examined: 1, failed: 0 });
+    expect(await sweep()).toEqual({ examined: 1, failed: 0, recovered: 0 });
     expect((await doc(p.id))!.status).toBe('succeeded');
     await onlyCandidate(p.id);
     await sweep();
@@ -619,7 +619,7 @@ describe('Résolution des créations SasPay sans référence (e2e 1-22D.3)', () 
     // Rapprochement : retrouvée par SA référence marchand, relue, attribuée.
     nextWindow();
     await onlyCandidate(p.id);
-    expect(await sweep()).toEqual({ examined: 1, failed: 0 });
+    expect(await sweep()).toEqual({ examined: 1, failed: 0, recovered: 0 });
     expect((await doc(p.id))!).toMatchObject({
       status: 'succeeded',
       providerReference: p.session!.id,

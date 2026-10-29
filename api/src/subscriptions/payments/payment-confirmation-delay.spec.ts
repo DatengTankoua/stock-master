@@ -4,6 +4,7 @@ import {
   confirmationDelayStart,
   paymentAwaitingConfirmation,
   paymentConfirmationDelayed,
+  paymentCreationUnresolved,
   paymentUnresolvedAtSasPay,
 } from './payment-confirmation-delay';
 
@@ -115,5 +116,44 @@ describe('payment-confirmation-delay', () => {
     expect(
       paymentAwaitingConfirmation({ ...engaged, provider: 'campay' }, false),
     ).toBe(false);
+  });
+
+  it('création non confirmée : session inconnue, initiating ou initiation_uncertain', () => {
+    const creation = {
+      ...engaged,
+      status: 'initiating',
+      providerReference: null,
+      providerTransactionId: null,
+      incidentCode: null,
+    };
+    expect(paymentCreationUnresolved(creation)).toBe(true);
+    expect(
+      paymentCreationUnresolved({
+        ...creation,
+        status: 'uncertain',
+        incidentCode: 'initiation_uncertain',
+      }),
+    ).toBe(true);
+    // Session connue, autre incident, autre état, clos, encaissé, CamPay.
+    expect(
+      paymentCreationUnresolved({ ...creation, providerReference: 'sess' }),
+    ).toBe(false);
+    expect(
+      paymentCreationUnresolved({
+        ...creation,
+        status: 'uncertain',
+        incidentCode: 'checkout_unresolved',
+      }),
+    ).toBe(false);
+    for (const status of ['pending', 'review', 'succeeded', 'failed']) {
+      expect(paymentCreationUnresolved({ ...creation, status })).toBe(false);
+    }
+    expect(paymentCreationUnresolved({ ...creation, open: false })).toBe(false);
+    expect(paymentCreationUnresolved({ ...creation, collectedAt: at })).toBe(
+      false,
+    );
+    expect(paymentCreationUnresolved({ ...creation, provider: 'campay' })).toBe(
+      false,
+    );
   });
 });

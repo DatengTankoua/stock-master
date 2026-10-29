@@ -283,7 +283,7 @@ describe('Confirmations SasPay sans nouvelles tentatives (e2e 1-21B)', () => {
       const sweep = await moduleFixture
         .get(SubscriptionPaymentsService)
         .sweepOnce({ limit: 10, staleMs: 600_000, lateWindowMs: 3_600_000 });
-      expect(sweep).toEqual({ examined: 1, failed: 0 });
+      expect(sweep).toEqual({ examined: 1, failed: 0, recovered: 0 });
       expect((await paymentModel.findById(p.id).lean().exec())!.status).toBe(
         'succeeded',
       );

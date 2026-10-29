@@ -1035,6 +1035,13 @@ export function SubscriptionPaymentPanel({
               restricted={restricted}
             />
           )}
+          {!confirming && current.creationUnresolved?.delayed && (
+            <PaymentConfirmationAssistance
+              reference={current.reference}
+              restricted={restricted}
+              variant="creation"
+            />
+          )}
           <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-muted-foreground">{t("payment.term")}</dt>
