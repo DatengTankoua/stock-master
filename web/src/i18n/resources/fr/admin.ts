@@ -691,6 +691,8 @@ const adminFr = {
     unknownOrganization: "Commerce",
     supportMailbox:
       "Le traitement de la demande se fait dans la messagerie d'assistance : son contenu n'est pas conservé dans Stock Master.",
+    delayedProcedure:
+      "Information seulement : l'état du paiement n'est pas modifié. Vérifiez d'abord son statut (page des paiements, puis « inspect » et « reconcile » du CLI de rapprochement). S'il reste non confirmé, ouvrez un ticket auprès de l'assistance SasPay avec la référence de transaction (ou, à défaut, la référence Stock Master).",
     open: {
       organization: "Ouvrir la fiche",
       payment: "Voir les paiements",
@@ -709,6 +711,13 @@ const adminFr = {
         title: "Paiement à examiner",
         summary:
           "{{name}} : {{amount}}. Motif : {{reason}}. Aucune issue automatique : intervention de l'opérateur requise.",
+      },
+      payment_confirmation_delayed: {
+        title: "Paiement en attente de confirmation depuis plus de 24 heures",
+        summary:
+          "{{name}} : {{amount}}, demandé le {{since}}. Transaction SasPay : {{transaction}}. Référence Stock Master : {{reference}}.",
+        summaryNoTransaction:
+          "{{name}} : {{amount}}, demandé le {{since}}. Aucune transaction SasPay rattachée. Référence Stock Master : {{reference}}.",
       },
       support_request: {
         title: "Demande d'assistance",

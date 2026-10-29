@@ -60,6 +60,7 @@ import {
 } from "@/lib/payment-guards";
 import { useLiveRefresh, useSocketSignals } from "@/hooks/use-live-refresh";
 import { OfferConditions, OfferSelector } from "./subscription-offers";
+import { PaymentConfirmationAssistance } from "./payment-confirmation-assistance";
 import { rich } from "@/i18n/rich";
 
 // 1-14D.2C — Paiement Mobile Money de l'abonnement par le PROPRIÉTAIRE réel.
@@ -179,6 +180,7 @@ type MessageKey =
       | "closureUnconfirmed"
       | "renewalSuspended"
       | "collectedInResolution"
+      | "confirmationPending"
       | "offlineVerify"}`;
 
 /** 1-21E : issue ÉTABLIE par le serveur pour un changement de forfait. */
@@ -676,6 +678,11 @@ export function SubscriptionPaymentPanel({
       if (updated.status === "succeeded") {
         setMessage({ tone: "success", key: "payment.messages.confirmed" });
         onAccessRestore();
+      } else if (updated.confirmationPending) {
+        setMessage({
+          tone: "info",
+          key: "payment.messages.confirmationPending",
+        });
       } else if (updated.situation && SITUATION_MESSAGES[updated.situation]) {
         // 1-21E : message fidèle au statut RÉELLEMENT observé.
         setMessage({
@@ -910,23 +917,34 @@ export function SubscriptionPaymentPanel({
     refunded: "payment.situation.refunded",
   };
   const situationKey = phase ? situationCopy[phase] : undefined;
+  // Transaction SasPay engagée, issue pas encore connue (établi par le
+  // serveur) : jamais « page expirée » pour un paiement peut-être débité.
+  const confirming = current?.confirmationPending ?? null;
   const copy = current
-    ? situationKey
+    ? confirming
       ? {
-          label: t(`${situationKey}.label` as "payment.situation.closed.label"),
-          detail: t(
-            `${situationKey}.detail` as "payment.situation.closed.detail",
-          ),
+          label: t("payment.confirmation.label"),
+          detail: t("payment.confirmation.detail"),
         }
-      : {
-          label: t(`payment.status.${current.status}.label`),
-          detail:
-            current.status === "pending" && checkoutUrl
-              ? t("payment.checkout.pendingDetail")
-              : t(`payment.status.${current.status}.detail`),
-        }
+      : situationKey
+        ? {
+            label: t(
+              `${situationKey}.label` as "payment.situation.closed.label",
+            ),
+            detail: t(
+              `${situationKey}.detail` as "payment.situation.closed.detail",
+            ),
+          }
+        : {
+            label: t(`payment.status.${current.status}.label`),
+            detail:
+              current.status === "pending" && checkoutUrl
+                ? t("payment.checkout.pendingDetail")
+                : t(`payment.status.${current.status}.detail`),
+          }
     : null;
   const historyLabel = (payment: ApiSubscriptionPayment) => {
+    if (payment.confirmationPending) return t("payment.confirmation.label");
     const phaseOf = checkoutPhase(payment, now);
     const key = phaseOf ? situationCopy[phaseOf] : undefined;
     // Lien expiré : l'historique garde le libellé du statut.
@@ -1002,7 +1020,21 @@ export function SubscriptionPaymentPanel({
               {copy.label}
             </h3>
             <p className="text-sm text-muted-foreground">{copy.detail}</p>
+            {confirming && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="payment-confirmation-provider-delay"
+              >
+                {t("payment.confirmation.providerDelay")}
+              </p>
+            )}
           </div>
+          {confirming?.delayed && (
+            <PaymentConfirmationAssistance
+              reference={current.reference}
+              restricted={restricted}
+            />
+          )}
           <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-muted-foreground">{t("payment.term")}</dt>

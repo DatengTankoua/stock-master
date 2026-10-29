@@ -4,6 +4,11 @@ import {
   TERM_MONTHS,
   isSubscriptionTerm,
 } from '../subscriptions/subscription-terms';
+import {
+  PAYMENT_CONFIRMATION_DELAY_MS,
+  paymentConfirmationDelayed,
+  type DelayFacts,
+} from '../subscriptions/payments/payment-confirmation-delay';
 import { PlatformAdminRuntime } from './platform-admin-runtime';
 import {
   PlatformAdminNotificationsService,
@@ -37,6 +42,12 @@ export const NOTIFICATION_MAX_CATCH_UP_MS = 7 * 24 * 3_600_000;
 const PAGE = 200;
 const MAX_PAGES_PER_SOURCE = 10;
 const ACTIVATION = 'activation';
+/**
+ * Point d'activation PROPRE aux retards SasPay (première passe de la version
+ * qui les signale) : un paiement dont le seuil de 24 h était déjà franchi
+ * avant n'est pas signalé (pas d'alerte rétroactive en masse au déploiement).
+ */
+const DELAYED_ACTIVATION = 'payments_confirmation_delayed_activation';
 
 interface SourceDoc {
   _id: unknown;
@@ -149,6 +160,7 @@ export class PlatformAdminNotificationSweep implements OnApplicationShutdown {
       created += await this.sweepSource(source, activation, now);
     }
     created += await this.sweepCampaigns(activation, now);
+    created += await this.sweepDelayedPayments(now);
     return { created };
   }
 
@@ -377,6 +389,126 @@ export class PlatformAdminNotificationSweep implements OnApplicationShutdown {
         currency: typeof p.currency === 'string' ? p.currency : 'XAF',
         ...(term ? { term, months: TERM_MONTHS[term] } : {}),
         ...(type === 'payment_review' ? { incidentCode: incident } : {}),
+      },
+    };
+  }
+
+  // ─── F. Paiements SasPay non confirmés après 24 h ────────────────────────
+
+  /**
+   * Seuil atteint SANS AUCUNE écriture du paiement : aucun curseur sur
+   * `updatedAt`. Comme les campagnes, chaque passe relit l'ÉTAT : paiements
+   * SasPay ouverts non résolus dont `createdAt` (immuable) est antérieur à
+   * `now - 24 h`, et dont le seuil a été franchi depuis l'activation de cette
+   * source. Ceux déjà signalés (clé `payment_confirmation_delayed:<id>`)
+   * sont écartés. Au plus un paiement ouvert par organisation (index
+   * unique) : la liste relue reste bornée par le nombre de commerces.
+   *
+   * Aucun changement d'état du paiement : l'alerte informe seulement.
+   */
+  private async sweepDelayedPayments(now: Date): Promise<number> {
+    const activation = await this.cursor(DELAYED_ACTIVATION, now);
+    const range = {
+      $gte: new Date(activation.getTime() - PAYMENT_CONFIRMATION_DELAY_MS),
+      $lte: new Date(now.getTime() - PAYMENT_CONFIRMATION_DELAY_MS),
+    };
+    if (range.$gte > range.$lte) return 0;
+    let after: { at: Date; id: unknown } | null = null;
+    let created = 0;
+    for (let page = 0; page < MAX_PAGES_PER_SOURCE; page += 1) {
+      const docs = (await this.collection('subscription_payments')
+        .find(
+          {
+            provider: 'saspay',
+            open: true,
+            status: { $in: ['initiating', 'pending', 'uncertain'] },
+            ...(after
+              ? {
+                  $or: [
+                    { createdAt: { $gt: after.at, $lte: range.$lte } },
+                    { createdAt: after.at, _id: { $gt: after.id } },
+                  ],
+                }
+              : { createdAt: range }),
+          } as never,
+          {
+            projection: {
+              organizationId: 1,
+              amount: 1,
+              currency: 1,
+              term: 1,
+              provider: 1,
+              status: 1,
+              open: 1,
+              createdAt: 1,
+              collectedAt: 1,
+              refundedAt: 1,
+              periodId: 1,
+              merchantReference: 1,
+              providerTransactionId: 1,
+              providerCheckoutExpiresAt: 1,
+            },
+          },
+        )
+        .sort({ createdAt: 1, _id: 1 })
+        .limit(PAGE)
+        .toArray()) as unknown as SourceDoc[];
+      if (docs.length === 0) break;
+      const keys = docs.map((p) =>
+        notificationKeys.paymentConfirmationDelayed(hex(p._id)),
+      );
+      const done = new Set(
+        (
+          await this.db.notifications
+            .find({ eventKey: { $in: keys } }, { projection: { eventKey: 1 } })
+            .toArray()
+        ).map((n) => n.eventKey),
+      );
+      const due = docs.filter(
+        (p, i) =>
+          !done.has(keys[i]) &&
+          paymentConfirmationDelayed(p as DelayFacts, now),
+      );
+      if (due.length > 0) {
+        const names = await this.organizationNames(
+          due.map((d) => d.organizationId),
+        );
+        created += await this.notifications.record(
+          due.map((p) => this.delayedPaymentEvent(p, names)),
+        );
+      }
+      const last = docs[docs.length - 1];
+      after = { at: last.createdAt as Date, id: last._id };
+      if (docs.length < PAGE) break;
+    }
+    return created;
+  }
+
+  private delayedPaymentEvent(
+    p: SourceDoc,
+    names: Map<string, string>,
+  ): NotificationEvent {
+    const paymentId = hex(p._id);
+    const organizationId = hex(p.organizationId);
+    const term = isSubscriptionTerm(p.term) ? p.term : null;
+    const startedAt = p.createdAt as Date;
+    return {
+      eventKey: notificationKeys.paymentConfirmationDelayed(paymentId),
+      type: 'payment_confirmation_delayed',
+      // Instant où le seuil a été franchi (jamais la date de la passe).
+      occurredAt: new Date(startedAt.getTime() + PAYMENT_CONFIRMATION_DELAY_MS),
+      target: { kind: 'payment', id: paymentId, organizationId },
+      params: {
+        organizationName: organizationNameParam(names.get(organizationId)),
+        amount: typeof p.amount === 'number' ? p.amount : 0,
+        currency: typeof p.currency === 'string' ? p.currency : 'XAF',
+        ...(term ? { term, months: TERM_MONTHS[term] } : {}),
+        reference: text(p.merchantReference, ''),
+        transactionReference:
+          typeof p.providerTransactionId === 'string'
+            ? p.providerTransactionId
+            : null,
+        startedAt: startedAt.toISOString(),
       },
     };
   }

@@ -102,6 +102,8 @@ const VIEW_KEYS = [
   'situation',
   // 1-21E : statut financier (encaissement confirmé).
   'collected',
+  // Retard SasPay : transaction engagée non confirmée (null sinon).
+  'confirmationPending',
   'confirmedAt',
   'createdAt',
   'currency',
@@ -488,7 +490,8 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
       );
       const res = await pay(suspended.token);
       expect(res.status).toBe(403);
-      expect(res.body.code).toBe('ORGANIZATION_ACCESS_DENIED');
+      // Membre ACTIF de l'organisation : refus distinct de la suspension.
+      expect(res.body.code).toBe('ORGANIZATION_SUSPENDED');
 
       const revoked = await registerOwner('revoked');
       await userModel.updateOne(
@@ -1131,15 +1134,16 @@ describe('Paiements d’abonnement (e2e 1-14D.2B)', () => {
         { $set: { status: 'suspended' } },
       );
       sim.settle(reference, 'succeeded');
+      // Propriétaire actif : refus distinct de la suspension.
       expect((await refresh(token, paymentId)).body.code).toBe(
-        'ORGANIZATION_ACCESS_DENIED',
+        'ORGANIZATION_SUSPENDED',
       );
       const view = await payments.confirmPayment(new Types.ObjectId(paymentId));
       expect(view.status).toBe('succeeded');
       const org = await organizationModel.findById(orgId).lean().exec();
       expect(org?.status).toBe('suspended');
       expect((await call('get', '/products', token)).body.code).toBe(
-        'ORGANIZATION_ACCESS_DENIED',
+        'ORGANIZATION_SUSPENDED',
       );
     });
   });

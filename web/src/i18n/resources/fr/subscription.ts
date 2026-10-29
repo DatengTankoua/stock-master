@@ -208,6 +208,8 @@ const subscriptionFr = {
         "Une tentative précédente de ce renouvellement a été payée : la poursuite de ce paiement est suspendue en attendant sa résolution.",
       collectedInResolution:
         "Paiement reçu : sa prise en compte nécessite une vérification par notre équipe. Il n'est ni perdu ni refusé.",
+      confirmationPending:
+        "Statut vérifié : le paiement est toujours en cours de confirmation chez SasPay. Si vous avez déjà été débité, ne recommencez pas le paiement.",
       offlineVerify: "Hors connexion : la vérification nécessite Internet.",
       statusChecked: "Statut vérifié : {{status}}.",
       statusNow: "Ce paiement est désormais : {{status}}.",
@@ -234,6 +236,28 @@ const subscriptionFr = {
       validUntil: "Lien de paiement valable jusqu'à {{time}}.",
     },
     // 1-21E : situations précises d'un paiement par page SasPay.
+    // Transaction SasPay engagée dont l'issue n'est pas encore connue.
+    confirmation: {
+      label: "Paiement en cours de confirmation",
+      detail:
+        "Votre paiement est en cours de confirmation. Si vous avez déjà été débité, ne recommencez pas le paiement.",
+      providerDelay:
+        "SasPay peut mettre du temps à actualiser le statut d'un paiement. Stock Master le vérifie automatiquement ; vous pouvez aussi appuyer sur « Vérifier le paiement ».",
+      delayedTitle: "Vérification avec l'assistance",
+      delayedDetail:
+        "Ce paiement n'est toujours pas confirmé par SasPay après plus de 24 heures. Sa vérification nécessite l'intervention de notre assistance : contactez-la en indiquant la référence ci-dessous.",
+      referenceLabel: "Référence à communiquer",
+      copy: "Copier la référence",
+      copied: "Référence copiée.",
+      copyFailed:
+        "Copie impossible : sélectionnez la référence pour la copier.",
+      noPromise:
+        "Notre assistance vérifiera son statut auprès de SasPay. L'abonnement n'est prolongé qu'une fois le paiement confirmé par SasPay.",
+      channels: "Contacter l'assistance",
+      whatsapp: "WhatsApp {{number}}",
+      emailSubject: "Paiement en attente de confirmation {{reference}}",
+      supportPage: "Page Assistance",
+    },
     situation: {
       expired: {
         label: "Page de paiement expirée",
