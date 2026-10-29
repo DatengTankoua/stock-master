@@ -1,6 +1,11 @@
 import type { Connection, Types } from 'mongoose';
 import type { EncryptedTotpSecret } from './totp-secret-cipher';
 import type { PlatformCapability } from './platform-admin-capabilities';
+import type {
+  PlatformAdminNotificationCursorDoc,
+  PlatformAdminNotificationDoc,
+  PlatformAdminNotificationReadDoc,
+} from './platform-admin-notifications';
 
 /**
  * Collections de l'administration de la plateforme. Accès par le pilote
@@ -27,6 +32,10 @@ export const PLATFORM_ADMIN_COLLECTIONS = Object.freeze({
   // Campagnes promotionnelles (distinctes des messages de service).
   campaigns: 'platform_campaigns',
   campaignDeliveries: 'platform_campaign_deliveries',
+  // Notifications internes des administrateurs (jamais celles des commerces).
+  notifications: 'platform_admin_notifications',
+  notificationReads: 'platform_admin_notification_reads',
+  notificationCursors: 'platform_admin_notification_cursors',
 });
 
 export type GrantStatus = 'active' | 'revoked';
@@ -261,6 +270,8 @@ export interface PlatformCampaignDoc {
     frozenAt?: Date | null;
     /** Constitution interrompue puis close : audience partielle. */
     incomplete?: boolean;
+    /** Dernière page validée (écriture de la transaction de page). */
+    lastPageAt?: Date | null;
   };
   archivedAt: Date | null;
   archivedBy: Types.ObjectId | null;
@@ -420,6 +431,15 @@ export function platformAdminCollections(connection: Connection) {
     ),
     campaignDeliveries: db.collection<PlatformCampaignDeliveryDoc>(
       PLATFORM_ADMIN_COLLECTIONS.campaignDeliveries,
+    ),
+    notifications: db.collection<PlatformAdminNotificationDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.notifications,
+    ),
+    notificationReads: db.collection<PlatformAdminNotificationReadDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.notificationReads,
+    ),
+    notificationCursors: db.collection<PlatformAdminNotificationCursorDoc>(
+      PLATFORM_ADMIN_COLLECTIONS.notificationCursors,
     ),
   };
 }

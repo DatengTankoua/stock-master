@@ -19,6 +19,7 @@ import { resolveWebPushConfig } from './push/push-config';
 import { startNotifications } from './push/push-bootstrap';
 import { PlatformMessageDeliveryService } from './platform-admin/platform-message-delivery.service';
 import { PlatformCampaignDeliveryService } from './platform-admin/platform-campaign-delivery.service';
+import { PlatformAdminNotificationSweep } from './platform-admin/platform-admin-notification-sweep.service';
 import { configureProcessTimeZone } from './analytics/month-range';
 import { startStorageRecovery } from './storage-quota/storage-recovery';
 import { startPaymentReconciliationSweep } from './subscriptions/payments/payment-reconciliation-sweep';
@@ -165,6 +166,9 @@ async function bootstrap() {
   // Campagnes : audience toujours préparée ; envois seulement si
   // MARKETING_EMAILS_ENABLED=true (relu à chaque passe).
   app.get(PlatformCampaignDeliveryService).start();
+  // Notifications internes de l'administration : collecte depuis l'état
+  // persistant (aucune si l'espace est fermé ou ses index absents).
+  app.get(PlatformAdminNotificationSweep).start();
   // 1-17B : reprise des envois et suppressions de fichiers interrompus
   // (processus HTTP uniquement).
   startStorageRecovery(app);

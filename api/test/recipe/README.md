@@ -319,3 +319,11 @@ Rapport : [platform-admin-actions.md](../../../docs/architecture/platform-admin-
 fiche d'une organisation. Les e-mails sont consignés dans `mail.jsonl`
 (clé `platform-message/…`), les push dans `push.jsonl` ; aucun envoi réel.
 Rapport : [platform-admin-communications.md](../../../docs/architecture/platform-admin-communications.md).
+
+**Notifications internes** : la collecte tourne toutes les 5 s dans la
+recette (30 s en production) et ne signale que les événements postérieurs à
+sa première passe sur la base (point d'activation persistant, qu'un
+redémarrage de l'API ne déplace pas). Après `grant` et
+enrôlement, inscrire un commerce (ou toute autre source) : la cloche de
+`/admin` l'affiche en moins d'une minute.
+Rapport : [platform-admin-notifications.md](../../../docs/architecture/platform-admin-notifications.md).

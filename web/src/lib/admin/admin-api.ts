@@ -576,3 +576,83 @@ export interface AdminCampaignDelivery {
   updatedAt: string;
   completedAt: string | null;
 }
+
+// ─── Notifications internes de l'administration ──────────────────────────
+
+/** Types d'événements (textes composés côté web, FR/EN, aucun HTML). */
+export type AdminNotificationType =
+  | "organization_created"
+  | "payment_confirmed"
+  | "payment_review"
+  | "support_request"
+  | "campaign_audience_partial"
+  | "campaign_completed";
+
+export interface AdminNotification {
+  id: string;
+  type: AdminNotificationType;
+  category: "organizations" | "payments" | "support" | "campaigns";
+  occurredAt: string;
+  createdAt: string;
+  read: boolean;
+  readAt: string | null;
+  target: {
+    kind: "organization" | "payment" | "campaign";
+    id: string;
+    organizationId: string | null;
+    /** `false` : cible disparue (« Élément indisponible », aucun lien). */
+    available: boolean;
+  };
+  /** Paramètres contrôlés par l'API (jamais de contenu libre). */
+  params: {
+    organizationName?: string | null;
+    amount?: number;
+    currency?: string;
+    term?: string;
+    months?: number;
+    incidentCode?: string | null;
+    reference?: string;
+    supportCategory?: string;
+    audienceTotal?: number;
+    results?: {
+      accepted: number;
+      skipped: number;
+      failed: number;
+      uncertain: number;
+    };
+  };
+}
+
+export type AdminNotificationFilter = "all" | "unread";
+
+export interface AdminNotificationPage extends AdminPage<AdminNotification> {
+  filter: AdminNotificationFilter;
+  unread: number;
+}
+
+/** Événement local : relire le compteur après une lecture. */
+export const ADMIN_NOTIFICATIONS_CHANGED = "stockmaster:admin-notifications";
+
+export function signalAdminNotificationsChanged(): void {
+  window.dispatchEvent(new Event(ADMIN_NOTIFICATIONS_CHANGED));
+}
+
+/** Lien interne de la cible, ou `null` (cible disparue). */
+export function adminNotificationHref(n: AdminNotification): string | null {
+  if (!n.target.available) return null;
+  switch (n.target.kind) {
+    case "organization":
+      return `/admin/organizations/${n.target.id}`;
+    case "campaign":
+      return `/admin/campaigns/${n.target.id}`;
+    case "payment":
+      return n.target.organizationId
+        ? `/admin/payments?organizationId=${n.target.organizationId}`
+        : "/admin/payments";
+  }
+}
+
+/** Compteur borné visuellement. */
+export function adminBadgeLabel(count: number): string {
+  return count > 99 ? "99+" : String(count);
+}

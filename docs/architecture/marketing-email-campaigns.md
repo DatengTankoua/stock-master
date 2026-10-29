@@ -101,9 +101,9 @@ Correction apportée après revue :
 Trois étapes distinctes désormais :
 
 1. **Constitution progressive, à partir du lancement.** La requête de
-   lancement, juste après sa transaction, parcourt les accords par pages de 200 (curseur persistant,
-   une insertion par page). Il n'y a ni transaction globale, ni chargement
-   intégral en mémoire.
+   lancement, juste après sa transaction, parcourt les accords par pages de 200 (curseur persistant).
+   Chaque page est validée par **une transaction courte** (§ 1.5.1). Il n'y a ni
+   transaction sur toute l'audience, ni chargement intégral en mémoire.
    - Pour chaque accord, l'éligibilité **courante est évaluée au moment où
      sa page est examinée** : accord donné pour l'adresse actuelle, adresse vérifiée,
      membre actif d'un commerce actif ciblé.
@@ -118,12 +118,57 @@ Trois étapes distinctes désormais :
    **ne la poursuit pas** : à l'expiration d'un bail de 10 min
    (`leaseUntil`), il la close telle quelle (`incomplete: true`, signalé
    dans le suivi). L'audience est alors partielle, mais jamais complétée
-   plus tard.
+   plus tard. Une page encore en cours au moment de la clôture est
+   abandonnée entière (§ 1.5.1).
 3. **Revérification avant chaque envoi** (§ 1.6). Un membre de l'audience
    devenu inéligible depuis est ignoré ; elle ne peut qu'exclure, jamais
    ajouter.
 
 Aucune adresse libre, aucun accord donné par l'administrateur.
+
+### 1.5.1 Course entre constitution et clôture (corrigée)
+
+**Défaut corrigé.** Une page insérait ses livraisons **avant** la mise à jour
+conditionnelle de la campagne, sans transaction. Si l'audience était close
+entre-temps (bail expiré, `closeExpiredConstitutions`), la mise à jour
+échouait mais les livraisons restaient en base :
+
+- non comptées dans `audience.total` ;
+- envoyées ensuite, éventuellement après la notification de fin.
+
+L'envoi ne contrôle pas `frozenAt`, et ce n'est pas la protection retenue :
+les horodatages ne prouvent pas l'ordre de validation des transactions.
+
+**Correction** (`commitPage`). L'évaluation de l'éligibilité reste hors
+transaction (lectures). Puis, pour chaque page, une transaction courte :
+
+1. **Écriture conditionnelle réelle** sur le document campagne. Conditions :
+   `status: 'launched'`, `audience.status: 'preparing'`, curseur égal à
+   celui de l'étape (identité de l'étape : une position n'est validée
+   qu'une fois), bail non expiré. Écritures : `cursor`, `lastPageAt` (la
+   modification est toujours effective), `$inc total`, et sur la dernière
+   page `ready` / `frozenAt`. Les deux clôtures (`closeAudience`,
+   `closeExpiredConstitutions`) écrivent ce même document : une clôture
+   concurrente provoque un conflit d'écriture. L'issue est l'une des
+   deux :
+   - la clôture attend la fin de la transaction et voit la page validée ;
+   - la transaction est rejouée, et sa condition ne correspond plus.
+2. **Insertion des livraisons** de la page, dans la même transaction. Les
+   livraisons déjà présentes pour ces utilisateurs (étape d'une version
+   antérieure interrompue) sont écartées : aucun doublon, index unique
+   conservé.
+
+**Si la clôture gagne** : aucune livraison de la page, aucun curseur avancé.
+Rien ne rouvre l'audience : aucune écriture ne repasse à `preparing`, et le
+lancement exige une campagne `draft`.
+
+**Si la page gagne** : livraisons, curseur et total sont validés ensemble ;
+la clôture suivante les voit. Invariant : le nombre de livraisons égale
+`audience.total` (testé).
+
+**Inchangé** : déduplication, rejeu idempotent du lancement, revérification
+de l'éligibilité avant chaque envoi, clé d'idempotence, fenêtre
+d'incertitude, interrupteur.
 
 ### 1.6 Livraison
 
@@ -249,6 +294,24 @@ Tests ajoutés après revue :
   le lancement : jamais ajoutés, audience gelée inchangée ;
 - constitution interrompue : rien n'est ajouté par la suite, audience close
   partielle à l'expiration du bail ;
+- course constitution / clôture (§ 1.5.1). Chemin réel (`constituteAudience`
+  → évaluation → `commitPage`), avec un point de synchronisation posé juste
+  avant la transaction de page :
+  1. page suspendue, bail expiré, clôture, puis reprise : page refusée,
+     aucune livraison, curseur inchangé ; les rejeux de la constitution et
+     de la clôture ne rouvrent ni n'ajoutent rien ;
+  2. 210 comptes éligibles fictifs (plus d'une page) : la première page est
+     validée, la seconde suspendue puis la clôture passe. La première reste
+     comptée (`total` = livraisons = résultats du suivi) ; la seconde est
+     abandonnée ; un rejeu ne crée aucun doublon ;
+  3. clôture et constitution lancées simultanément (4 tours) : jamais l'une
+     sans l'autre (livraisons = `total`) ;
+  4. notification de fin émise pendant qu'une page est suspendue : la page
+     reprend, puis est refusée ; aucune livraison ; compteurs de fin exacts,
+     notification unique.
+
+  Contre-épreuve : l'ancien ordre (insertion hors transaction, avant la
+  mise à jour) remis temporairement fait échouer les scénarios 1 et 4 ;
 - réponse perdue pendant la constitution : rejeu du même identifiant sans
   seconde constitution, campagne retrouvée (« Lancée », audience en
   constitution), aucune livraison ajoutée par le traitement de fond, puis
@@ -342,12 +405,74 @@ Aucun défilement horizontal, aucune erreur de page. Captures :
   lancement). Ce n'est pas un instantané transactionnel de toute la base.
 - Pas de relance manuelle : une livraison en échec ou incertaine reste
   ainsi.
+- Constitution (§ 1.5.1) : une page abandonnée par une clôture n'est jamais
+  reprise. L'audience reste partielle et signalée comme telle.
 - Une instance API (comme les messages de service) : débit et verrou
   pensés pour un seul traitement de fond.
 - Durées de conservation (suivi des envois, jetons hachés) non fixées :
   rien n'est supprimé automatiquement.
 
 ## 5. Ce que vous devrez appliquer vous-même
+
+**0. Correctif de la course constitution / clôture (§ 1.5.1).** La garantie ne
+vaut qu'une fois **aucun ancien processus API** en service. La constitution
+tourne dans la requête de lancement ; une ancienne instance peut encore
+insérer hors transaction tant qu'elle vit.
+
+- **Avant de déployer** : ne lancer aucune campagne pendant la fenêtre de
+  déploiement. Vérifier qu'aucune constitution n'est en cours (lecture
+  seule) :
+  ```js
+  db.platform_campaigns.find(
+    { 'audience.status': 'preparing' },
+    { launchedAt: 1, 'audience.leaseUntil': 1, 'audience.total': 1 },
+  )
+  ```
+  S'il y en a une, attendre la fin de son bail (10 min au plus après son
+  lancement) avant de déployer.
+- **Après le déploiement** : vérifier dans Railway que l'ancien déploiement
+  est **arrêté** (retiré, plus de processus). Avant cela, une ancienne
+  instance peut encore insérer une page tardive.
+- **Campagne `preparing` lancée par l'ancienne version** : la nouvelle
+  version ne la poursuit pas. Elle la close partielle à l'expiration du
+  bail, comme avant.
+- **Données existantes : aucune suppression ni réécriture automatique.**
+  Vérification **en lecture seule** à exécuter vous-même (`mongosh`, URI
+  de production, seulement `aggregate`) :
+  ```js
+  db.platform_campaign_deliveries.aggregate([
+    { $group: {
+        _id: '$campaignId',
+        deliveries: { $sum: 1 },
+        pending: { $sum: { $cond: [{ $in: ['$status', ['pending', 'sending']] }, 1, 0] } },
+        lastCreatedAt: { $max: '$createdAt' },
+    } },
+    { $lookup: { from: 'platform_campaigns', localField: '_id', foreignField: '_id', as: 'c' } },
+    { $unwind: '$c' },
+    { $project: {
+        deliveries: 1, pending: 1, lastCreatedAt: 1,
+        total: '$c.audience.total',
+        audience: '$c.audience.status',
+        incomplete: '$c.audience.incomplete',
+        frozenAt: '$c.audience.frozenAt',
+    } },
+    { $match: { $expr: { $or: [
+        { $ne: ['$deliveries', '$total'] },
+        { $and: [{ $eq: ['$audience', 'ready'] }, { $gt: ['$lastCreatedAt', '$frozenAt'] }] },
+    ] } } },
+  ])
+  ```
+  Lecture du résultat :
+  - **Aucun résultat** : rien à signaler.
+  - **`deliveries > total`** : livraisons non comptées. Deux causes
+    possibles avec l'ancienne version :
+    - une page tardive insérée après la clôture ;
+    - une étape interrompue entre insertion et curseur, puis rejouée.
+  - **`lastCreatedAt > frozenAt`** : un **indice** seulement, pas une preuve
+    d'ordre.
+  - Si `pending > 0` et qu'un envoi est à éviter : passer
+    `MARKETING_EMAILS_ENABLED=false` et décider au cas par cas. Rien n'est
+    corrigé par ce lot.
 
 1. **Ordre** : pré-déploiement (index) → API → web. Le web ne publie les
    routes de campagne et `/api/unsubscribe` qu'avec la nouvelle API.

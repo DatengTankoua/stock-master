@@ -98,6 +98,9 @@ pnpm lint           # ESLint avec correction automatique
 Administration de la plateforme (accès, capacités, récupération du second
 facteur) : commandes opérateur prêtes à copier dans
 [railway-platform-admin.md](../docs/operations/railway-platform-admin.md).
+Notifications internes des administrateurs (événements, collecte durable,
+droits et lecture) :
+[platform-admin-notifications.md](../docs/architecture/platform-admin-notifications.md).
 
 ## Build production (Docker)
 

@@ -19,6 +19,9 @@ import {
 
 const realSleep: CampaignSleep = (ms) =>
   new Promise((resolve) => setTimeout(resolve, ms));
+import { PlatformAdminNotificationsService } from './platform-admin-notifications.service';
+import { PlatformAdminNotificationSweep } from './platform-admin-notification-sweep.service';
+import { PlatformAdminNotificationsController } from './platform-admin-notifications.controller';
 import { PlatformAdminCommunicationsService } from './platform-admin-communications.service';
 import { PlatformMessageDeliveryService } from './platform-message-delivery.service';
 import { PlatformAdminActionsService } from './platform-admin-actions.service';
@@ -36,7 +39,8 @@ import {
  * Administration de la plateforme : autorisation distincte des
  * permissions des commerces, session administrative et double
  * authentification obligatoire, données en lecture seule ; actions et
- * messages de service (capacités dédiées, preuve renforcée liée).
+ * messages de service (capacités dédiées, preuve renforcée liée) ;
+ * notifications internes des administrateurs (collecte durable, lecture).
  */
 @Module({
   imports: [
@@ -53,7 +57,11 @@ import {
     // Campagnes : éligibilité et désabonnement (accord marketing).
     MarketingConsentModule,
   ],
-  controllers: [PlatformAdminController, PlatformCampaignsController],
+  controllers: [
+    PlatformAdminController,
+    PlatformCampaignsController,
+    PlatformAdminNotificationsController,
+  ],
   providers: [
     platformAdminConfigProvider,
     platformAdminClockProvider,
@@ -67,7 +75,13 @@ import {
     PlatformCampaignsService,
     PlatformCampaignDeliveryService,
     { provide: CAMPAIGN_SLEEP, useValue: realSleep },
+    PlatformAdminNotificationsService,
+    PlatformAdminNotificationSweep,
   ],
-  exports: [PlatformMessageDeliveryService, PlatformCampaignDeliveryService],
+  exports: [
+    PlatformMessageDeliveryService,
+    PlatformCampaignDeliveryService,
+    PlatformAdminNotificationSweep,
+  ],
 })
 export class PlatformAdminModule {}

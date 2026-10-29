@@ -347,3 +347,31 @@ test("messages de service : routes relayées et codes publics", () => {
   const route = readFileSync(path.join(here, "..", "src", "app", "api", "admin", "[...path]", "route.ts"), "utf8");
   assert.match(route, /const MAX_BODY_BYTES = 65_536;/);
 });
+
+test("notifications de l'administration : routes relayées, autres refusées", () => {
+  const id = "0123456789abcdef01234567";
+  for (const [method, segments] of [
+    ["GET", ["notifications"]],
+    ["GET", ["notifications", "unread-count"]],
+    ["POST", ["notifications", "read-all"]],
+    ["POST", ["notifications", id, "read"]],
+  ]) {
+    assert.equal(resolveAdminRoute(method, segments), segments.join("/"), `${method} ${segments}`);
+  }
+  for (const [method, segments] of [
+    ["POST", ["notifications"]],
+    ["GET", ["notifications", "read-all"]],
+    ["GET", ["notifications", id, "read"]],
+    ["POST", ["notifications", "all", "read"]],
+    ["POST", ["notifications", id, "unread"]],
+    ["POST", ["notifications", id]],
+    ["POST", ["notifications", "unread-count"]],
+  ]) {
+    assert.equal(resolveAdminRoute(method, segments), null, `${method} ${segments}`);
+  }
+  // Filtre et page relayés ; un destinataire fourni par le navigateur, jamais.
+  assert.equal(
+    filterAdminQuery(new URLSearchParams("status=unread&page=2&userId=x")),
+    "?status=unread&page=2",
+  );
+});

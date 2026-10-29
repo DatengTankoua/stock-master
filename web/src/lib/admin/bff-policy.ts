@@ -87,6 +87,10 @@ const ROUTES: ReadonlyArray<{ method: Method; pattern: RegExp }> = [
   },
   { method: "GET", pattern: /^payments$/ },
   { method: "GET", pattern: /^audit$/ },
+  // Notifications internes des administrateurs (filtre `status`).
+  { method: "GET", pattern: /^notifications(\/unread-count)?$/ },
+  { method: "POST", pattern: /^notifications\/read-all$/ },
+  { method: "POST", pattern: /^notifications\/[0-9a-f]{24}\/read$/ },
 ];
 
 /** Chemin API relayé, ou `null` (route inconnue ou méthode refusée). */

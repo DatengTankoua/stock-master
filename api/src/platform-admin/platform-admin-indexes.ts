@@ -238,12 +238,13 @@ async function listIndexes(
 }
 
 /** Lecture seule : liste des problèmes (vide si tout est en place). */
-export async function checkPlatformAdminIndexes(
+export async function checkIndexSpecs(
   connection: Connection,
+  specs: readonly PlatformAdminIndexSpec[],
 ): Promise<string[]> {
   const problems: string[] = [];
   const cache = new Map<string, IndexDescription[]>();
-  for (const spec of PLATFORM_ADMIN_INDEXES) {
+  for (const spec of specs) {
     if (!cache.has(spec.collection)) {
       cache.set(
         spec.collection,
@@ -257,14 +258,15 @@ export async function checkPlatformAdminIndexes(
 }
 
 /** Crée les index manquants ; échoue sans rien écraser si l'un diffère. */
-export async function ensurePlatformAdminIndexes(
+export async function ensureIndexSpecs(
   connection: Connection,
+  specs: readonly PlatformAdminIndexSpec[],
 ): Promise<{ created: string[]; present: string[] }> {
   const db = connection.db;
   if (!db) throw new Error('connexion MongoDB non prête');
   const created: string[] = [];
   const present: string[] = [];
-  for (const spec of PLATFORM_ADMIN_INDEXES) {
+  for (const spec of specs) {
     const label = `${spec.collection}.${spec.name}`;
     const problem = describeIndexProblem(
       spec,
@@ -291,9 +293,21 @@ export async function ensurePlatformAdminIndexes(
     });
     created.push(label);
   }
-  const remaining = await checkPlatformAdminIndexes(connection);
+  const remaining = await checkIndexSpecs(connection, specs);
   if (remaining.length > 0) {
     throw new Error(`Index invalides après création : ${remaining.join(', ')}`);
   }
   return { created, present };
+}
+
+export function checkPlatformAdminIndexes(
+  connection: Connection,
+): Promise<string[]> {
+  return checkIndexSpecs(connection, PLATFORM_ADMIN_INDEXES);
+}
+
+export function ensurePlatformAdminIndexes(
+  connection: Connection,
+): Promise<{ created: string[]; present: string[] }> {
+  return ensureIndexSpecs(connection, PLATFORM_ADMIN_INDEXES);
 }

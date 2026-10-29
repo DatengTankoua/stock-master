@@ -648,6 +648,94 @@ const adminEn: Translation<typeof adminFr> = {
     close: "Close",
     operation: "Operation",
   },
+  notifications: {
+    title: "Notifications",
+    intro:
+      "Important platform events. Read / unread status is yours alone: reading a notification changes nothing for other administrators.",
+    recent: "Recent notifications",
+    seeAll: "See all notifications",
+    bell: {
+      none: "Notifications: none unread",
+      unread_one: "Notifications: {{count}} unread",
+      unread_other: "Notifications: {{count}} unread",
+      moreThan99: "Notifications: more than 99 unread",
+    },
+    filters: {
+      label: "Filter notifications",
+      all: "All",
+      unread: "Unread",
+    },
+    empty: "No notifications.",
+    emptyUnread: "No unread notifications.",
+    unreadMark: "unread",
+    readMark: "read",
+    markRead: "Mark as read",
+    markAllRead: "Mark all as read",
+    markingAll: "Marking…",
+    markFailed: "Could not mark this notification as read. Try again.",
+    remaining:
+      "Many notifications were still unread: run “Mark all as read” again for the next ones.",
+    unavailable: "Item unavailable",
+    unknownOrganization: "Business",
+    supportMailbox:
+      "The request is handled in the support mailbox: its content is not kept in Stock Master.",
+    open: {
+      organization: "Open record",
+      payment: "View payments",
+      campaign: "Open campaign",
+    },
+    types: {
+      organization_created: {
+        title: "New organization",
+        summary: "{{name}} just signed up.",
+      },
+      payment_confirmed: {
+        title: "Subscription payment confirmed",
+        summary: "{{name}}: {{amount}}, period granted: {{duration}}.",
+      },
+      payment_review: {
+        title: "Payment to review",
+        summary:
+          "{{name}}: {{amount}}. Reason: {{reason}}. No automatic outcome: operator action required.",
+      },
+      support_request: {
+        title: "Support request",
+        summary: "{{name}}: request {{reference}} (category: {{category}}).",
+      },
+      campaign_audience_partial: {
+        title: "Campaign: partial audience to check",
+        summary:
+          "Building the audience was interrupted and then closed: {{total}} recipient(s) kept.",
+      },
+      campaign_completed: {
+        title: "Campaign: processing finished",
+        summary:
+          "Accepted by the provider (not proof of receipt): {{accepted}} · Skipped: {{skipped}} · Failed: {{failed}} · Uncertain: {{uncertain}}.",
+      },
+    },
+    incidents: {
+      none: "unspecified incident",
+      initiation_rejected: "creation rejected by the provider",
+      initiation_uncertain: "uncertain creation",
+      provider_unavailable: "provider unavailable",
+      provider_mismatch:
+        "mismatch with the provider (amount, currency or reference)",
+      late_failure_after_success: "failure reported after a success",
+      checkout_unresolved: "unresolved checkout page",
+      provider_inconsistent: "inconsistent provider responses",
+      checkout_closed: "checkout page closed",
+      renewal_already_granted:
+        "payment collected for a renewal already granted",
+      replaced_payment_collected: "payment collected for a replaced attempt",
+      refunded_outside: "refunded outside Stock Master",
+    },
+    supportCategories: {
+      usage: "Usage",
+      subscription: "Subscription",
+      technical: "Technical issue",
+      other: "Other",
+    },
+  },
   security: {
     title: "Account security",
     session: "Session",
