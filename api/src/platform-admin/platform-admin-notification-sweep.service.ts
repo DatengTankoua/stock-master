@@ -445,8 +445,10 @@ export class PlatformAdminNotificationSweep implements OnApplicationShutdown {
               refundedAt: 1,
               periodId: 1,
               merchantReference: 1,
+              providerReference: 1,
               providerTransactionId: 1,
               providerCheckoutExpiresAt: 1,
+              incidentCode: 1,
             },
           },
         )
@@ -509,6 +511,14 @@ export class PlatformAdminNotificationSweep implements OnApplicationShutdown {
             ? p.providerTransactionId
             : null,
         startedAt: startedAt.toISOString(),
+        // Création non confirmée (session inconnue) : `initiating`, ou
+        // reprise en `initiation_uncertain` par le rapprochement.
+        incidentCode:
+          p.status === 'initiating' && typeof p.providerReference !== 'string'
+            ? 'initiation_uncertain'
+            : typeof p.incidentCode === 'string'
+              ? p.incidentCode
+              : null,
       },
     };
   }

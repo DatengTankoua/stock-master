@@ -247,6 +247,12 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
       emailSubject: "Payment awaiting confirmation {{reference}}",
       supportPage: "Support page",
     },
+    // SasPay session creation not confirmed after 24 hours.
+    creation: {
+      delayedTitle: "Check with support",
+      delayedDetail:
+        "The creation of this payment at SasPay has not been confirmed for more than 24 hours: the payment page may never have existed, or its link was not received. Checking it now requires our support team: contact them with the reference below. Do not make a new payment in the meantime.",
+    },
     situation: {
       expired: {
         label: "Payment page expired",
@@ -276,7 +282,7 @@ const subscriptionEn: Translation<typeof subscriptionFr> = {
       linkMissing: {
         label: "Payment link not retrieved",
         detail:
-          "The payment page may have been created at SasPay, but its link was not received. “Check payment” retrieves it without creating a new one.",
+          "The payment page may have been created at SasPay, but its link was not received. “Check payment” tries to find it at SasPay, never creating a new one; no new payment is possible in the meantime.",
       },
       attemptUnresolved: {
         label: "Attempt to be confirmed by SasPay",

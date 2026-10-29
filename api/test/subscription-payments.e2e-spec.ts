@@ -104,6 +104,8 @@ const VIEW_KEYS = [
   'collected',
   // Retard SasPay : transaction engagée non confirmée (null sinon).
   'confirmationPending',
+  // Création SasPay non confirmée (session inconnue ; null sinon).
+  'creationUnresolved',
   'confirmedAt',
   'createdAt',
   'currency',

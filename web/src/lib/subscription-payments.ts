@@ -53,6 +53,11 @@ export interface ApiSubscriptionPayment {
    */
   confirmationPending?: { since: string; delayed: boolean } | null;
   /**
+   * Création SasPay non confirmée (session inconnue) ; `delayed` : plus de
+   * 24 h depuis la création de la tentative, assistance proposée.
+   */
+  creationUnresolved?: { since: string; delayed: boolean } | null;
+  /**
    * 1-21E — CLIENT seulement : échéance locale du lien (horloge de CET
    * onglet, réception + validité restante), jamais envoyée au serveur.
    */

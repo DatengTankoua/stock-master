@@ -706,6 +706,8 @@ const adminEn: Translation<typeof adminFr> = {
           "{{name}}: {{amount}}, requested on {{since}}. SasPay transaction: {{transaction}}. Stock Master reference: {{reference}}.",
         summaryNoTransaction:
           "{{name}}: {{amount}}, requested on {{since}}. No SasPay transaction attached. Stock Master reference: {{reference}}.",
+        summaryCreationUnconfirmed:
+          "{{name}}: {{amount}}, requested on {{since}}. SasPay session creation not confirmed (session unknown, possibly nonexistent). Stock Master reference: {{reference}}.",
       },
       support_request: {
         title: "Support request",

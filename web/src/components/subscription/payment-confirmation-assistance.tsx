@@ -19,8 +19,14 @@ import { mailtoHref } from "@/lib/whatsapp-contact";
 export function PaymentConfirmationAssistance({
   reference,
   restricted,
+  variant = "confirmation",
 }: {
   reference: string;
+  /**
+   * `confirmation` : transaction engagée non confirmée ; `creation` :
+   * création de la session SasPay non confirmée (session inconnue).
+   */
+  variant?: "confirmation" | "creation";
   /** Session limitée (écran de blocage) : page Assistance non proposée. */
   restricted: boolean;
 }) {
@@ -47,9 +53,9 @@ export function PaymentConfirmationAssistance({
       data-testid="payment-confirmation-assistance"
     >
       <h4 id={`${id}-title`} className="font-semibold">
-        {t("payment.confirmation.delayedTitle")}
+        {t(`payment.${variant}.delayedTitle`)}
       </h4>
-      <p>{t("payment.confirmation.delayedDetail")}</p>
+      <p>{t(`payment.${variant}.delayedDetail`)}</p>
       <div className="space-y-1">
         <p id={`${id}-reference`} className="text-muted-foreground">
           {t("payment.confirmation.referenceLabel")}

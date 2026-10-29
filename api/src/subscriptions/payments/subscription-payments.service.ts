@@ -85,6 +85,7 @@ import type { PaymentCallPermit } from './payment-call-budget';
 import {
   confirmationDelayExceeded,
   paymentAwaitingConfirmation,
+  paymentCreationUnresolved,
 } from './payment-confirmation-delay';
 import {
   PAYMENT_HISTORY_DEFAULT_LIMIT,
@@ -96,6 +97,19 @@ import {
  * reprises applicatives (≤ 5) ET reprises automatiques du driver comprises.
  */
 export const PAYMENT_CONFIRMATION_BUDGET_MS = 30_000;
+
+/**
+ * Création restée `initiating` (processus arrêté entre l'insertion et
+ * l'enregistrement de la réponse du prestataire) : reprise par le
+ * rapprochement après ce délai SEULEMENT. Une création en cours dure au plus
+ * le budget de l'appel (10 s, coupé par `AbortSignal`) plus ses écritures
+ * MongoDB (bornées par le pilote, ≤ 60 s) : 10 min laissent une large marge
+ * à une création lente sans jamais la doubler. Toutes les écritures restent
+ * conditionnelles à l'état relu.
+ */
+export const INITIATING_RECOVERY_DELAY_MS = 10 * 60 * 1000;
+/** Reclassements au plus par passe (aucun appel externe). */
+export const INITIATING_RECOVERY_LIMIT = 5;
 
 /**
  * 1-21B — Origine publique du web (`PUBLIC_APP_URL` validée) pour l'URL de
@@ -185,6 +199,12 @@ export interface SubscriptionPaymentView {
    * `delayed` : seuil de 24 h atteint à l'heure du serveur (assistance).
    */
   confirmationPending: { since: string; delayed: boolean } | null;
+  /**
+   * Création SasPay non confirmée (session inconnue de Stock Master, voir
+   * `paymentCreationUnresolved`) ; `delayed` : plus de 24 h depuis la
+   * création de la tentative, assistance proposée. `null` sinon.
+   */
+  creationUnresolved: { since: string; delayed: boolean } | null;
   createdAt: string | null;
   initiatedAt: string | null;
   confirmedAt: string | null;
@@ -1578,17 +1598,25 @@ export class SubscriptionPaymentsService {
    * écriture conditionnelle de `lastCheckedAt` (plusieurs processus : un
    * seul le vérifie par période). Prestataires sans adaptateur disponible
    * ignorés. Aucune création, aucune relance de débit.
+   *
+   * Créations restées `initiating` : d'abord reclassées (voir
+   * `recoverStaleInitiations`), puis vérifiées comme tout `uncertain`.
    */
   async sweepOnce(options: {
     limit: number;
     staleMs: number;
     lateWindowMs: number;
-  }): Promise<{ examined: number; failed: number }> {
+    initiatingDelayMs?: number;
+  }): Promise<{ examined: number; failed: number; recovered: number }> {
     const providers = [this.provider, ...(this.confirmers ?? [])]
       .filter((p) => p.available)
       .map((p) => p.name);
-    const report = { examined: 0, failed: 0 };
+    const report = { examined: 0, failed: 0, recovered: 0 };
     if (providers.length === 0) return report;
+    report.recovered = await this.recoverStaleInitiations(
+      providers,
+      options.initiatingDelayMs ?? INITIATING_RECOVERY_DELAY_MS,
+    );
     for (let i = 0; i < options.limit; i += 1) {
       // 1-22D : budget des confirmations insuffisant → passe interrompue
       // AVANT de réserver un paiement (repris à la passe suivante).
@@ -1645,6 +1673,69 @@ export class SubscriptionPaymentsService {
       }
     }
     return report;
+  }
+
+  /**
+   * Créations restées `initiating` depuis `delayMs` : issue de l'appel de
+   * création INCONNUE. Les données persistées ne distinguent pas un arrêt
+   * avant l'appel, un appel transmis sans réponse et une session créée dont
+   * la réponse n'a pas été enregistrée : rien n'est écrit avant l'appel. Le
+   * paiement passe donc dans l'état existant de cette situation, `uncertain`
+   * / `initiation_uncertain` (ouvert, jamais un échec, jamais réinitié),
+   * que le moteur vérifie ensuite : recherche bornée par référence marchand,
+   * rattachement après relecture et concordance stricte, CLI.
+   *
+   * - Prestataires à recherche par référence marchand seulement (SasPay) :
+   *   ailleurs, rien ne permettrait de retrouver la session.
+   * - Écriture conditionnelle `status: initiating` : une seule reprise entre
+   *   processus ; une vérification, un webhook ou la création elle-même
+   *   arrivés avant l'emportent (aucun écrasement).
+   * - Aucun appel externe ici, aucune nouvelle session (aucune idempotence
+   *   documentée de la création), aucun champ nouveau requis : les anciens
+   *   documents sont traités de même.
+   */
+  private async recoverStaleInitiations(
+    providers: readonly string[],
+    delayMs: number,
+  ): Promise<number> {
+    const lookupProviders = providers.filter(
+      (name) =>
+        confirmationProviderFor(name, this.provider, this.confirmers)
+          ?.supportsMerchantReferenceLookup === true,
+    );
+    if (lookupProviders.length === 0) return 0;
+    let recovered = 0;
+    for (let i = 0; i < INITIATING_RECOVERY_LIMIT; i += 1) {
+      const cutoff = new Date(this.clock().getTime() - delayMs);
+      const moved = await this.paymentModel
+        .findOneAndUpdate(
+          {
+            provider: { $in: lookupProviders },
+            status: SubscriptionPaymentStatus.INITIATING,
+            createdAt: { $lt: cutoff },
+          },
+          {
+            $set: {
+              status: SubscriptionPaymentStatus.UNCERTAIN,
+              incidentCode: SubscriptionPaymentIncident.INITIATION_UNCERTAIN,
+            },
+          },
+          {
+            sort: { createdAt: 1, _id: 1 },
+            projection: { _id: 1, organizationId: 1 },
+          },
+        )
+        .lean<Pick<PaymentRecord, '_id' | 'organizationId'>>()
+        .exec();
+      if (!moved) break;
+      recovered += 1;
+      // Identifiant interne seulement (aucune URL, aucune donnée du payeur).
+      this.logger.warn(
+        `Création restée en cours reprise (issue inconnue) : paiement ${moved._id.toHexString()}.`,
+      );
+      this.signalPayments(moved.organizationId);
+    }
+    return recovered;
   }
 
   /** 1-22D — Chaque prestataire balayé peut encore lire un statut complet. */
@@ -2125,6 +2216,12 @@ export class SubscriptionPaymentsService {
       situation: this.situation(payment, linkValid, expiry),
       collected: isCollected(payment),
       confirmationPending: awaiting
+        ? {
+            since: iso(payment.createdAt)!,
+            delayed: confirmationDelayExceeded(payment, this.clock()),
+          }
+        : null,
+      creationUnresolved: paymentCreationUnresolved(payment)
         ? {
             since: iso(payment.createdAt)!,
             delayed: confirmationDelayExceeded(payment, this.clock()),
